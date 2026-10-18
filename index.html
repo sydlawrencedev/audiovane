@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#06010d" />
+    <title>SIGNAL — Audio Visualiser</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' fill='%2306010d'/%3E%3Cpath d='M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16' stroke='%23ff2bd6' stroke-width='2' fill='none'/%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="stage"></canvas>
+
+      <div id="crt" aria-hidden="true">
+        <div class="crt-scanlines"></div>
+        <div class="crt-vignette"></div>
+        <div class="crt-glow"></div>
+      </div>
+
+      <header class="topbar">
+        <div class="brand">
+          <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
+            <path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" />
+          </svg>
+          <div class="brand-text">
+            <span class="brand-name">SIGNAL</span>
+            <span class="brand-sub">audio visualiser · v1</span>
+          </div>
+        </div>
+
+        <div class="source-pill" id="source-pill" data-state="idle">
+          <span class="source-dot"></span>
+          <span class="source-label">idle</span>
+        </div>
+
+        <div class="bpm" id="bpm" hidden>
+          <span class="bpm-num">0</span>
+          <span class="bpm-unit">BPM</span>
+        </div>
+      </header>
+
+      <aside class="modes" aria-label="Visualizer modes">
+        <button class="mode-btn active" data-mode="tunnel" type="button">
+          <span class="mode-glyph">01</span>
+          <span class="mode-name">TUNNEL</span>
+        </button>
+        <button class="mode-btn" data-mode="particles" type="button">
+          <span class="mode-glyph">02</span>
+          <span class="mode-name">CONSTELLATION</span>
+        </button>
+        <button class="mode-btn" data-mode="shader" type="button">
+          <span class="mode-glyph">03</span>
+          <span class="mode-name">LIQUID</span>
+        </button>
+      </aside>
+
+      <section class="meter" aria-label="Spectrum meter">
+        <canvas id="meter-canvas" width="512" height="64"></canvas>
+      </section>
+
+      <section class="intro" id="intro">
+        <div class="intro-inner">
+          <h1 class="intro-title">FEED IT SOME SOUND.</h1>
+          <p class="intro-sub">
+            Pick any audio source. The visualizer reacts to bass, mids, treble, and beats in real time.
+          </p>
+
+          <div class="intro-actions">
+            <button class="btn primary" id="btn-system" type="button">
+              <span class="btn-label">Share System Audio</span>
+              <span class="btn-sub">Screen / tab with sound — best for Spotify, YouTube, etc.</span>
+            </button>
+            <button class="btn" id="btn-mic" type="button">
+              <span class="btn-label">Use Microphone</span>
+              <span class="btn-sub">Plays whatever the mic hears.</span>
+            </button>
+            <label class="btn file" tabindex="0">
+              <span class="btn-label">Load Audio File</span>
+              <span class="btn-sub">MP3, WAV, FLAC, OGG — anything the browser can decode.</span>
+              <input id="file-input" type="file" accept="audio/*" hidden />
+            </label>
+            <button class="btn ghost" id="btn-demo" type="button">
+              <span class="btn-label">Try the Demo Tone</span>
+              <span class="btn-sub">Sweep + kick so you can see it work with no input.</span>
+            </button>
+          </div>
+
+          <p class="intro-fine">
+            <strong>Heads up:</strong> browsers can't grab your speakers directly — so we use
+            screen-share-with-audio (Chrome / Edge / Safari 17+) or your microphone. The demo tone
+            lets you preview without sharing anything.
+          </p>
+        </div>
+      </section>
+
+      <footer class="footer">
+        <div class="footer-cell">
+          <span class="footer-k">MODE</span>
+          <span class="footer-v" id="f-mode">TUNNEL</span>
+        </div>
+        <div class="footer-cell">
+          <span class="footer-k">RMS</span>
+          <span class="footer-v" id="f-rms">0.00</span>
+        </div>
+        <div class="footer-cell">
+          <span class="footer-k">BASS</span>
+          <span class="footer-v" id="f-bass">0.00</span>
+        </div>
+        <div class="footer-cell">
+          <span class="footer-k">MID</span>
+          <span class="footer-v" id="f-mid">0.00</span>
+        </div>
+        <div class="footer-cell">
+          <span class="footer-k">TREB</span>
+          <span class="footer-v" id="f-treble">0.00</span>
+        </div>
+        <div class="footer-cell">
+          <span class="footer-k">BEAT</span>
+          <span class="footer-v" id="f-beat">—</span>
+        </div>
+      </footer>
+
+      <div class="hidden-audio">
+        <audio id="file-audio" crossorigin="anonymous"></audio>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

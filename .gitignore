@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Node
+node_modules/
+package-lock.json
+
+# Swift / SwiftPM
+.build/
+*.xcodeproj
+.swiftpm/
+
+# Build output
+VisualiserMac/build/
+VisualiserMac/dist/
+dist/
