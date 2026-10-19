@@ -53,7 +53,7 @@
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Music visualisers",
       "operatingSystem": "macOS 14.2 or later, Apple silicon",
-      "softwareVersion": "0.2.6",
+      "softwareVersion": "0.2.7",
       "downloadUrl": "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip",
       "installUrl": "https://audiovane.minithlabs.com/install.sh",
       "screenshot": "https://audiovane.minithlabs.com/media/share.jpg",
@@ -147,6 +147,22 @@
   .agents ol { padding-left: 20px; }
   .agents li { margin: 6px 0; }
 
+  .gh-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+  .gh-card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .gh-card:hover { border-color: var(--magenta); }
+  .gh-card-link { display: block; padding: 14px 16px 16px; text-decoration: none; color: inherit; }
+  .gh-card-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+  .gh-meta { font: 600 11px "JetBrains Mono", monospace; letter-spacing: 1px; text-transform: uppercase; color: var(--cyan); }
+  .gh-date { font: 400 11px "JetBrains Mono", monospace; color: var(--muted); white-space: nowrap; }
+  .gh-title { font-size: 16px; margin: 0 0 6px; color: var(--text); }
+  /* Clamped: release notes are written for GitHub, not for a card, and one
+     long one would otherwise stretch every card in the row. The full text is
+     one click away on GitHub. */
+  .gh-body { margin: 0; font-size: 14px; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .gh-empty { color: var(--muted); font-size: 15px; }
+  .gh-more { display: inline-block; margin-top: 18px; color: var(--cyan); font: 600 13px "JetBrains Mono", monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .gh-more:hover { color: var(--magenta); }
+
   section#shareware .shareware { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
   section#shareware .small a { color: var(--gold); }
 
@@ -174,6 +190,7 @@
     <nav>
       <a href="#modes">Modes</a>
       <a href="#install">Install</a>
+      <a href="#changelog">Changelog</a>
       <a href="#shareware">Shareware</a>
       <a href="https://github.com/sydlawrencedev/audiovane">GitHub</a>
     </nav>
@@ -257,6 +274,18 @@
     </div>
   </section>
 
+  <section id="changelog">
+    <h2>Changelog</h2>
+    <p class="sub">Every release, newest first — fetched from GitHub, so this is what actually shipped.</p>
+    <div id="changelog-list"><p class="gh-empty">Loading releases…</p></div>
+  </section>
+
+  <section id="issues">
+    <h2>What's open</h2>
+    <p class="sub">Known problems, in the open, where you can watch them get fixed. Found something new? <a href="https://github.com/sydlawrencedev/audiovane/issues">Report it</a>.</p>
+    <div id="issues-list"><p class="gh-empty">Loading open issues…</p></div>
+  </section>
+
   <section id="shareware">
     <h2>Proudly shareware</h2>
     <p class="sub">Free to use. Yours to share. No ads, no account, no trial that expires.</p>
@@ -275,11 +304,12 @@
   </div>
 
   <footer>
-    Made by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/audiovane">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/audiovane/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/audiovane/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine mode after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
+    Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/audiovane">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/audiovane/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/audiovane/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine mode after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
     <span class="privacy">This page counts visits and clicks anonymously (which button, which mode card you scroll to). No cookies, no account, nothing about you. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden> — done, this page won't report anything.</span></span>
   </footer>
 </div>
 <script src="/analytics.js" defer></script>
+<script src="/github.js" defer></script>
 <script>
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {
