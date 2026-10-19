@@ -11,7 +11,7 @@ struct VisualiserApp: App {
         WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
-                .frame(minWidth: 960, minHeight: 600)
+                .frame(minWidth: 960, minHeight: 460)
                 .preferredColorScheme(.dark)
                 .background(Color.black)
         }
@@ -19,7 +19,7 @@ struct VisualiserApp: App {
         WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
-                .frame(minWidth: 960, minHeight: 600)
+                .frame(minWidth: 960, minHeight: 460)
                 .preferredColorScheme(.dark)
                 .background(Color.black)
         }

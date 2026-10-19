@@ -5,9 +5,9 @@ import SwiftUI
 /// fixed 200pt column and about 60% of the window height, which was real
 /// estate the visualisation should have had.
 ///
-/// The number-row shortcuts still work exactly as before, and each row in the
-/// list shows its shortcut so the keyboard route stays discoverable now that
-/// the list isn't permanently on screen.
+/// One line per mode (no shortcut subtitles) so the open list stays short
+/// enough for small windows. The keyboard shortcuts still work and are
+/// listed in the Visualizer menu.
 struct ModePicker: View {
     @EnvironmentObject var app: AppState
 
@@ -19,7 +19,6 @@ struct ModePicker: View {
                 DropdownEntry(
                     value: mode,
                     title: mode.displayName,
-                    subtitle: mode == .autoScan ? "key = · 20s each" : "key \(String(mode.shortcutKey))",
                     glyph: mode.glyph
                 )
             },

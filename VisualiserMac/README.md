@@ -26,16 +26,16 @@ Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
 ## Running
 
-The bundle is self-contained at `build/VisualiserMac.app`. To open it:
+The bundle is self-contained at `build/AudioVane.app`. To open it:
 
 ```
-open build/VisualiserMac.app
+open build/AudioVane.app
 ```
 
 Or to rebuild first:
 
 ```
-./build-app.sh debug      # debug build at build/VisualiserMac.app
+./build-app.sh debug      # debug build at build/AudioVane.app
 ./build-app.sh release    # release build
 ```
 
@@ -219,7 +219,7 @@ Metal needs Xcode's `metalc` toolchain. This repo uses Swift Package Manager wit
 For visual regression / sanity checks:
 
 ```
-SNAPSHOT_DIR=/tmp/viz_snapshots ./build/VisualiserMac.app/Contents/MacOS/VisualiserMac --snapshot
+SNAPSHOT_DIR=/tmp/viz_snapshots ./build/AudioVane.app/Contents/MacOS/AudioVane --snapshot
 ```
 
 This renders one frame of each mode to PNG and exits.

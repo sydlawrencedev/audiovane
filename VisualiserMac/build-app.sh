@@ -8,7 +8,7 @@ CONFIG="${1:-debug}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-APP_NAME="VisualiserMac"
+APP_NAME="AudioVane"
 BUNDLE_ID="com.minithlabs.visualiser"
 # Release version, shown in the app and compared by the update checker.
 VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"

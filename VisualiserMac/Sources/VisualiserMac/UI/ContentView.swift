@@ -4,6 +4,18 @@ import AppKit
 struct ContentView: View {
     @EnvironmentObject var app: AppState
 
+    /// The HUD hides (slides out) while the pointer is away from the window,
+    /// leaving just the visuals and the credits button.
+    @StateObject private var pointer = PointerWatcher()
+    @State private var window: NSWindow?
+    private var pointerInside: Bool { pointer.inside }
+
+    /// Shown when the pointer is over the window, or a drop-down / the intro
+    /// needs the UI on screen.
+    private var chromeVisible: Bool {
+        pointerInside || app.openDropdown != nil || app.showIntro
+    }
+
     var body: some View {
         ZStack {
             // OpenGL-rendered visualizer (full-bleed)
@@ -21,13 +33,18 @@ struct ContentView: View {
                 HUDView()
                     .padding(.horizontal, 28)
                     .padding(.top, 22)
+                    .offset(y: chromeVisible ? 0 : -110)
+                    .opacity(chromeVisible ? 1 : 0)
                 Spacer()
                 FooterView()
                     .padding(.leading, 28)
                     // Leave room for the credits button in the corner.
                     .padding(.trailing, 215)
                     .padding(.bottom, 14)
+                    .offset(y: chromeVisible ? 0 : 80)
+                    .opacity(chromeVisible ? 1 : 0)
             }
+            .animation(.easeInOut(duration: 0.35), value: chromeVisible)
             .opacity(app.showIntro ? 0 : 1)
             .allowsHitTesting(!app.showIntro)
             // The open drop-down list lives inside HUDView, and zIndex only
@@ -42,6 +59,9 @@ struct ContentView: View {
                     .padding(.trailing, 28)
                     .padding(.top, 60)
                     .padding(.bottom, 90)
+                    .offset(x: chromeVisible ? 0 : 300)
+                    .opacity(chromeVisible ? 1 : 0)
+                    .animation(.easeInOut(duration: 0.35), value: chromeVisible)
             }
             .opacity(app.showIntro ? 0 : 0.85)
             .allowsHitTesting(!app.showIntro)
@@ -85,6 +105,8 @@ struct ContentView: View {
                     .zIndex(50)
             }
         }
+        .background(WindowReader(window: $window))
+        .onChange(of: window) { _, w in pointer.window = w }
     }
 }
 
@@ -192,5 +214,48 @@ struct BeatFlash: View {
         )
         .opacity(isVisible ? strength : 0)
         .animation(.easeOut(duration: 0.18), value: isVisible)
+    }
+}
+/// Hands back the NSWindow hosting this view (for the pointer check).
+private struct WindowReader: NSViewRepresentable {
+    @Binding var window: NSWindow?
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { window = view.window }
+        return view
+    }
+    func updateNSView(_ view: NSView, context: Context) {
+        if window == nil { DispatchQueue.main.async { window = view.window } }
+    }
+}
+
+/// Polls the pointer against the window frame. Hover events alone stop
+/// arriving when the app isn't frontmost, which is exactly when the
+/// visualiser is usually being watched. Reports "outside" after half a second
+/// away. Owns its timer, so view re-renders (30 a second) don't reset it.
+final class PointerWatcher: ObservableObject {
+    @Published private(set) var inside = true
+    weak var window: NSWindow?
+    private var leftAt: Date?
+    private var timer: Timer?
+
+    init() {
+        let t = Timer(timeInterval: 0.15, repeats: true) { [weak self] _ in self?.poll() }
+        RunLoop.main.add(t, forMode: .common)
+        timer = t
+    }
+
+    deinit { timer?.invalidate() }
+
+    private func poll() {
+        guard let host = window ?? NSApp.windows.first(where: { $0.isVisible && $0.canBecomeMain }) else { return }
+        if host.frame.contains(NSEvent.mouseLocation) {
+            leftAt = nil
+            if !inside { inside = true }
+        } else {
+            let left = leftAt ?? Date()
+            leftAt = left
+            if inside && Date().timeIntervalSince(left) > 0.5 { inside = false }
+        }
     }
 }

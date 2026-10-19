@@ -2,16 +2,16 @@
 import PackageDescription
 
 let package = Package(
-    name: "VisualiserMac",
+    name: "AudioVane",
     platforms: [
         .macOS("14.2")
     ],
     products: [
-        .executable(name: "VisualiserMac", targets: ["VisualiserMac"])
+        .executable(name: "AudioVane", targets: ["AudioVane"])
     ],
     targets: [
         .executableTarget(
-            name: "VisualiserMac",
+            name: "AudioVane",
             path: "Sources/VisualiserMac",
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"]),

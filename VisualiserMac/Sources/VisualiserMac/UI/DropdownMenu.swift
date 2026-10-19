@@ -139,7 +139,7 @@ struct DropdownMenu<Item: Hashable>: View {
                         }
                     }
                     .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
+                    .padding(.vertical, entry.subtitle == nil ? 5 : 6)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 6)

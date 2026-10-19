@@ -12,6 +12,8 @@ Or ask an AI assistant: *"install audiovane from https://audiovane.minithlabs.co
 
 If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00).
 
+Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/audiovane/issues). Pull requests are very welcome, especially new visualisations: see [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Repository layout
 
 | Path | What |
@@ -25,8 +27,8 @@ If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/fZu14mb8B9Li9X
 
 ```bash
 cd VisualiserMac
-./build-app.sh debug      # build/VisualiserMac.app
-open build/VisualiserMac.app
+./build-app.sh debug      # build/AudioVane.app
+open build/AudioVane.app
 ```
 
 ## Releasing

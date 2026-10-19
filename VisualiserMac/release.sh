@@ -23,7 +23,7 @@ fi
 
 ./build-app.sh release
 rm -rf dist && mkdir dist
-ditto build/VisualiserMac.app dist/AudioVane.app
+ditto build/AudioVane.app dist/AudioVane.app
 (cd dist && ditto -c -k --keepParent AudioVane.app AudioVane.zip)
 
 gh release create "$TAG" dist/AudioVane.zip -R "$REPO" \
