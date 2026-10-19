@@ -7,7 +7,6 @@ struct ContentView: View {
     /// The HUD hides (slides out) while the pointer is away from the window,
     /// leaving just the visuals and the credits button.
     @StateObject private var pointer = PointerWatcher()
-    @State private var window: NSWindow?
     private var pointerInside: Bool { pointer.inside }
 
     /// Shown when the pointer is over the window, or a drop-down / the intro
@@ -111,8 +110,11 @@ struct ContentView: View {
                     .zIndex(50)
             }
         }
-        .background(WindowReader(window: $window))
-        .onChange(of: window) { _, w in pointer.window = w }
+        .background(WindowReader(window: $app.window))
+        .onChange(of: app.window) { _, w in
+            pointer.window = w
+            app.windowDidAppear()
+        }
     }
 }
 

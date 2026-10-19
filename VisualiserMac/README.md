@@ -86,6 +86,18 @@ AudioVane --watch-on / --watch-off
 ~/Library/Logs/AudioVane/music-watch.log    # the watcher's own log
 ```
 
+## Floating above other apps
+
+**Float above other apps** (credits popover, or the Visualizer menu) puts the
+window at `.floating`, so it stays above other apps' normal windows — handy when
+you want the visualiser over your editor or a browser. Full-screen apps and the
+menu bar still cover it, which is deliberate: anything higher would sit on top of
+things you need to use.
+
+The choice is remembered, and applied as soon as the window exists at launch.
+The level is logged once whenever it changes (`[window] level = floating`), which
+is the only way to answer "is it supposed to be on top?" from a bug report.
+
 ## First launch
 
 A fresh install starts in **Auto Scan**, cycling every twenty seconds — with

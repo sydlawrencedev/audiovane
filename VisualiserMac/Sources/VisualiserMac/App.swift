@@ -52,6 +52,10 @@ struct VisualiserApp: App {
                     SpriteAtlas.ensureFolder()
                     NSWorkspace.shared.open(SpriteAtlas.folder)
                 }
+                Toggle("Float Above All Windows", isOn: Binding(
+                    get: { app.alwaysOnTop },
+                    set: { app.setAlwaysOnTop($0) }))
+                Divider()
                 Picker("Lead Singer", selection: $app.singerVoice) {
                     ForEach(SingerVoice.allCases) { Text($0.label).tag($0) }
                 }

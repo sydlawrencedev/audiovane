@@ -8,8 +8,12 @@ import AppKit
 struct AboutButton: View {
     @EnvironmentObject var app: AppState
     @StateObject private var startup = StartupManager.shared
+    @State private var titleHovering = false
 
     private static let site = URL(string: "https://minithlabs.com")!
+    /// The app's own site, which is what the name in the credits should go to
+    /// — minithlabs.com is the maker's, and stays below it as its own link.
+    private static let product = URL(string: "https://audiovane.minithlabs.com")!
 
     var body: some View {
         Button {
@@ -43,10 +47,17 @@ struct AboutButton: View {
     private var popoverContent: some View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("AUDIOVANE")
-                    .font(.system(size: 13, weight: .bold))
-                    .tracking(3)
-                    .foregroundStyle(.white)
+                Link(destination: Self.product) {
+                    Text("AUDIOVANE")
+                        .font(.system(size: 13, weight: .bold))
+                        .tracking(3)
+                        .foregroundStyle(.white)
+                        .underline(titleHovering)
+                }
+                .buttonStyle(.plain)
+                .onHover { titleHovering = $0 }
+                .help("audiovane.minithlabs.com")
+
                 Link(destination: Self.site) {
                     Text("minithlabs.com")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
@@ -75,6 +86,10 @@ struct AboutButton: View {
             Divider().overlay(Color.white.opacity(0.1))
 
             StartupToggles(manager: startup)
+
+            Divider().overlay(Color.white.opacity(0.1))
+
+            WindowToggles()
 
             Divider().overlay(Color.white.opacity(0.1))
 
@@ -141,6 +156,39 @@ private struct StartupToggles: View {
                 .font(.system(size: 9))
                 .foregroundStyle(Color(white: 0.45))
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+/// "Float above other apps" — its own section because it isn't a start-up
+/// choice, it's how the window behaves while you're watching it.
+private struct WindowToggles: View {
+    @EnvironmentObject var app: AppState
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("WINDOW")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Color(white: 0.45))
+
+            VStack(alignment: .leading, spacing: 2) {
+                Toggle(isOn: Binding(get: { app.alwaysOnTop }, set: { app.setAlwaysOnTop($0) })) {
+                    Text("Float above other apps")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(.white)
+                }
+                .toggleStyle(.switch)
+                .controlSize(.mini)
+                .help("Keeps AudioVane above other apps' windows. Full screen apps and the menu bar still cover it.")
+
+                Text(app.alwaysOnTop
+                     ? "AudioVane stays above other windows"
+                     : "AudioVane goes behind other apps")
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color(white: 0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 }

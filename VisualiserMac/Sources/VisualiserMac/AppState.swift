@@ -106,6 +106,19 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// The main window, once the view tree has built it. Owned here so the
+    /// window's level can be set from a toggle, from the menu, or at launch —
+    /// none of which are the view that found the window.
+    @Published var window: NSWindow?
+
+    /// Whether the window floats above other apps. `.floating` rather than
+    /// anything higher: it stays above normal windows but still yields to full
+    /// screen apps and the menu bar, which is what someone watching a
+    /// visualiser over their editor wants.
+    @Published private(set) var alwaysOnTop: Bool = {
+        UserDefaults.standard.bool(forKey: "audiovane.alwaysOnTop")
+    }()
+
     /// Whether the credits / support popover is open.
     @Published var showAbout: Bool = false
 
@@ -381,6 +394,30 @@ final class AppState: ObservableObject {
 
     func setMode(_ mode: VisualizerMode) {
         activeMode = mode
+    }
+
+    func setAlwaysOnTop(_ on: Bool) {
+        alwaysOnTop = on
+        UserDefaults.standard.set(on, forKey: "audiovane.alwaysOnTop")
+        applyWindowLevel()
+        Task { await Analytics.shared.track("always_on_top_changed", ["on": on]) }
+    }
+
+    /// Called when the window first appears, so a preference set last session
+    /// takes effect without the user touching anything.
+    func windowDidAppear() {
+        applyWindowLevel()
+    }
+
+    private func applyWindowLevel() {
+        guard let window else { return }
+        let wanted: NSWindow.Level = alwaysOnTop ? .floating : .normal
+        guard window.level != wanted else { return }
+        window.level = wanted
+        // Logged because "it's behind everything" is the kind of report that
+        // arrives with no way to check it, and this is the only line that says
+        // what the window is actually doing.
+        NSLog("[window] level = %@", alwaysOnTop ? "floating" : "normal")
     }
 
     /// The single path into `AudioEngine`'s source switching, so the header
