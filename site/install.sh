@@ -5,7 +5,7 @@
 set -euo pipefail
 
 URL="https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip"
-COFFEE="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00"
+COFFEE="https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01"
 
 if [ "$(uname -s)" != "Darwin" ]; then
     echo "AudioVane is a macOS app." >&2; exit 1

@@ -27,6 +27,12 @@ final class UpdateChecker {
     /// `userInitiated`: from the menu — also report "you're up to date" and errors.
     func check(userInitiated: Bool) {
         if !userInitiated && ProcessInfo.processInfo.environment["AUDIOVANE_NO_UPDATE_CHECK"] != nil { return }
+        if userInitiated {
+            Task {
+                await Analytics.shared.track("update_check_requested")
+                await Analytics.shared.logToPostHog("manual update check requested")
+            }
+        }
         var request = URLRequest(url: URL(string: "https://api.github.com/repos/\(Self.repo)/releases/latest")!)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.timeoutInterval = 15
@@ -34,13 +40,34 @@ final class UpdateChecker {
             let release = data.flatMap { try? JSONDecoder().decode(Release.self, from: $0) }
             DispatchQueue.main.async {
                 guard let release else {
-                    if userInitiated { self.alert("Couldn't check for updates", error?.localizedDescription ?? "No release information found.") }
+                    if userInitiated {
+                        Task {
+                            await Analytics.shared.logToPostHog(
+                                "manual update check failed",
+                                attributes: ["reason": "release_metadata_unavailable"])
+                        }
+                        self.alert("Couldn't check for updates", error?.localizedDescription ?? "No release information found.")
+                    }
                     return
                 }
                 let latest = release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
                 guard Self.isNewer(latest, than: self.currentVersion) else {
-                    if userInitiated { self.alert("You're up to date", "AudioVane \(self.currentVersion) is the latest version.") }
+                    if userInitiated {
+                        Task {
+                            await Analytics.shared.logToPostHog(
+                                "manual update check completed",
+                                attributes: ["update_available": false])
+                        }
+                        self.alert("You're up to date", "AudioVane \(self.currentVersion) is the latest version.")
+                    }
                     return
+                }
+                if userInitiated {
+                    Task {
+                        await Analytics.shared.logToPostHog(
+                            "manual update check completed",
+                            attributes: ["update_available": true, "latest_version": latest])
+                    }
                 }
                 self.offer(latest, release: release)
             }
@@ -71,8 +98,15 @@ final class UpdateChecker {
                 alert("Update not available", "This release has no \(Self.assetName) download.")
                 return
             }
+            Task {
+                await Analytics.shared.track("update_install_started", [
+                    "from_version": currentVersion,
+                    "to_version": version,
+                ])
+            }
             install(from: url)
         case .alertThirdButtonReturn:
+            Task { await Analytics.shared.track("update_release_notes_opened", ["version": version]) }
             if let url = URL(string: release.html_url) { NSWorkspace.shared.open(url) }
         default:
             break

@@ -410,6 +410,59 @@ final class AppState: ObservableObject {
         activeMode = mode
     }
 
+    /// True while the window is in its own full-screen Space.
+    @Published private(set) var isFullScreen = false
+    /// Full screen and "float above other apps" are mutually exclusive at the OS
+    /// level: macOS will not put a window above the normal level into a
+    /// full-screen Space. Left alone, turning float on silently kills the green
+    /// button's job and it just zooms the window, which looks like a full
+    /// screen that stops under the menu bar.
+    ///
+    /// So this goes in the other direction: when the window is floating and
+    /// full screen is asked for, drop to the normal level first and put the
+    /// float back on the way out. A full-screen Space is above everything in
+    /// that Space anyway, so nothing is lost while it's there — and both
+    /// features keep working.
+    func toggleFullScreen() {
+        guard let window else { return }
+        guard !isFullScreen, alwaysOnTop, window.level != .normal else {
+            window.toggleFullScreen(nil)
+            return
+        }
+        restoringFloatAfterFullScreen = true
+        window.level = .normal
+        // macOS needs a turn of the run loop to notice the level change and
+        // hand full-screen capability back to the window. Asking in the same
+        // turn does nothing at all, which is what the first version did.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            window.toggleFullScreen(nil)
+        }
+    }
+
+    /// Set when the level was dropped to make full screen possible.
+    private var restoringFloatAfterFullScreen = false
+
+    private func handleEnteredFullScreen() {
+        isFullScreen = true
+        NSLog("[window] entered full screen (level %@)", windowLevelName)
+    }
+
+    private func handleExitedFullScreen() {
+        isFullScreen = false
+        // Put the float back, or the user comes out of full screen into a
+        // window that no longer floats and has to notice.
+        if restoringFloatAfterFullScreen, alwaysOnTop {
+            restoringFloatAfterFullScreen = false
+            applyWindowLevel()
+        }
+        NSLog("[window] left full screen (level %@)", windowLevelName)
+    }
+
+    private var windowLevelName: String {
+        guard let window else { return "none" }
+        return window.level == .floating ? "floating" : "normal"
+    }
+
     func setAlwaysOnTop(_ on: Bool) {
         alwaysOnTop = on
         UserDefaults.standard.set(on, forKey: "audiovane.alwaysOnTop")
@@ -430,8 +483,20 @@ final class AppState: ObservableObject {
     /// window refusing to get there.
     static let minimumWindowSize = CGSize(width: 420, height: 280)
 
+    /// Only installed while the window is floating; see `applyWindowLevel`.
+    private var greenButtonProxy: GreenButtonProxy?
+
     private func startWatchingWidth() {
         guard Self.resizeObserver == nil, let window else { return }
+        let center = NotificationCenter.default
+        center.addObserver(forName: NSWindow.didEnterFullScreenNotification, object: window,
+                           queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleEnteredFullScreen() }
+        }
+        center.addObserver(forName: NSWindow.didExitFullScreenNotification, object: window,
+                           queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.handleExitedFullScreen() }
+        }
         windowWidth = window.frame.width
         Self.resizeObserver = NotificationCenter.default.addObserver(
             forName: NSWindow.didResizeNotification, object: window, queue: .main
@@ -444,8 +509,20 @@ final class AppState: ObservableObject {
     private func applyWindowLevel() {
         guard let window else { return }
         let wanted: NSWindow.Level = alwaysOnTop ? .floating : .normal
-        guard window.level != wanted else { return }
-        window.level = wanted
+        if window.level != wanted {
+            window.level = wanted
+        }
+        // While the window is floating, macOS refuses it a full-screen Space,
+        // so the green button zooms instead — which looks like a full screen
+        // that stops under the menu bar. Point the button at the path that
+        // works for those windows, and hand it straight back to AppKit for
+        // every other window, which should keep its own behaviour untouched.
+        if alwaysOnTop {
+            if greenButtonProxy == nil { greenButtonProxy = GreenButtonProxy() }
+            greenButtonProxy?.takeOverGreenButton(in: window)
+        } else {
+            greenButtonProxy?.releaseGreenButton(in: window)
+        }
         // Logged because "it's behind everything" is the kind of report that
         // arrives with no way to check it, and this is the only line that says
         // what the window is actually doing.
@@ -628,6 +705,36 @@ enum SingerVoice: String, CaseIterable, Identifiable {
 /// numbers go first (they're diagnostics for us, not for the person watching),
 /// then the pill labels, then the pills themselves. What's left at the narrowest
 /// size is the brand and the thing on screen.
+/// Sits behind the window's green button while that window is floating.
+///
+/// `NSWindow.standardWindowButton(.zoomButton)` is public API, so handing it a
+/// different target is a supported thing to do; clearing the target again puts
+/// AppKit's own behaviour back.
+final class GreenButtonProxy: NSObject {
+    weak var window: NSWindow?
+
+    func takeOverGreenButton(in window: NSWindow) {
+        let button = window.standardWindowButton(.zoomButton)
+        guard let button else { return }
+        button.target = self
+        button.action = #selector(greenButtonClicked)
+        self.window = window
+    }
+
+    func releaseGreenButton(in window: NSWindow) {
+        guard let button = window.standardWindowButton(.zoomButton) else { return }
+        button.target = nil
+        button.action = nil
+    }
+
+    @objc private func greenButtonClicked() {
+        MainActor.assumeIsolated {
+            guard let state = AppState.shared else { return }
+            state.toggleFullScreen()
+        }
+    }
+}
+
 enum LayoutTier: Int, Comparable {
     case wide, compact, narrow, tiny
 

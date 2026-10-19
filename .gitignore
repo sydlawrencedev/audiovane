@@ -10,6 +10,9 @@ package-lock.json
 *.xcodeproj
 .swiftpm/
 
+# Local agent/tooling state
+.claude/
+
 # Cloudflare Worker local state and secrets
 .wrangler/
 .dev.vars
@@ -19,3 +22,4 @@ VisualiserMac/build/
 VisualiserMac/dist/
 dist/
 VisualiserMac/Tests/eval-results/
+.env

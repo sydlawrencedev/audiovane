@@ -1,11 +1,7 @@
 import Foundation
+import PostHog
 
-/// Minimal PostHog capture client.
-///
-/// Deliberately not the official SDK: that pulls in feature flags, session
-/// replay and surveys, and session replay in particular has no business inside
-/// an app whose entire job is capturing the screen. This speaks the same
-/// `/batch` endpoint with nothing attached.
+/// PostHog capture client for the app's product events and error reporting.
 ///
 /// Privacy: this app watches audio and draws the screen, so the rule is that
 /// nothing derived from *what the user is watching or listening to* ever
@@ -30,7 +26,7 @@ actor Analytics {
     }()
 
     private var apiKey: String?
-    private var host: String
+    private var host: String?
     private var distinctId: String
     private var queue: [[String: Any]] = []
     private var flushTask: Task<Void, Never>?
@@ -41,12 +37,20 @@ actor Analytics {
 
     private let defaults: UserDefaults
 
+    private static let logEnvironment: String = {
+        #if DEBUG
+        return "development"
+        #else
+        return "production"
+        #endif
+    }()
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
         let info = Bundle.main.infoDictionary ?? [:]
         apiKey = (info["PostHogKey"] as? String)?.nilIfBlank
-        host = ((info["PostHogHost"] as? String)?.nilIfBlank) ?? "https://us.i.posthog.com"
+        host = (info["PostHogHost"] as? String)?.nilIfBlank
         if let key = apiKey, !key.hasPrefix("phc_") {
             NSLog("[analytics] ignoring malformed PostHog key")
             apiKey = nil
@@ -59,6 +63,19 @@ actor Analytics {
             defaults.set(fresh, forKey: Self.distinctIdKey)
             distinctId = fresh
         }
+
+        if !Self.disabledAtBuild, let apiKey, let host {
+            let config = PostHogConfig(projectToken: apiKey, host: host)
+            config.errorTrackingConfig.autoCapture = true
+            config.logs.serviceName = "audiovane-macos"
+            config.logs.environment = Self.logEnvironment
+            PostHogSDK.shared.setup(config)
+            if defaults.bool(forKey: Self.enabledKey) {
+                PostHogSDK.shared.identify(distinctId)
+            } else {
+                PostHogSDK.shared.optOut()
+            }
+        }
     }
 
     var isEnabled: Bool {
@@ -68,31 +85,35 @@ actor Analytics {
     /// False when the bundle has no project key — the toggle then shows as
     /// unavailable rather than pretending to collect.
     var isConfigured: Bool {
-        Self.disabledAtBuild ? false : apiKey != nil
+        Self.disabledAtBuild ? false : apiKey != nil && host != nil
     }
 
     /// Opting in is a one-time write, so a returning user doesn't have to
     /// re-toggle it every launch. Seeded from Info.plist at first run.
     func bootstrapOptIn() {
-        guard !Self.disabledAtBuild else { return }
-        guard apiKey != nil else { return }
+        guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         let marker = "analytics.optInPrompted"
         guard !defaults.bool(forKey: marker) else { return }
         defaults.set(true, forKey: marker)
         defaults.set(true, forKey: Self.enabledKey)
+        PostHogSDK.shared.optIn()
+        PostHogSDK.shared.identify(distinctId)
     }
 
     var currentDistinctId: String { distinctId }
 
     func setEnabled(_ on: Bool) async {
-        guard !Self.disabledAtBuild else { return }
+        guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         defaults.set(on, forKey: Self.enabledKey)
         if !on {
+            PostHogSDK.shared.optOut()
             queue.removeAll()
             flushTask?.cancel()
             flushTask = nil
             NSLog("[analytics] disabled by user")
         } else {
+            PostHogSDK.shared.optIn()
+            PostHogSDK.shared.identify(distinctId)
             NSLog("[analytics] enabled")
         }
     }
@@ -104,11 +125,17 @@ actor Analytics {
         distinctId = UUID().uuidString
         defaults.set(distinctId, forKey: Self.distinctIdKey)
         queue.removeAll()
+        PostHogSDK.shared.reset()
+        if defaults.bool(forKey: Self.enabledKey) {
+            PostHogSDK.shared.identify(distinctId)
+        } else {
+            PostHogSDK.shared.optOut()
+        }
         NSLog("[analytics] identity reset")
     }
 
     func track(_ event: String, _ properties: [String: Any] = [:]) {
-        guard !Self.disabledAtBuild, apiKey != nil else { return }
+        guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         guard defaults.bool(forKey: Self.enabledKey) else { return }
 
         var payload: [String: Any] = [
@@ -125,10 +152,18 @@ actor Analytics {
         scheduleFlush()
     }
 
+    /// Purpose-written operational logs only. Existing system and app loggers
+    /// remain local, so every log sent to PostHog is visible at its call site.
+    func logToPostHog(_ message: String, attributes: [String: Any] = [:]) {
+        guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
+        guard defaults.bool(forKey: Self.enabledKey) else { return }
+        PostHogSDK.shared.logger?.info(message, attributes: attributes)
+    }
+
     /// Counts an occurrence in a per-session tally instead of sending a row.
     /// Detail screens send the exact sequence; PostHog gets the histogram.
     func countInSession(_ key: String, by amount: Int = 1) {
-        guard !Self.disabledAtBuild, apiKey != nil else { return }
+        guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         guard defaults.bool(forKey: Self.enabledKey) else { return }
         session[key, default: 0] += amount
     }
@@ -175,7 +210,7 @@ actor Analytics {
     @discardableResult
     func flush() async -> Bool {
         flushTask = nil
-        guard !Self.disabledAtBuild, let apiKey, defaults.bool(forKey: Self.enabledKey) else { return false }
+        guard !Self.disabledAtBuild, let apiKey, let host, defaults.bool(forKey: Self.enabledKey) else { return false }
 
         var batch = queue
         queue.removeAll()

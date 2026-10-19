@@ -33,7 +33,7 @@ Everything here is copy-paste. Project **673583**.
    single-binary app this is usually what you want.
 
 4. Add the Stripe payment link as a **goal** (`Settings → Goals`), pasting
-   `https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00`. PostHog matches it against
+   `https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01`. PostHog matches it against
    `$current_url` — only relevant if you ever load that page in an in-app
    webview again.
 

@@ -10,7 +10,7 @@ curl -fsSL https://audiovane.minithlabs.com/install.sh | bash
 
 Or ask an AI assistant: *"install audiovane from https://audiovane.minithlabs.com"*.
 
-If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00).
+If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01).
 
 Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/audiovane/issues). Pull requests are very welcome, especially new visualisations: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
@@ -21,6 +21,7 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/a
 | `VisualiserMac/` | The macOS app (Swift, SwiftUI, OpenGL). See its [README](VisualiserMac/README.md). |
 | `site/` | The landing page, installer (`install.sh`) and AI install instructions (`install.md`, `llms.txt`). |
 | `site/analytics.js` | Anonymous page-view / click tracking for the landing page. |
+| `site/github.js` | Changelog and open issues, fetched from the GitHub API when scrolled into view. |
 | `worker/index.js` | Cloudflare Worker: serves `./site` and handles `/download` (redirect + Discord notification). |
 | `site/sitemap.xml`, `site/robots.txt` | What Google is pointed at. One URL; the plain-text agent pages are deliberately left crawlable but unlisted. |
 | `site/_headers`, `site/_redirects` | Cloudflare response headers (caching, security) and canonical-path redirects. |
@@ -121,6 +122,21 @@ Notes:
   `wrangler.toml` and redeploying; the site keeps working either way.
 - `install.sh` still downloads straight from GitHub, so script installs don't
   produce notifications.
+
+## Changelog and open issues
+
+Both sections on the landing page read from `api.github.com` at runtime rather
+than being baked in, so they can't go stale between deploys. Three things keep
+that honest:
+
+- **Cached** in `sessionStorage` for 15 minutes. GitHub's unauthenticated API
+  allows 60 requests an hour *per IP*, and every visitor would be spending from
+  the same one.
+- **Lazy** — the fetch starts when the section scrolls into view.
+- **Never fatal** — if GitHub is down, rate-limiting us, or the JSON moves, the
+  section says so and leaves a link to the repo behind. Issue titles are
+  rendered through `textContent`, never `innerHTML`, because they're whatever
+  someone typed into a text box.
 
 ## SEO
 

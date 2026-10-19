@@ -72,24 +72,30 @@ final class StartupManager: ObservableObject {
     // MARK: - Turning them on and off
 
     func setLaunchAtLogin(_ on: Bool) {
-        apply(on, to: LoginItem.agent)
+        apply(on, to: LoginItem.agent, preference: "launch_at_login")
         refresh()
     }
 
     func setWatchMusicApps(_ on: Bool) {
-        apply(on, to: WatcherControl.agent)
+        apply(on, to: WatcherControl.agent, preference: "watch_music_apps")
         refresh()
     }
 
     /// Records the choice first, then makes it true, and undoes the choice if
     /// it couldn't be: the switch and the stored preference have to agree, or
     /// the next launch repairs something the user never asked for.
-    private func apply(_ on: Bool, to agent: LaunchAgentControl) {
+    private func apply(_ on: Bool, to agent: LaunchAgentControl, preference: String) {
         UserDefaults.standard.set(on, forKey: agent.enabledKey)
         let result = on ? agent.install() : agent.uninstall()
         switch result {
         case .success:
             errorMessage = nil
+            Task {
+                await Analytics.shared.track("startup_preference_changed", [
+                    "preference": preference,
+                    "enabled": on,
+                ])
+            }
         case .failure(let error):
             UserDefaults.standard.set(false, forKey: agent.enabledKey)
             errorMessage = error.localizedDescription

@@ -57,6 +57,10 @@ struct VisualiserApp: App {
                 Toggle("Float Above All Windows", isOn: Binding(
                     get: { app.alwaysOnTop },
                     set: { app.setAlwaysOnTop($0) }))
+                Button(app.isFullScreen ? "Exit Full Screen" : "Enter Full Screen") {
+                    app.toggleFullScreen()
+                }
+                .keyboardShortcut("f", modifiers: [.command, .control])
                 Divider()
                 Picker("Lead Singer", selection: $app.singerVoice) {
                     ForEach(SingerVoice.allCases) { Text($0.label).tag($0) }
@@ -70,6 +74,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        _ = Analytics.shared
         // First thing in: a crash handler that installs after the app has
         // already started crashing is a handler that misses the first crash.
         CrashReporter.shared.install()
@@ -126,6 +131,56 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 CrashReporter.shared.log("simulated crash requested on the command line")
                 CrashReporter.shared.simulateCrash()
+            }
+        }
+
+        // `--window-info` prints the window's level and frame. Full screen is
+        // the thing worth checking here: macOS refuses a full-screen Space to a
+        // window above the normal level, which looks exactly like a full screen
+        // that stops under the menu bar.
+        if CommandLine.arguments.contains("--window-info") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                guard let w = NSApp.windows.first else { print("[window] no window"); exit(0) }
+                let mask = w.styleMask
+                print("[window] title: \(w.title)")
+                print("[window] isFullScreen: \(w.styleMask.contains(.fullScreen))")
+                print("[window] level: \(w.level == .floating ? "floating" : "normal")")
+                print("[window] resizable: \(mask.contains(.resizable))")
+                print("[window] fullScreenPrimary: \(w.collectionBehavior.contains(.fullScreenPrimary))")
+                print("[window] frame: \(w.frame)")
+                if let screen = w.screen ?? NSScreen.main {
+                    print("[window] screen frame:  \(screen.frame)")
+                    print("[window] visible frame: \(screen.visibleFrame)")
+                }
+                // With --full-screen, stay alive long enough to see what the
+                // toggle actually did, then report the same numbers again.
+                // --green-button presses the real traffic-light button instead
+                // of the menu item, which is what a person actually clicks.
+                let pressGreen = CommandLine.arguments.contains("--green-button")
+                guard CommandLine.arguments.contains("--full-screen") || pressGreen else { exit(0) }
+                if pressGreen {
+                    let button = w.standardWindowButton(.zoomButton)
+                    print("[window] green button target: \(button?.target.map { String(describing: type(of: $0)) } ?? "AppKit (default)")")
+                    button?.performClick(nil)
+                } else {
+                    AppState.shared?.toggleFullScreen()
+                }
+                // Full screen is an animated transition into another Space, so
+                // report a timeline rather than a single moment, which catches
+                // the state mid-animation and calls it a failure.
+                func report(_ label: String) {
+                    print("\(label): fullScreen=\(w.styleMask.contains(.fullScreen)) " +
+                          "level=\(w.level == .floating ? "floating" : "normal") " +
+                          "w=\(Int(w.frame.width))x\(Int(w.frame.height))")
+                    fflush(stdout)
+                }
+                report("t+0")
+                for step in 1...4 {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + Double(step)) {
+                        report("t+\(step)s")
+                        if step == 4 { exit(0) }
+                    }
+                }
             }
         }
 

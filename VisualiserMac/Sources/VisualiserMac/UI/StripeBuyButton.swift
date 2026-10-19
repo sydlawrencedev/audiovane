@@ -16,7 +16,7 @@ import AppKit
 /// place to collect a card than a 284pt-wide iframe in a popover.
 struct StripeBuyButton: View {
     /// Stripe's hosted payment page for this account.
-    static let paymentLink = URL(string: "https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00")!
+    static let paymentLink = URL(string: "https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01")!
     static let buyButtonID = "buy_btn_1USD7jAe4Pa3AR9tvGlMbjqP"
     static let publishableKey = "pk_live_51PvhoNAe4Pa3AR9tKQcqIgoT0Y7k0NG495AfC1Ld6Hj3tXI5MPjgs8rSyG0wITDRZRqpI8be9plbHHVyqQ0adNJa00IOFZO0KM"
 

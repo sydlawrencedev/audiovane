@@ -10,9 +10,15 @@ let package = Package(
         .executable(name: "AudioVane", targets: ["AudioVane"]),
         .executable(name: "AudioVaneWatcher", targets: ["AudioVaneWatcher"])
     ],
+    dependencies: [
+        .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.58.0")
+    ],
     targets: [
         .executableTarget(
             name: "AudioVane",
+            dependencies: [
+                .product(name: "PostHog", package: "posthog-ios")
+            ],
             path: "Sources/VisualiserMac",
             swiftSettings: [
                 .unsafeFlags(["-parse-as-library"]),
