@@ -2283,29 +2283,33 @@ extension FunShaders {
 extension FunShaders {
     // MARK: - Wormhole
 
-    /// Falling through a vortex of light, after the climax of the AudioVane
-    /// brand film (0:38 to 0:40): a magenta stream and a gold stream of fine
-    /// filaments twist down into a funnel, with gold sparks, soft out-of-focus
-    /// debris and cyan glass shards racing past. Drawn in log-polar space
-    /// (angle round the eye, log of the distance for depth), so it's a few
-    /// noise lookups per pixel and four bokeh layers, with no raymarching.
-    /// The fall runs on uScroll, so it rushes when the music is loud. The bass
-    /// tightens the twist and fattens the streams, the spectrum runs round the
-    /// circle and brightens the filaments, every beat turns the vortex a step
-    /// and flares the knot in its throat, and the treble adds sparks and makes
-    /// the glass glint. In silence: dim, and still.
+    /// Falling through a knot of light, after the climax of the AudioVane
+    /// brand film (0:38 to 0:40): a few thick, glittering streams of hot pink
+    /// and gold sweep in from the edges of the screen over black space and
+    /// twist into an off-centre knot, a gold coil turning away into the
+    /// distance. Gold glitter, warm bokeh and a few cyan glass cubes fly out
+    /// past the camera in depth layers. Drawn in log-polar space round the
+    /// knot (angle, and log of the distance for depth), so it's a handful of
+    /// noise lookups per pixel and five particle layers, with no raymarching.
+    /// The colours are picked to land as hot pink and gold through the NEON
+    /// grade, and the background carries a touch of green so the grade's
+    /// purple lift reads as black. The fall runs on uScroll, so it rushes when
+    /// the music is loud. The bass tightens the curl and the coil, every beat
+    /// turns the knot a step and lifts the light, and the treble adds glitter
+    /// and makes the glass glint. In silence: dim, and still.
     static let wormhole = """
-    // Wormhole: falling through a vortex of light. Magenta and gold streams of
-    // fine filaments twist down into a funnel while gold sparks, soft bokeh and
-    // cyan glass shards race past.
+    // Wormhole: falling through a knot of light in black space. A few thick,
+    // glittering streams of hot pink and gold sweep in from the edges of the
+    // screen and twist into an off-centre knot, while gold glitter, soft bokeh
+    // and cyan glass cubes fly out past the camera.
 
-    const int kWormBokeh = 4;
-    const vec3 wormMagenta = vec3(1.0, 0.18, 0.72);
-    const vec3 wormGold = vec3(1.0, 0.68, 0.24);
-    const vec3 wormCyan = vec3(0.25, 0.95, 1.0);
+    const int kWormLayers = 5;
+    const vec3 wormPink = vec3(1.0, 0.13, 0.24);
+    const vec3 wormGold = vec3(1.0, 0.54, 0.02);
+    const vec3 wormCyan = vec3(0.0, 1.0, 0.80);
 
     // How far we've fallen. Forward-only, faster when louder.
-    float wormTravel() { return uScroll * 1.7; }
+    float wormTravel() { return uScroll * 9.0; }
     // One step per beat, eased in, so beat-driven turns never run backwards.
     float wormTurn() { return floor(uBeats) + smoothstep(0.0, 0.5, fract(uBeats)); }
 
@@ -2320,110 +2324,142 @@ extension FunShaders {
         return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
     }
 
-    // Spectrum around the circle, smoothed between bands.
-    float wormSpec(float x01) {
-        float f = abs(fract(x01) * 2.0 - 1.0) * 95.0;     // mirrored, so it has no seam
-        int i = int(floor(f));
-        float t = fract(f);
-        return mix(uBands[i], uBands[min(i + 1, 95)], t * t * (3.0 - 2.0 * t));
+    // Signed angle from `a` to `c`, wrapped to -PI..PI.
+    float wormAngle(float a, float c) { return mod(a - c + PI, 2.0 * PI) - PI; }
+
+    // One stream: a soft, ragged band of angle around `c` with half-width `w`.
+    // `rag` roughens its edges.
+    float wormStream(float a, float u, float c, float w, float seed, float rag) {
+        float wob = wormNoise(vec2(u * 0.55 + seed, seed), 64.0) - 0.5;
+        float d = abs(wormAngle(a, c + wob * 0.9));
+        return smoothstep(w * (0.85 + 0.4 * wob), w * 0.45, d + (rag - 0.5) * w * 0.7);
     }
 
-    // A soft lobe around angle `c`, `sharp` sets how narrow.
-    float wormLobe(float a, float c, float sharp) { return pow(0.5 + 0.5 * cos(a - c), sharp); }
+    // Roughly how close angle `a` is to a stream centred on `c`.
+    float wormLobe(float a, float c) { return pow(0.5 + 0.5 * cos(a - c), 5.0); }
 
-    // Fine filaments running along the stream: thin in angle, long in depth.
-    // `n` is how many filaments go round the circle (whole, so they wrap).
-    float wormFilaments(float a, float u, float n, float seed) {
+    // Long streaks running along the streams, stretched by the speed of the fall.
+    float wormStreaks(float a, float flow, float n, float seed) {
         float x = a / (2.0 * PI) * n;
-        float f = wormNoise(vec2(x, u * 0.9 + seed), n);
-        f = 0.65 * f + 0.35 * wormNoise(vec2(x * 2.0, u * 1.7 - seed), n * 2.0);
-        return pow(f, 4.0);
+        float f = wormNoise(vec2(x, flow * 0.6 + seed), n);
+        f = 0.6 * f + 0.4 * wormNoise(vec2(x * 3.0, flow * 1.0 - seed), n * 3.0);
+        return f * f * f;
     }
 
     void main() {
         vec2 p = screenP();
         float travel = wormTravel();
         float turn = wormTurn();
-        float px = 1.0 / uResolution.y;
-        // The eye of the vortex wanders a little (sound-gated clock).
-        vec2 eye = vec2(0.04 + 0.05 * sin(uTime * 0.13), -0.02 + 0.04 * sin(uTime * 0.17 + 1.0));
+        float lit = 0.35 + 0.65 * uActive;
+        // The knot sits low and a little left of centre, drifting slowly.
+        vec2 eye = vec2(-0.03 + 0.03 * sin(uTime * 0.11), -0.07 + 0.025 * sin(uTime * 0.09 + 1.0));
         vec2 q = p - eye;
         float r = max(length(q), 1e-4);
         float a = atan(q.y, q.x);
-        float u = -log(r);                                // depth down the funnel
+        float u = -log(r);                                // depth into the knot
+        float flow = u * 3.0 - travel;                    // streaks rush outward
 
-        // Twist: the streams spiral harder further down, and harder on the bass.
-        float twist = 1.15 + 0.45 * uBass;
-        float spin = uTime * 0.22 + turn * 0.35;
-        float a2 = a + twist * u + spin;
-        float flow = u * 1.0 - travel;                    // streams rush outward as we fall
+        // The streams curl hard near the knot and straighten out at the edges.
+        // Bass tightens the curl; each beat turns the whole knot a step.
+        float curl = (0.14 + 0.06 * uBass) / (r + 0.05);
+        float a2 = a + curl + uTime * 0.012 + turn * 0.04;
 
-        // Two broad streams, magenta and gold, plus a thinner second arm of each.
-        float width = 3.6 - 1.4 * uBass;                  // the bass fattens them
-        float mag = wormLobe(a2, 0.0, width) + 0.35 * wormLobe(a2 * 2.0, 1.3, width * 2.5);
-        float gold = wormLobe(a2, PI - 0.5, width) + 0.35 * wormLobe(a2 * 2.0, 4.4, width * 2.5);
+        // A few broad streams: a wide pink fan, a gold river, and pink accents.
+        float rag = wormNoise(vec2(a2 / (2.0 * PI) * 24.0, u * 0.8), 24.0);
+        float pinkA = wormStream(a2, u, 3.2, 1.15, 1.0, rag);
+        float goldA = wormStream(a2, u, -0.8, 1.0, 5.0, rag);
+        float pinkB = wormStream(a2, u, 0.4, 0.5, 9.0, 1.0 - rag);
+        float pinkC = wormStream(a2, u, 1.4, 0.22, 13.0, 1.0 - rag);
+        float pink = max(max(pinkA, pinkB), pinkC * 0.8);
 
-        float spec = wormSpec(a2 / (2.0 * PI));
-        float fm = wormFilaments(a2, flow, 96.0, 0.0);
-        float fg = wormFilaments(a2 + 0.7, flow * 1.2, 128.0, 7.0);
-        float level = (0.75 + 0.5 * uLevel + 0.9 * spec) * (0.55 + 0.45 * uActive);
+        float sp = wormStreaks(a2, flow, 90.0, 0.0);
+        float sg = wormStreaks(a2 + 0.4, flow * 1.15, 120.0, 7.0);
+        float level = (0.8 + 0.6 * uLevel + 0.5 * uBass) * lit;
 
-        // Light falls off into the throat, and fades out to the edges of the screen.
-        float throat = smoothstep(0.015, 0.16, r);
-        float outer = 1.0 / (1.0 + r * r * 1.4);
-        vec3 col = vec3(0.004, 0.002, 0.012);
-        col += wormMagenta * mag * (0.04 + 3.4 * fm) * level * throat * outer;
-        col += wormGold * gold * (0.03 + 4.2 * fg) * level * throat * outer;
-        // white-hot cores where the filaments bunch up
-        col += vec3(1.0, 0.9, 0.95) * (mag * fm * fm + gold * fg * fg) * 2.0 * level * throat * outer;
-        // the glowing knot just inside the throat
-        float knot = exp(-pow((r - 0.07) / 0.035, 2.0)) * (0.5 + 0.5 * wormFilaments(a2 * 1.5, flow * 2.0, 40.0, 3.0));
-        col += mix(wormGold, wormMagenta, 0.3) * knot * (0.6 + 0.8 * uBeatStrength) * (0.4 + 0.6 * uActive);
+        // Light gathers in the knot and dies in its very throat.
+        float throat = smoothstep(0.0, 0.018, r);
+        float knotGlow = exp(-r * 22.0);
+        // A touch of green so the grade's purple lift lands as a near-neutral black.
+        vec3 col = vec3(0.004, 0.03, 0.0);
+        // a medium grain so the streams read as made of particles, not paint
+        float grain = wormNoise(vec2(a2 / (2.0 * PI) * 200.0, u * 4.0 - travel * 1.3), 200.0);
+        float sheet = wormNoise(vec2(a2 / (2.0 * PI) * 6.0, u * 0.7 - travel * 0.25), 6.0);
+        grain = (0.25 + 1.5 * grain * grain) * (0.4 + 1.4 * sheet * sheet);
+        col += wormPink * pink * (1.0 + 3.6 * sp) * grain * level * throat;
+        col += wormGold * goldA * (0.9 + 3.4 * sg) * grain * level * throat;
+        // the knot itself: a bright gold loop of light
+        if (r < 0.2) {
+            // the knot: a gold coil of light twisting away into the distance
+            float loop = exp(-pow((r - 0.03) / 0.028, 2.0)) * (0.4 + 1.2 * wormStreaks(a2 * 2.0, flow, 40.0, 3.0));
+            float coil = fract(u * 2.2 + a2 / (2.0 * PI) - travel * 0.5);
+            coil = smoothstep(0.0, 0.3, coil) * smoothstep(0.9, 0.35, coil) * smoothstep(0.17, 0.05, r) * smoothstep(0.01, 0.03, r);
+            coil *= 0.3 + 1.4 * sg;
+            col += mix(wormGold, vec3(1.0, 0.85, 0.55), 0.3) * (loop * 2.4 + coil * (0.7 + 0.6 * uBass)) * level * throat;
+        }
+        col += vec3(1.0, 0.78, 0.45) * goldA * sg * sg * 2.4 * level * throat;     // white-hot cores
+        col += vec3(1.0, 0.7, 0.85) * pink * sp * sp * sheet * 2.5 * level * throat;
+        col += wormGold * pink * sg * sg * (1.0 - sheet) * 2.5 * level * throat;     // gold threads woven through the pink
+        col += mix(wormGold, wormPink, 0.4) * knotGlow * (0.5 + 0.9 * uBeatStrength) * lit * throat;
 
-        // Gold sparks racing outward, stretched by their speed.
-        vec2 sg = vec2(a2 / (2.0 * PI) * 160.0, u * 6.0 - travel * 6.0);
-        vec2 sc = floor(sg);
-        sc.x = mod(sc.x, 160.0);
-        float sh = hash21(sc);
-        vec2 so = fract(sg) - vec2(0.5, 0.5) - (vec2(hash21(sc + 3.7), hash21(sc + 9.1)) - 0.5) * vec2(0.5, 0.2);
-        float spark = smoothstep(0.22, 0.0, length(so * vec2(1.0, 0.35))) * step(0.86 - 0.08 * uTreble, sh);
-        col += mix(wormGold, vec3(1.0, 0.85, 0.6), sh) * spark * (0.6 + 1.2 * uTreble + 1.2 * uBeatStrength) * throat * (0.3 + 0.7 * uActive);
+        // Fine glitter inside the streams.
+        // (log-polar cells are square on screen, so the specks keep their shape)
+        vec2 gg = vec2(a2 / (2.0 * PI) * 220.0, (u * 3.0 - travel) * 220.0 / (6.0 * PI));
+        vec2 gc = floor(gg);
+        gc.x = mod(gc.x, 220.0);
+        float gh = hash21(gc);
+        vec2 gj = fract(gg) - 0.5 - (vec2(hash21(gc + 2.9), hash21(gc + 6.1)) - 0.5) * 0.8;
+        float gsz = 0.1 + 0.5 * pow(hash21(gc + 4.3), 2.0);
+        float glit = smoothstep(gsz, gsz * 0.3, length(gj * vec2(1.0, 0.55))) * step(0.80 - 0.18 * max(pink, goldA) - 0.10 * uTreble, gh) * (0.3 + 0.7 * hash21(gc + 8.2));
+        col += mix(vec3(1.0, 0.36, 0.0), vec3(1.0, 0.75, 0.35), gh * gh * gh * gh) * glit * (pink * 1.4 + goldA * 1.4 + 0.4 * exp(-r * 8.0)) * 1.7 * (1.0 + uTreble) * lit * throat;
 
-        // Bokeh and glass shards flying past in a few depth layers.
+        // Gold sparks spraying out of the knot, streaked by their speed.
+        vec2 sg2 = vec2(a2 / (2.0 * PI) * 150.0, u * 5.0 - travel * 1.6);
+        vec2 sc = floor(sg2);
+        sc.x = mod(sc.x, 150.0);
+        float sh = hash21(sc + 31.0);
+        vec2 so = fract(sg2) - 0.5 - (vec2(hash21(sc + 3.7), hash21(sc + 9.1)) - 0.5) * vec2(0.6, 0.4);
+        float spark = smoothstep(0.18, 0.0, length(so * vec2(1.0, 0.18))) * step(0.93 - 0.05 * uTreble, sh) * (goldA + 2.0 * knotGlow);
+        col += mix(wormGold, vec3(1.0, 0.9, 0.7), sh) * spark * (0.5 + 1.0 * uTreble + 1.0 * uBeatStrength) * throat * lit;
+
+        // Bokeh, glitter specks and cyan glass cubes flying past in depth layers.
         vec2 dir = q / r;
-        for (int i = 0; i < kWormBokeh; i++) {
+        // more debris near the streams than out in empty space
+        float near = 0.4 + 0.6 * max(wormLobe(a2, 3.2), wormLobe(a2, -0.8));
+        for (int i = 0; i < kWormLayers; i++) {
             float fi = float(i);
-            float z = fract(fi / float(kWormBokeh) + travel * 0.12);    // 0 far, 1 right past us
-            vec2 bq = rot(spin * 0.5 + fi * 1.7) * q * mix(9.0, 1.2, z * z) + fi * 17.3;
+            float z = fract(fi / float(kWormLayers) + travel * 0.25);     // 0 far, 1 right past us
+            float scale = mix(14.0, 1.3, z * z);
+            vec2 bq = q * scale + vec2(fi * 17.3, fi * 9.1);
             vec2 cell = floor(bq);
-            float h = hash21(cell);
-            vec2 local = fract(bq) - 0.5 - (vec2(hash21(cell + 1.3), hash21(cell + 5.9)) - 0.5) * 0.5;
-            // stretch along the flight direction: motion blur
-            vec2 bdir = rot(spin * 0.5 + fi * 1.7) * dir;
-            float along = dot(local, bdir), side = dot(local, vec2(-bdir.y, bdir.x));
-            float blur = 1.0 + 2.5 * z * z;
-            float fade = smoothstep(0.0, 0.3, z) * smoothstep(1.0, 0.8, z);
-            if (h > 0.9) {
-                // soft chunks of debris, warm and out of focus
-                float size = 0.10 + 0.12 * hash21(cell + 2.2);
+            float h = hash21(cell + fi * 3.1);
+            vec2 local = fract(bq) - 0.5 - (vec2(hash21(cell + 1.3), hash21(cell + 5.9)) - 0.5) * 0.3;
+            float along = dot(local, dir), side = dot(local, vec2(-dir.y, dir.x));
+            float blur = 1.0 + 0.8 * z * z;                                 // motion blur
+            float fade = smoothstep(0.0, 0.25, z) * smoothstep(1.0, 0.85, z);
+            float size = 0.03 + 0.14 * pow(hash21(cell + 2.2), 2.0);
+            if (h < 0.02 && z > 0.4) {
+                // a cyan glass cube, tumbling
+                vec2 cp = rot(h * 300.0 + uTime * 1.5 + turn * 0.5) * vec2(along / blur, side);
+                float d = max(abs(cp.x), abs(cp.y)) - (0.09 + size * 0.8);
+                float edge = 0.01 + 0.025 * z;                               // softer when close
+                float cube = smoothstep(edge, -edge, d);
+                float rim = smoothstep(edge + 0.03, 0.0, abs(d + 0.02));    // bright glass edges
+                float face = smoothstep(-0.12, 0.12, cp.y + 0.4 * cp.x);              // lit from one side
+                vec3 glass = wormCyan * (0.35 + 0.6 * face + 1.0 * rim) * (1.1 + 0.8 * uTreble + 0.6 * uBeatStrength) * lit;
+                col = mix(col, glass + col * 0.45, cube * fade * 0.75);
+            } else if (h < 0.06 + 0.5 * z * z) {
+                // a soft out-of-focus disc, or a sharp gold speck
+                float soft = mix(0.01, 0.07, z) * (0.5 + hash21(cell + 4.4));
                 float d = length(vec2(along / blur, side)) - size;
-                float disc = smoothstep(0.08, -0.04, d);
-                col = mix(col, vec3(0.36, 0.26, 0.22) * (0.4 + 0.6 * uActive) + col * 0.3, disc * fade * 0.32);
-                col += vec3(1.0, 0.75, 0.55) * smoothstep(0.03, 0.0, abs(d)) * fade * 0.05;
-            } else if (h < 0.025) {
-                // a cyan glass shard
-                vec2 sp = rot(h * 300.0 + uTime * 1.3) * vec2(along / blur, side);
-                float d = max(abs(sp.x), abs(sp.y) * 1.6) - 0.05;
-                float shard = smoothstep(0.02, -0.01, d) * (0.35 + 0.65 * smoothstep(-0.03, 0.0, d));   // bright rim, clearer middle
-                float glint = exp(-max(d, 0.0) * 30.0) * 0.3;
-                col += wormCyan * (shard + glint) * fade * (1.0 + 0.8 * uTreble + 0.6 * uBeatStrength) * (0.4 + 0.6 * uActive);
+                float disc = smoothstep(soft, -soft, d);
+                vec3 bc = mix(vec3(0.85, 0.62, 0.40), vec3(1.0, 0.72, 0.25), hash21(cell + 7.7));
+                col += bc * (0.25 + 0.9 * hash21(cell + 8.8)) * lit * disc * fade * near * (0.4 + 0.6 * z);
             }
         }
 
-        col += mix(wormMagenta, wormGold, 0.5) * uBeatStrength * 0.05 * uActive;
-        col = 1.0 - exp(-col * 1.5);                      // soft highlight roll-off
-        col *= 1.0 - 0.35 * dot(p, p);                    // vignette
-        col = mix(col * 0.45, col, uActive);              // dims and settles in silence
+        col *= 1.0 + 0.25 * uBeatStrength * uActive;      // a lift on the beat
+        col = 1.0 - exp(-col * 1.4);                      // soft highlight roll-off
+        col = mix(col * 0.4, col, uActive);               // dims and settles in silence
         fragColor = vec4(col, 1.0);
     }
     """
