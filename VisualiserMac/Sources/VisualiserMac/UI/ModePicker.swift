@@ -71,6 +71,7 @@ extension VisualizerMode {
         case .machine: return "gearshape.2"
         case .waveform: return "waveform.path"
         case .ribbons: return "scribble.variable"
+        case .silk: return "wind"
         }
     }
 }

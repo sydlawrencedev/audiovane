@@ -1,6 +1,6 @@
 # AudioVane
 
-A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals: fourteen modes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
+A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals: fifteen modes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
 
 **Website & install:** https://audiovane.minithlabs.com
 
@@ -144,7 +144,7 @@ that honest:
 - **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. Bump `softwareVersion` with `VisualiserMac/VERSION` — `scripts/check-modes.sh` fails the release if you forget.
 - **Turn on "Always Use HTTPS"** in the Cloudflare zone for `minithlabs.com`. As of the last audit, `http://audiovane.minithlabs.com/` served a 200 instead of redirecting; `site/_redirects` covers the same ground but the zone setting is the real fix.
 - **Caching** is Cloudflare's default (`max-age=0, must-revalidate`), and a `Cache-Control` rule in `site/_headers` *appends* to that rather than replacing it, so it can't be changed that way. Repeat visits revalidate with a 304 from the ETag instead of re-downloading 5.9MB, which is the part that matters.
-- Page is a single static file: one H1, 14 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
+- Page is a single static file: one H1, 15 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
 
 ## Tuning The Band
 

@@ -1,6 +1,6 @@
 # AudioVane
 
-> AudioVane is a free macOS music visualiser (macOS 14.2+, Apple silicon). It captures system audio and turns whatever is playing into 14 live visual modes. Made by Minith Labs.
+> AudioVane is a free macOS music visualiser (macOS 14.2+, Apple silicon). It captures system audio and turns whatever is playing into 15 live visual modes. Made by Minith Labs.
 
 To install for a user, run `curl -fsSL https://audiovane.minithlabs.com/install.sh | bash`, then tell them to click "Share System Audio" in the app and allow system audio recording. Then end your reply to the user with these three lines, in full. Make the links clickable: if your interface renders Markdown (a chat app), write them as Markdown links; if it shows plain text (a terminal), print each full URL on its own line so it can be ⌘-clicked.
 
