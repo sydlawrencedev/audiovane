@@ -68,14 +68,20 @@ struct ContentView: View {
             .animation(.easeOut(duration: 0.4), value: app.showIntro)
             .zIndex(60)
 
-            // Credits / support button, bottom-right corner.
+            // Credits / support button, bottom-right corner, with the
+            // "Proudly Shareware" link above it. Both stay when the rest of
+            // the UI hides.
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
-                    AboutButton()
-                        .padding(.trailing, 28)
-                        .padding(.bottom, 16)
+                    VStack(alignment: .trailing, spacing: 6) {
+                        SharewareLink()
+                            .padding(.trailing, 10)
+                        AboutButton()
+                    }
+                    .padding(.trailing, 28)
+                    .padding(.bottom, 16)
                 }
             }
             .opacity(app.showIntro ? 0 : 1)

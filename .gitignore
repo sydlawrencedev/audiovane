@@ -14,3 +14,4 @@ package-lock.json
 VisualiserMac/build/
 VisualiserMac/dist/
 dist/
+VisualiserMac/Tests/eval-results/

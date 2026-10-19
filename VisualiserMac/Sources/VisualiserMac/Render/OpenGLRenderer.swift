@@ -548,6 +548,21 @@ final class OpenGLRenderer: NSObject {
         glUniform1fv(uBandPresent, 6, walkers.indices.map { walkers[$0].on || abs(walkers[$0].x - offStage($0)) > 1 ? 1 : 0 })
     }
 
+    /// The band's current read of the music, for the evaluation log.
+    func bandEvalState() -> [String: Any] {
+        let names = ["drums", "bass", "guitar", "keys", "female_singer", "male_singer"]
+        var onStage: [String] = []
+        for (i, w) in walkers.enumerated() where w.on { onStage.append(names[i]) }
+        let classifier = audio.instruments.presence()
+        let partNames = ["drums", "bass", "guitar", "keys", "vocals"]
+        return [
+            "on_stage": onStage,
+            "parts": Dictionary(uniqueKeysWithValues: zip(partNames, bandParts.map { Double($0) })),
+            "classifier": Dictionary(uniqueKeysWithValues: zip(partNames, classifier.map { Double($0) })),
+            "singers": songLineup?.rawValue ?? "",
+        ]
+    }
+
     private func updateBadgerOverlay(_ snap: AudioSnapshot) -> (kind: Float, age: Float) {
         let now = CACurrentMediaTime()
         if snap.beat {

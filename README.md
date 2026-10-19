@@ -31,6 +31,16 @@ cd VisualiserMac
 open build/AudioVane.app
 ```
 
+## Tuning The Band
+
+`VisualiserMac/Tests/band-fixtures.yaml` lists YouTube videos labelled with their genre and who's playing. `scripts/band-eval.py` plays each one in Chrome while AudioVane listens, then prints a scorecard (genre right? right musicians on stage?) and saves the detector's features and per-genre scores to `VisualiserMac/Tests/eval-results/` for tuning. AudioVane needs system audio permission first; keep other audio off while it runs.
+
+```bash
+scripts/band-eval.py --check     # validate the fixtures file
+scripts/band-eval.py             # run them all (about a minute each)
+scripts/band-eval.py --only jazz
+```
+
 ## Releasing
 
 1. Bump `VisualiserMac/VERSION`.

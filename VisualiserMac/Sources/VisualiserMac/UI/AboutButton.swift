@@ -119,3 +119,24 @@ private struct AnalyticsToggle: View {
         }
     }
 }
+
+/// "Proudly Shareware", linking to the AudioVane website. Sits just above
+/// the credits button.
+struct SharewareLink: View {
+    private static let site = URL(string: "https://audiovane.minithlabs.com")!
+    @State private var hovering = false
+
+    var body: some View {
+        Link(destination: Self.site) {
+            Text("Proudly Shareware")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.2)
+                .textCase(.uppercase)
+                .foregroundStyle(Color(red: 1.0, green: 0.76, blue: 0.35).opacity(hovering ? 1 : 0.8))
+                .underline(hovering)
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .help("audiovane.minithlabs.com")
+    }
+}

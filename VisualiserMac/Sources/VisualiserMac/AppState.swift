@@ -189,6 +189,14 @@ final class AppState: ObservableObject {
             self?.reEvaluateAutoGenre()
             self?.pumpAutoGenre()
             self?.syncScanTarget()
+            self?.writeEvalLine()
+        }
+        // `--genre-auto` forces auto-detect on (ignoring a remembered lock) and
+        // `--system-audio` starts listening straight away: both used by the
+        // band evaluation runner.
+        if CommandLine.arguments.contains("--genre-auto") { genreIsAuto = true }
+        if CommandLine.arguments.contains("--system-audio") {
+            Task { await audio.startSystemCapture() }
         }
     }
 
@@ -325,6 +333,36 @@ final class AppState: ObservableObject {
     /// a genre manually). The picker uses this to draw the confidence bar.
     var genreIsDecided: Bool {
         genreIsAuto && genreConfidence >= Self.autoGenreMinConfidence
+    }
+
+    /// Band evaluation log: with AUDIOVANE_EVAL_LOG set, append one JSON line a
+    /// second describing what the genre detector and the band make of the
+    /// music. scripts/band-eval.py scores it against labelled videos.
+    private lazy var evalLog: FileHandle? = {
+        guard let path = ProcessInfo.processInfo.environment["AUDIOVANE_EVAL_LOG"] else { return nil }
+        FileManager.default.createFile(atPath: path, contents: nil)
+        return FileHandle(forWritingAtPath: path)
+    }()
+
+    private func writeEvalLine() {
+        guard let log = evalLog else { return }
+        let det = audio.genreDetector
+        var line: [String: Any] = [
+            "t": Date().timeIntervalSince1970,
+            "detected": det.genre.name.lowercased(),
+            "confidence": Double(det.confidence),
+            "active": genre.name.lowercased(),
+            "auto": genreIsAuto,
+            "bpm": audio.snapshot.bpm,
+            "rms": Double(audio.snapshot.rms),
+            "features": det.lastFeatures.mapValues(Double.init),
+            "scores": Dictionary(uniqueKeysWithValues: det.lastScores.map { ($0.key.name.lowercased(), Double($0.value)) }),
+        ]
+        for (k, v) in renderer.bandEvalState() { line[k] = v }
+        if let data = try? JSONSerialization.data(withJSONObject: line, options: [.sortedKeys]) {
+            log.write(data)
+            log.write(Data("\n".utf8))
+        }
     }
 
     /// Pump the detector's output into the active genre. Called from the

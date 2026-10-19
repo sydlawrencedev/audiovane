@@ -51,6 +51,10 @@ final class GenreDetector {
     /// 0..1, how confident the latest decision was. Used for the picker UI
     /// to grey out genres the detector is sure aren't right.
     private(set) var confidence: Float = 0
+    /// The latest scoring inputs and per-genre scores, for the band
+    /// evaluation log (scripts/band-eval.py) and tuning.
+    private(set) var lastFeatures: [String: Float] = [:]
+    private(set) var lastScores: [Genre: Float] = [:]
 
     func update(snapshot: AudioSnapshot, beat: Bool, vocal: Float, now: TimeInterval) {
         if now - windowStart > windowDuration {
@@ -248,6 +252,10 @@ private func score() -> (Genre, Float) {
         if !hasBeat {
             for g in Genre.allCases where g != .ambient { s[g] = 0 }
         }
+
+        lastScores = s
+        lastFeatures = ["bpm": bpmF, "bass": bass, "mid": mid, "treble": treble, "centroid": centroid,
+                        "onsets": onsets, "range": range, "vocal": vocal]
 
         let ranked = s.sorted { $0.value > $1.value }
         guard let top = ranked.first else { return (.rock, 0) }

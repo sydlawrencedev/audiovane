@@ -1,0 +1,37 @@
+# Labelled songs for tuning The Band's genre and line-up detection.
+#
+# scripts/band-eval.py plays each video in Chrome, lets AudioVane listen
+# through system audio, and scores what it decided against these labels.
+#
+# Each entry:
+#   url:   a YouTube link (watch?v=… or youtu.be/…)
+#   start: seconds into the video to start from. Pick a stretch where every
+#          band member you list is playing (skip intros and outros).
+#   genre: one of
+#            classical, electronic, rock, pop, hip-hop,
+#            jazz, blues, country, r&b, ambient
+#   band:  who should be on stage, any of
+#            drums, bass, guitar, keys, female_singer, male_singer
+#          ("guitar" also covers violin and sax, "bass" also covers upright
+#          bass and cello, as the stage draws them; a duet lists both singers)
+#   note:  optional, anything useful (artist, song, why it's tricky)
+#
+# Aim for 3–5 songs per genre, including a few that should be hard
+# (acoustic rock, drumless pop, a duet). Prefer official audio or lyric
+# videos: live recordings with crowd noise and long talky intros are harder
+# to label fairly.
+#
+# Copy an example below, uncomment it, and fill in a real link.
+
+fixtures:
+#  - url: https://www.youtube.com/watch?v=XXXXXXXXXXX
+#    start: 40
+#    genre: rock
+#    band: [drums, bass, guitar, male_singer]
+#    note: Artist – Song
+#
+#  - url: https://www.youtube.com/watch?v=XXXXXXXXXXX
+#    start: 30
+#    genre: jazz
+#    band: [drums, bass, keys, female_singer]
+#    note: Artist – Song
