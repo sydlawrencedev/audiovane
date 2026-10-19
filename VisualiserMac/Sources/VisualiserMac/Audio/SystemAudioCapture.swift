@@ -41,7 +41,7 @@ final class SystemAudioCapture {
         // 2. Wrap the tap in a private aggregate device clocked by the default output.
         let outputUID = try Self.defaultOutputDeviceUID()
         let aggregateDesc: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "AUDIVANE System Tap",
+            kAudioAggregateDeviceNameKey: "AUDIOVANE System Tap",
             kAudioAggregateDeviceUIDKey: UUID().uuidString,
             kAudioAggregateDeviceMainSubDeviceKey: outputUID,
             kAudioAggregateDeviceIsPrivateKey: true,

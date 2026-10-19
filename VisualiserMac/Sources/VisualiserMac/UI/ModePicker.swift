@@ -14,7 +14,8 @@ struct ModePicker: View {
     var body: some View {
         DropdownMenu(
             id: .mode,
-            entries: VisualizerMode.allCases.map { mode in
+            // Auto Scan always sits at the bottom of the list.
+            entries: (VisualizerMode.allCases.filter { $0 != .autoScan } + [.autoScan]).map { mode in
                 DropdownEntry(
                     value: mode,
                     title: mode.displayName,
@@ -22,7 +23,15 @@ struct ModePicker: View {
                     glyph: mode.glyph
                 )
             },
-            selection: $app.activeMode,
+            selection: Binding(
+                get: { app.activeMode },
+                set: {
+                    // Flags the change as deliberate so the mode_changed event
+                    // can tell a click apart from auto-scan cycling.
+                    app.viaPicker = true
+                    app.activeMode = $0
+                }
+            ),
             tint: app.activeMode == .band || app.activeMode == .autoScan ? .bandTint : .modeTint,
             pillExtra: app.activeMode == .autoScan ? AnyView(scanIndicator) : nil
         )
@@ -60,6 +69,7 @@ extension VisualizerMode {
         case .band: return "music.mic"
         case .autoScan: return "arrow.trianglehead.2.clockwise.rotate.90"
         case .machine: return "gearshape.2"
+        case .waveform: return "waveform.path"
         }
     }
 }

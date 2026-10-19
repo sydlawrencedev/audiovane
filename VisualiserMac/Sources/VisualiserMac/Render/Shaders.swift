@@ -3,6 +3,50 @@ import Foundation
 /// Embedded GLSL 330 core shaders. Plain strings — no build step needed.
 enum Shaders {
 
+    /// Full-screen palette grade. Samples the finished scene and maps its
+    /// luminance ramp between a shadow and a highlight colour, then applies
+    /// saturation and a black lift. Runs after every mode, so one palette
+    /// themes the whole app.
+    static let gradeVS = """
+    #version 330 core
+    layout(location = 0) in vec2 aPos;
+    out vec2 vUV;
+    void main() {
+        vUV = aPos * 0.5 + 0.5;
+        gl_Position = vec4(aPos, 0.0, 1.0);
+    }
+    """
+
+    static let gradeFS = """
+    #version 330 core
+    in vec2 vUV;
+    uniform sampler2D uTex;
+    uniform vec3 uShadow;
+    uniform vec3 uHighlight;
+    uniform float uSaturation;
+    uniform float uDuotone;
+    uniform float uLift;
+    out vec4 fragColor;
+
+    void main() {
+        vec3 c = texture(uTex, vUV).rgb;
+        float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+
+        // Duotone: stretch the luminance ramp between the two palette colours.
+        vec3 graded = uShadow + (uHighlight - uShadow) * luma;
+        c = mix(c, graded, uDuotone);
+
+        // Saturation, around the graded luminance.
+        luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+        c = mix(vec3(luma), c, uSaturation);
+
+        // Lift the blacks toward the shadow colour so the image doesn't crush.
+        c += uShadow * uLift * (1.0 - luma);
+
+        fragColor = vec4(clamp(c, 0.0, 1.0), 1.0);
+    }
+    """
+
     static let tunnelVS = """
     #version 330 core
     layout(location = 0) in vec3 aPos;

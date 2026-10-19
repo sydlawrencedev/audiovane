@@ -25,8 +25,13 @@ struct SpriteAtlas {
     var layerCount: Int { cellWidth == 0 ? 0 : pixels.count / (cellWidth * cellHeight * 4) }
 
     static var folder: URL {
-        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AUDIVANE/Hamsters", isDirectory: true)
+        // AUDIOVANE_SPRITE_DIR points somewhere else (e.g. an empty folder so
+        // demo recordings use the drawn hamsters, not someone's own GIFs).
+        if let dir = ProcessInfo.processInfo.environment["AUDIOVANE_SPRITE_DIR"] {
+            return URL(fileURLWithPath: dir, isDirectory: true)
+        }
+        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("AUDIOVANE/Hamsters", isDirectory: true)
     }
 
     static func ensureFolder() {

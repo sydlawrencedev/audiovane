@@ -9,7 +9,7 @@ struct HUDView: View {
             HStack(spacing: 12) {
                 BrandMark()
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("AUDIVANE")
+                    Text("AUDIOVANE")
                         .font(.system(size: 17, weight: .bold, design: .default))
                         .tracking(3.5)
                         .foregroundStyle(Color.white)
@@ -28,6 +28,9 @@ struct HUDView: View {
 
             // genre picker (band mode only)
             GenrePicker()
+
+            // colour palette picker
+            PalettePicker()
 
             // source pill
             SourcePill(state: app.sourceState, label: app.sourceLabel)

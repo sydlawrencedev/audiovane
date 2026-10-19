@@ -1,0 +1,12 @@
+# Landing page for https://audiovane.minithlabs.com — static files in ./site,
+# served by a Cloudflare Worker on the custom domain.
+#   npx wrangler deploy
+name = "audiovane"
+compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./site"
+
+[[routes]]
+pattern = "audiovane.minithlabs.com"
+custom_domain = true

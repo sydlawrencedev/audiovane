@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Identifies which header dropdown is open. Only one at a time.
 enum DropdownID: String {
-    case mode, genre
+    case mode, genre, palette
 }
 
 /// One selectable row in a `DropdownMenu`.
@@ -11,6 +11,8 @@ struct DropdownEntry<Item: Hashable>: Identifiable {
     let title: String
     var subtitle: String? = nil
     var glyph: String? = nil
+    /// Optional two-stop colour swatch shown instead of the glyph.
+    var swatch: (shadow: SIMD3<Float>, highlight: SIMD3<Float>)? = nil
     /// When set, picking this row runs the action instead of changing the
     /// selection. Used for things like an "Auto" toggle that isn't itself a
     /// member of the selection set.
@@ -48,7 +50,9 @@ struct DropdownMenu<Item: Hashable>: View {
             }
         } label: {
             HStack(spacing: 8) {
-                if let glyph = current?.glyph {
+                if let swatch = current?.swatch {
+                    PaletteSwatch(shadow: swatch.shadow, highlight: swatch.highlight)
+                } else if let glyph = current?.glyph {
                     Text(glyph)
                         .font(.system(size: 11, weight: .bold, design: .monospaced))
                         .foregroundStyle(tint)
@@ -108,7 +112,9 @@ struct DropdownMenu<Item: Hashable>: View {
                     withAnimation(.easeOut(duration: 0.14)) { app.openDropdown = nil }
                 } label: {
                     HStack(spacing: 10) {
-                        if let glyph = entry.glyph {
+                        if let swatch = entry.swatch {
+                            PaletteSwatch(shadow: swatch.shadow, highlight: swatch.highlight)
+                        } else if let glyph = entry.glyph {
                             Text(glyph)
                                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                                 .foregroundStyle(isSelected(entry) ? tint : Color(white: 0.45))

@@ -8,7 +8,7 @@ struct VisualiserApp: App {
     @StateObject private var app = AppState()
 
     var body: some Scene {
-        WindowGroup("AUDIVANE") {
+        WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
                 .frame(minWidth: 960, minHeight: 600)
@@ -16,7 +16,7 @@ struct VisualiserApp: App {
                 .background(Color.black)
         }
         .windowStyle(.hiddenTitleBar)
-        WindowGroup("AUDIVANE") {
+        WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
                 .frame(minWidth: 960, minHeight: 600)
@@ -27,6 +27,9 @@ struct VisualiserApp: App {
         .windowResizability(.contentSize)
         .commands {
             CommandGroup(replacing: .newItem) { }
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { UpdateChecker.shared.check(userInitiated: true) }
+            }
             CommandMenu("Visualizer") {
                 ForEach(VisualizerMode.allCases) { mode in
                     Button(mode.displayName.capitalized) { app.activeMode = mode }
@@ -56,6 +59,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Look for a newer release on every launch (not in the test modes).
+        let testMode = ["--snapshot", "--record"].contains { CommandLine.arguments.contains($0) }
+        if !testMode { UpdateChecker.shared.check(userInitiated: false) }
+
         // Snapshot mode — render a few frames then exit. Used for verification.
         if CommandLine.arguments.contains("--snapshot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -77,6 +84,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 self.captureUIShot()
             }
         }
+
+        // `--about` opens the credits popover on launch (used to verify the
+        // Stripe embed actually renders).
+        if CommandLine.arguments.contains("--about") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                AppState.shared?.openAbout()
+            }
+        }
+    }
+
+    /// Session tallies (mode switches, palette switches) only reach PostHog on
+    /// the next flush — 2.5s after the last event — so without this they'd be
+    /// lost every time someone quit shortly after fiddling with the controls.
+    func applicationWillTerminate(_ notification: Notification) {
+        Task { await Analytics.shared.flushNow() }
     }
 
     /// Renders the SwiftUI view tree to a PNG. The OpenGL layer won't appear
@@ -96,6 +118,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("band", .band, nil),
             ("mode-open", .tunnel, .mode),
             ("genre-open", .band, .genre),
+            ("palette-open", .tunnel, .palette),
         ]
         for (name, mode, open) in shots {
             app.showIntro = false
@@ -165,6 +188,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             app.renderer.renderToPNG(width: 1280, height: 720, mode: .band, frames: 60,
                                      path: "\(outDir)/viz-band-duet.png")
             app.renderer.singerVoice = .auto
+            for genre in Genre.allCases {
+                app.renderer.genre = genre
+                app.renderer.renderToPNG(width: 1280, height: 720, mode: .band, frames: 60,
+                                         path: "\(outDir)/viz-band-\(genre.name.lowercased()).png")
+            }
             NSLog("[SNAP] saved")
             exit(0)
         }

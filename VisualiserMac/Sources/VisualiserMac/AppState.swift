@@ -7,9 +7,29 @@ final class AppState: ObservableObject {
         didSet {
             if activeMode != oldValue {
                 NSLog("[DD] mode changed \(oldValue.rawValue) -> \(activeMode.rawValue)")
+                // Tallied rather than sent individually: a user cycling
+                // through modes generates 40 events in a minute and PostHog
+                // only wants the histogram.
+                Task { await Analytics.shared.countInSession("mode_switches") }
+                Task {
+                    await Analytics.shared.countInSession("mode:\(activeMode.rawValue)")
+                }
+                Task {
+                    await Analytics.shared.track("mode_changed", [
+                        "mode": activeMode.rawValue,
+                        "from_mode": oldValue.rawValue,
+                        "via": viaPicker ? "picker" : (viaAutoScan ? "auto_scan" : "system"),
+                    ])
+                }
+                viaPicker = false
+                viaAutoScan = false
             }
         }
     }
+    /// Set by the mode picker so the event can distinguish a deliberate click
+    /// from the auto-scan cycling the stage underneath you.
+    @Published var viaPicker: Bool = false
+    @Published var viaAutoScan: Bool = false
     @Published var sourceLabel: String = "idle"
     @Published var sourceState: SourceState = .idle
     @Published var showIntro: Bool = true
@@ -34,6 +54,19 @@ final class AppState: ObservableObject {
             if !genreIsAuto {
                 genreLockAtChange = audio.tracks.changeCount
             }
+            guard genre != oldValue else { return }
+            Task {
+                await Analytics.shared.track(
+                    genreIsAuto ? "genre_detected" : "genre_locked",
+                    [
+                        "genre": genre.name,
+                        "from_genre": oldValue.name,
+                        "genre_id": genre.rawValue,
+                        "confidence": Double(round(genreConfidence * 100) / 100),
+                        "auto": genreIsAuto,
+                    ]
+                )
+            }
         }
     }
     /// When true, `GenreDetector` writes into `genre` over time. When false,
@@ -45,6 +78,28 @@ final class AppState: ObservableObject {
     /// While auto-scanning, the mode currently on screen. Mirrors the
     /// renderer's scanner so the header can show what's playing right now.
     @Published private(set) var scanTarget: VisualizerMode = .tunnel
+
+    /// The colour palette applied to every mode. Index into `Palette.all`.
+    @Published var paletteIndex: Int = 0 {
+        didSet {
+            renderer.paletteIndex = paletteIndex
+            guard paletteIndex != oldValue else { return }
+            let name = paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?"
+            let from = oldValue < Palette.all.count ? Palette.all[oldValue].name : "?"
+            Task { await Analytics.shared.countInSession("palette_switches") }
+            Task { await Analytics.shared.track("palette_changed", [
+                    "palette": name,
+                    "from_palette": from,
+                    "index": paletteIndex,
+                ])
+            }
+        }
+    }
+
+    /// Whether the credits / support popover is open.
+    @Published var showAbout: Bool = false
+
+    func openAbout() { showAbout = true }
 
     /// The track-change count at the moment the user manually picked a genre.
     /// Compared to `audio.tracks.changeCount` to know when the lock should
@@ -83,6 +138,21 @@ final class AppState: ObservableObject {
             self.activeMode = m
             self.renderer.setMode(m)
         }
+        // `--genre <name>` pins The Band's genre for this run (used for testing
+        // and the demo reel); it isn't remembered.
+        if let i = CommandLine.arguments.firstIndex(of: "--genre"),
+           i + 1 < CommandLine.arguments.count,
+           let g = Genre.allCases.first(where: { $0.name.lowercased() == CommandLine.arguments[i + 1].lowercased() }) {
+            self.genreIsAuto = false
+            self.genre = g
+        }
+        // `--palette N` picks a colour palette at launch (used for testing).
+        if let i = CommandLine.arguments.firstIndex(of: "--palette"),
+           i + 1 < CommandLine.arguments.count,
+           let p = Int(CommandLine.arguments[i + 1]) {
+            self.paletteIndex = p
+            self.renderer.paletteIndex = p
+        }
 
         audio.$sourceLabel
             .receive(on: RunLoop.main)
@@ -109,6 +179,8 @@ final class AppState: ObservableObject {
         // so the snapshot can grab the renderer after the GL context is ready.
         AppState.shared = self
 
+        emitLaunchEvent()
+
         // Watch track changes — when one happens, re-arm auto. We compare the
         // change count so a song skip counts but a frame-by-frame jitter doesn't.
         // The renderer reads `audio.tracks.changeCount` directly, but the
@@ -117,6 +189,38 @@ final class AppState: ObservableObject {
             self?.reEvaluateAutoGenre()
             self?.pumpAutoGenre()
             self?.syncScanTarget()
+        }
+    }
+
+    /// One `app_launched` per run. Fired from init rather than from
+    /// `applicationDidFinishLaunching`, because SwiftUI has not necessarily
+    /// built the scene yet when that delegate callback lands and the launch
+    /// properties would come back empty.
+    private func emitLaunchEvent() {
+        let args = CommandLine.arguments
+        // Skip the headless verification modes so the dev loop doesn't show
+        // up in PostHog as a room full of phantom users.
+        let isHeadless = args.contains("--snapshot")
+            || args.contains("--record")
+            || args.contains("--ui-shot")
+        guard !isHeadless else { return }
+
+        let mode = activeMode.rawValue
+        let palette = paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?"
+        let autoscan = activeMode == .autoScan
+        let isRelease = !args.contains("--debug")
+        let fresh = !UserDefaults.standard.bool(forKey: "analytics.seenBefore")
+
+        Task {
+            await Analytics.shared.bootstrapOptIn()
+            await Analytics.shared.track("app_launched", [
+                "mode": mode,
+                "palette": palette,
+                "autoscan": autoscan,
+                "is_release": isRelease,
+                "fresh_install": fresh,
+            ])
+            await Analytics.shared.setSeenBefore()
         }
     }
 
@@ -130,8 +234,8 @@ final class AppState: ObservableObject {
 
     static private(set) var shared: AppState?
 
-    private static let genreDefaultsKey = "audivane.genre"
-    private static let genreAutoDefaultsKey = "audivane.genreAuto"
+    private static let genreDefaultsKey = "audiovane.genre"
+    private static let genreAutoDefaultsKey = "audiovane.genreAuto"
 
     /// Last manually-picked genre, so a relaunch starts on the genre the
     /// user actually chose rather than defaulting to Rock.
@@ -147,11 +251,23 @@ final class AppState: ObservableObject {
     // Make sure there's a value stored on first launch so the get above
     // always has something coherent to return.
     static func primeDefaults() {
-        if UserDefaults.standard.object(forKey: genreDefaultsKey) == nil {
-            UserDefaults.standard.set(Genre.rock.rawValue, forKey: genreDefaultsKey)
+        let d = UserDefaults.standard
+        // Carry the preference across the app's previous names so a user's
+        // chosen genre doesn't reset when the app is renamed.
+        for (old, new) in [("signal.genre", genreDefaultsKey),
+                           ("audivane.genre", genreDefaultsKey),
+                           ("signal.genreAuto", genreAutoDefaultsKey),
+                           ("audivane.genreAuto", genreAutoDefaultsKey)] {
+            if d.object(forKey: new) == nil, let v = d.object(forKey: old) {
+                d.set(v, forKey: new)
+            }
+            d.removeObject(forKey: old)
         }
-        if UserDefaults.standard.object(forKey: genreAutoDefaultsKey) == nil {
-            UserDefaults.standard.set(true, forKey: genreAutoDefaultsKey)
+        if d.object(forKey: genreDefaultsKey) == nil {
+            d.set(Genre.rock.rawValue, forKey: genreDefaultsKey)
+        }
+        if d.object(forKey: genreAutoDefaultsKey) == nil {
+            d.set(true, forKey: genreAutoDefaultsKey)
         }
     }
 
@@ -233,10 +349,13 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     case badger, llama, hamster, nyan
     case spectrum, kaleidoscope, warp
     case band
-    /// Cycles through every other mode, 20 seconds each.
-    case autoScan
     /// MIDEM Music Hack Day machine — drums, pads and bouncing balls.
     case machine
+    /// Glowing neon-green waveforms shaped by the spectrum.
+    case waveform
+    /// Cycles through every other mode, 20 seconds each.
+    /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
+    case autoScan
     var id: String { rawValue }
     var displayName: String {
         switch self {
@@ -253,14 +372,18 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
         case .band: return "THE BAND"
         case .autoScan: return "AUTO SCAN"
         case .machine: return "MACHINE"
+        case .waveform: return "NEON WAVE"
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }
     var glyph: String { String(format: "%02d", index + 1) }
-    /// Number-row shortcut: 1...9, 0 for the tenth mode, - for the eleventh.
+    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ;
+    /// Auto Scan is always =.
     var shortcutKey: Character {
         if self == .autoScan { return "=" }
-        return index < 10 ? Character(String((index + 1) % 10)) : "-"
+        if index < 10 { return Character(String((index + 1) % 10)) }
+        let extra: [Character] = ["-", "[", "]", ";", "'"]
+        return extra[min(index - 10, extra.count - 1)]
     }
 }
 

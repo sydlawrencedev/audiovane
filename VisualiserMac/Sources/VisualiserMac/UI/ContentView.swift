@@ -23,7 +23,9 @@ struct ContentView: View {
                     .padding(.top, 22)
                 Spacer()
                 FooterView()
-                    .padding(.horizontal, 28)
+                    .padding(.leading, 28)
+                    // Leave room for the credits button in the corner.
+                    .padding(.trailing, 215)
                     .padding(.bottom, 14)
             }
             .opacity(app.showIntro ? 0 : 1)
@@ -44,6 +46,20 @@ struct ContentView: View {
             .opacity(app.showIntro ? 0 : 0.85)
             .allowsHitTesting(!app.showIntro)
             .animation(.easeOut(duration: 0.4), value: app.showIntro)
+            .zIndex(60)
+
+            // Credits / support button, bottom-right corner.
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    AboutButton()
+                        .padding(.trailing, 28)
+                        .padding(.bottom, 16)
+                }
+            }
+            .opacity(app.showIntro ? 0 : 1)
+            .allowsHitTesting(!app.showIntro)
             .zIndex(60)
 
             // beat flash

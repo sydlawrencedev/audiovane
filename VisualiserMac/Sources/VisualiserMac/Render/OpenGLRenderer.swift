@@ -22,6 +22,27 @@ final class OpenGLRenderer: NSObject {
     /// Where the machine camera is in its 48-second loop.
     private var machineCameraPhase: Float = 0
 
+    // --- Palette post-process -------------------------------------------
+    // The scene is rendered into an offscreen texture, then a full-screen
+    // grade pass maps it through the active palette and writes to the
+    // drawable. One shader themes every mode at once.
+    private var gradeProgram: GLuint = 0
+    private var gradeVAO: GLuint = 0
+    private var gradeVBO: GLuint = 0
+    private var sceneFBO: GLuint = 0
+    private var sceneTex: GLuint = 0
+    private var fboWidth = 0
+    private var fboHeight = 0
+    private var uGradeTex: GLint = -1
+    private var uGradeShadow: GLint = -1
+    private var uGradeHighlight: GLint = -1
+    private var uGradeSaturation: GLint = -1
+    private var uGradeDuotone: GLint = -1
+    private var uGradeLift: GLint = -1
+
+    /// Index into `Palette.all`. Set by AppState.
+    var paletteIndex: Int = 0
+
     // VAOs / VBOs
     private var tunnelVAO: GLuint = 0
     private var tunnelVBO: GLuint = 0
@@ -164,6 +185,7 @@ final class OpenGLRenderer: NSObject {
     private var bandParts = [Float](repeating: 0, count: 5)        // drums, bass, guitar, keys, vocals
     private var bandKeys = [Float](repeating: 0, count: 9)
     private var bandVocal: Float = 0
+    private var bandLowAverage: Float = 0
     private var bandForceAll = false                               // snapshots: everyone plays
     /// Once a part is heard, keep it playing at least this long after it was
     /// last heard, to bridge gaps between strums, phrases and fills.
@@ -174,6 +196,7 @@ final class OpenGLRenderer: NSObject {
     private var uBandVocal: GLint = -1, uBandKeys: GLint = -1
     private var uBandX: GLint = -1, uBandWalk: GLint = -1, uBandFace: GLint = -1, uBandPlay: GLint = -1
     private var uBandHome: GLint = -1
+    private var uBandLineupMask: GLint = -1, uBandPresent: GLint = -1
     private var uBandGenre: GLint = -1
     private var uBandGenrePrev: GLint = -1
     private var uBandGenreMix: GLint = -1
@@ -213,9 +236,9 @@ final class OpenGLRenderer: NSObject {
         var partHeardInSong = false
     }
     private var walkers: [Walker] = []
-    private static let walkOnAfter: Float = 0.5
-    private static let walkSpeed: Float = 110          // art pixels per second
-    private static let drumRiseSpeed: Float = 35       // drummer rising/sinking behind the kit
+    private static let walkOnAfter: Float = 0.25
+    private static let walkSpeed: Float = 160          // art pixels per second
+    private static let drumRiseSpeed: Float = 80       // drummer rising/sinking behind the kit
     private static let songBreakSilence: Double = 1.0  // seconds of near-silence
     private static let songMinLength: Double = 10      // music needed before a break counts
     private static let reConfirmGrace: Double = 10.0   // walker grace period on a song change
@@ -258,6 +281,8 @@ final class OpenGLRenderer: NSObject {
     /// Advances the fade. Called every frame from bindBand before the
     /// uniforms are pushed.
     private func advanceGenreFade(now: CFTimeInterval) {
+        // Snapshots render each genre in isolation: no cross-fade from the last.
+        if bandForceAll { genreFadeActive = false }
         guard genreFadeActive else { genreFade = 1; return }
         let t = Float((now - genreFadeStart) / Self.genreFadeDuration)
         // ease-in-out so the dip isn't abrupt
@@ -294,17 +319,28 @@ final class OpenGLRenderer: NSObject {
         // Who's playing: hold for a while after last heard, then fade (~1s).
         let detected = audio.instruments.presence()
         let now = CACurrentMediaTime()
+        // Fast evidence from the spectrum alongside the (slow, sometimes
+        // deaf) classifier: a locked-on tempo means drums; sustained energy
+        // under ~250Hz means bass.
+        var low: Float = 0
+        for i in 6..<26 { low += b[i] / 20 }
+        bandLowAverage += (low - bandLowAverage) * min(1, dt * 1.5)
+        let spectral: [Float] = [snap.bpm > 0 ? 0.8 : 0, min(1, max(0, (bandLowAverage - 0.3) / 0.3)), 0, 0, 0]
         for i in 0..<bandParts.count {
-            let c = bandForceAll ? 1 : detected[i]
-            var heard = min(1, max(0, (c - 0.05) / 0.3))
+            // Snapshots "hear" exactly the genre's usual line-up.
+            let lineupSlots = GenreVisual.visual(for: genre).lineup
+            let forced: Float = (i < 4 ? lineupSlots.contains(WalkerSlot(rawValue: i)!)
+                                       : (lineupSlots.contains(.femaleSinger) || lineupSlots.contains(.maleSinger))) ? 1 : 0
+            let c = bandForceAll ? forced : detected[i]
+            var heard = max(min(1, max(0, (c - 0.05) / 0.3)), bandForceAll ? 0 : spectral[i])
             if heard > 0.4 {
                 bandHeldLevel[i] = heard
                 bandLastHeard[i] = now
-            } else if now - bandLastHeard[i] < Self.bandHoldSeconds {
+            } else if !bandForceAll && now - bandLastHeard[i] < Self.bandHoldSeconds {
                 heard = max(heard, bandHeldLevel[i])
             }
             let target = heard * Float(danceActivity)
-            let rate: Float = target > bandParts[i] ? 2.0 : 1.0
+            let rate: Float = target > bandParts[i] ? 4.0 : 1.5
             bandParts[i] += (target - bandParts[i]) * min(1, dt * rate)
         }
 
@@ -507,6 +543,9 @@ final class OpenGLRenderer: NSObject {
         glUniform1fv(uBandFace, 6, walkers.map(\.face))
         glUniform1fv(uBandPlay, 6, play)
         glUniform1fv(uBandHome, 6, home)
+        let mask = GenreVisual.visual(for: genre).lineup.reduce(0) { $0 | (1 << $1.rawValue) }
+        glUniform1i(uBandLineupMask, GLint(mask))
+        glUniform1fv(uBandPresent, 6, walkers.indices.map { walkers[$0].on || abs(walkers[$0].x - offStage($0)) > 1 ? 1 : 0 })
     }
 
     private func updateBadgerOverlay(_ snap: AudioSnapshot) -> (kind: Float, age: Float) {
@@ -721,6 +760,12 @@ final class OpenGLRenderer: NSObject {
         danceActivity = 1
         bandForceAll = true
         defer { danceActivity = savedActivity; bandForceAll = false }
+
+        // Draw the scene into a target owned by this context (framebuffers
+        // aren't shared between contexts), then grade it into the snapshot's
+        // own FBO so the PNG shows the active palette.
+        var snapTarget = makeSceneTarget(w: width, h: height)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), snapTarget.fbo)
         for k in 0..<frames {
             audio.refreshSnapshot()
             beatClock = Double(k) / 60.0 * 2.0
@@ -749,6 +794,12 @@ final class OpenGLRenderer: NSObject {
             }
         }
 
+        // Grade the scene through the palette into the snapshot's FBO.
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo)
+        glViewport(0, 0, GLsizei(width), GLsizei(height))
+        glDisable(GLbitfield(GL_BLEND))
+        drawGrade(sampling: snapTarget.tex, mode: currentMode)
+
         // read pixels
         let rowBytes = width * 4
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -757,6 +808,8 @@ final class OpenGLRenderer: NSObject {
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
         glDeleteFramebuffers(1, &fbo)
         glDeleteTextures(1, &colorTex)
+        glDeleteFramebuffers(1, &snapTarget.fbo)
+        glDeleteTextures(1, &snapTarget.tex)
 
         // flip vertically (GL is bottom-up, PNG is top-down)
         var flipped = [UInt8](repeating: 0, count: width * height * 4)
@@ -836,8 +889,8 @@ final class OpenGLRenderer: NSObject {
 
         audio.tick()
         // The instrument classifier is only worth running when the band is
-        // actually on screen — which, during auto-scan, means whenever the
-        // scanner is sitting on the band mode.
+        // on screen — which, during auto-scan, means whenever the scanner
+        // is sitting on the band mode.
         let isBandOnScreen = currentMode == .band || (currentMode == .autoScan && autoScanTarget == .band)
         audio.instruments.isEnabled = isBandOnScreen
 
@@ -846,6 +899,10 @@ final class OpenGLRenderer: NSObject {
         advanceDanceClock(audio.snapshot)
         let time = Float(danceClock.truncatingRemainder(dividingBy: 3600))
 
+        // Draw the scene into the offscreen target so the palette grade can
+        // be applied to the finished frame.
+        ensureSceneTarget()
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), sceneFBO)
         glViewport(0, 0, GLsizei(viewWidth), GLsizei(viewHeight))
         glClearColor(0.02, 0.004, 0.03, 1.0)
         glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
@@ -869,7 +926,75 @@ final class OpenGLRenderer: NSObject {
             drawShaderMode(mode, time: time, snap: snap)
         }
 
+        // Grade the finished frame through the active palette and present it.
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+        glViewport(0, 0, GLsizei(viewWidth), GLsizei(viewHeight))
+        glDisable(GLbitfield(GL_BLEND))
+        drawGrade(sampling: sceneTex, mode: mode)
         // Note: flushBuffer is called by the view after this returns.
+    }
+
+    // MARK: - Palette grade
+
+    /// Creates an FBO + colour texture of the given size. Framebuffer objects
+    /// are not part of the OpenGL share list, so the snapshot path (which runs
+    /// in a different context) needs its own rather than reusing the live one.
+    private func makeSceneTarget(w: Int, h: Int) -> (fbo: GLuint, tex: GLuint) {
+        var fbo: GLuint = 0
+        glGenFramebuffers(1, &fbo)
+        var tex: GLuint = 0
+        glGenTextures(1, &tex)
+        glBindTexture(GLenum(GL_TEXTURE_2D), tex)
+        glTexImage2D(GLenum(GL_TEXTURE_2D), 0, GL_RGBA8, GLsizei(w), GLsizei(h), 0,
+                     GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), nil)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MIN_FILTER), GL_LINEAR)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_MAG_FILTER), GL_LINEAR)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_S), GL_CLAMP_TO_EDGE)
+        glTexParameteri(GLenum(GL_TEXTURE_2D), GLenum(GL_TEXTURE_WRAP_T), GL_CLAMP_TO_EDGE)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo)
+        glFramebufferTexture2D(GLenum(GL_FRAMEBUFFER), GLenum(GL_COLOR_ATTACHMENT0),
+                               GLenum(GL_TEXTURE_2D), tex, 0)
+        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
+        return (fbo, tex)
+    }
+
+    /// Creates (or resizes) the offscreen target the scene is drawn into.
+    private func ensureSceneTarget() {
+        let w = max(1, Int(viewWidth))
+        let h = max(1, Int(viewHeight))
+        guard w != fboWidth || h != fboHeight || sceneFBO == 0 else { return }
+        fboWidth = w
+        fboHeight = h
+        if sceneFBO != 0 { glDeleteFramebuffers(1, &sceneFBO) }
+        if sceneTex != 0 { glDeleteTextures(1, &sceneTex) }
+        let pair = makeSceneTarget(w: w, h: h)
+        sceneFBO = pair.fbo
+        sceneTex = pair.tex
+    }
+
+    /// Modes drawn in their own fixed colours, which the palette would spoil.
+    private static let ungradedModes: Set<VisualizerMode> = [.badger, .llama, .nyan]
+
+    /// Full-screen quad that grades the offscreen scene through the palette
+    /// (or passes it straight through for `ungradedModes`).
+    private func drawGrade(sampling texture: GLuint, mode: VisualizerMode) {
+        guard gradeProgram != 0 else { return }
+        let ungraded = Self.ungradedModes.contains(mode)
+        let pal = Palette.palette(at: paletteIndex)
+
+        glUseProgram(gradeProgram)
+        glActiveTexture(GLenum(GL_TEXTURE0))
+        glBindTexture(GLenum(GL_TEXTURE_2D), texture)
+        glUniform1i(uGradeTex, 0)
+        glUniform3f(uGradeShadow, pal.shadow.x, pal.shadow.y, pal.shadow.z)
+        glUniform3f(uGradeHighlight, pal.highlight.x, pal.highlight.y, pal.highlight.z)
+        glUniform1f(uGradeSaturation, ungraded ? 1 : pal.saturation)
+        glUniform1f(uGradeDuotone, ungraded ? 0 : pal.duotone)
+        glUniform1f(uGradeLift, ungraded ? 0 : pal.lift)
+
+        glBindVertexArray(gradeVAO)
+        glDrawArrays(GLenum(GL_TRIANGLE_STRIP), 0, 4)
+        glBindVertexArray(0)
     }
 
     // MARK: - Tunnel
@@ -993,22 +1118,28 @@ final class OpenGLRenderer: NSObject {
     /// playback, a synthetic clock in snapshot mode.
     private func drawMachine(time: Float, snap: AudioSnapshot, now: CFTimeInterval, cameraT: Float? = nil) {
         let dt = Float(lastFrameDT)
-        machine.update(bands: snap.bands, rms: snap.rms, now: now, dt: dt)
-        if bandForceAll {
+        machine.update(bands: snap.bands, rms: snap.rms, now: now)
+        if bandForceAll && machine.mode.notes.isEmpty {
             // Snapshots have no live flux, so seed notes to show the balls.
-            machine.mode.seedNotes(count: 14, now: now)
+            machine.mode.seedNotes(count: 24, now: now)
         }
 
-        // The camera loops over ~48s, like the original flying its path over
-        // the course of the track. It advances off its own clock rather than
-        // wall-clock time, so it starts at the beginning of the path when you
-        // switch into the mode instead of landing at a random point.
-        if cameraT == nil {
-            machineCameraPhase += dt / 48.0
+        // The original flies its camera path once over the length of the
+        // track. Music / Spotify tell us the track length; otherwise glide
+        // back and forth along the path every four minutes.
+        var t: Float
+        if let k = ProcessInfo.processInfo.environment["MACHINE_T"].flatMap(Float.init) {
+            t = k   // debug: pin the camera's place along its path
+        } else if let k = cameraT {
+            t = k
+        } else if let length = audio.tracks.duration, length > 0, let start = audio.tracks.startedAt {
+            t = Float(min(1, (CACurrentMediaTime() - start) / length))
+        } else {
+            machineCameraPhase += dt / 240
             if machineCameraPhase >= 1 { machineCameraPhase -= 1 }
+            t = 1 - abs(1 - 2 * machineCameraPhase)
         }
-        let t = cameraT ?? machineCameraPhase
-        var cam = MachineRenderer.camera(t: t)
+        var cam = MachineMode.camera(progress: t)
         // Debug override: MACHINE_CAM="ex,ey,ez,tx,ty,tz" pins the camera.
         if let s = ProcessInfo.processInfo.environment["MACHINE_CAM"] {
             let n = s.split(separator: ",").compactMap { Float($0) }
@@ -1019,9 +1150,9 @@ final class OpenGLRenderer: NSObject {
         let aspect = viewWidth / max(1, viewHeight)
         let viewProj = makeViewProj(eye: cam.pos, target: cam.target,
                                     up: SIMD3<Float>(0, 1, 0),
-                                    aspect: aspect, fovY: 50,
-                                    near: 1, far: 900)
-        machine.draw(viewProj: viewProj, cameraPos: cam.pos, time: time)
+                                    aspect: aspect, fovY: 45,
+                                    near: 1, far: 1000)
+        machine.render(viewProj: viewProj, cameraPos: cam.pos, width: Int(viewWidth), height: Int(viewHeight))
     }
 
     private func drawLiquid(time: Float, snap: AudioSnapshot) {
@@ -1123,6 +1254,35 @@ final class OpenGLRenderer: NSObject {
     private func setupGL() {
         glEnable(GLenum(GL_PROGRAM_POINT_SIZE))
         glEnable(GLenum(GL_BLEND))
+    }
+
+    /// Builds the palette grade program and its full-screen quad.
+    private func buildGradePass() {
+        gradeProgram = makeGLProgram(vs: Shaders.gradeVS, fs: Shaders.gradeFS, "grade")
+        uGradeTex = glGetUniformLocation(gradeProgram, "uTex")
+        uGradeShadow = glGetUniformLocation(gradeProgram, "uShadow")
+        uGradeHighlight = glGetUniformLocation(gradeProgram, "uHighlight")
+        uGradeSaturation = glGetUniformLocation(gradeProgram, "uSaturation")
+        uGradeDuotone = glGetUniformLocation(gradeProgram, "uDuotone")
+        uGradeLift = glGetUniformLocation(gradeProgram, "uLift")
+
+        // A full-screen triangle strip: two triangles in clip space.
+        var vao: GLuint = 0
+        glGenVertexArrays(1, &vao)
+        gradeVAO = vao
+        glBindVertexArray(gradeVAO)
+
+        var vbo: GLuint = 0
+        glGenBuffers(1, &vbo)
+        gradeVBO = vbo
+        glBindBuffer(GLenum(GL_ARRAY_BUFFER), gradeVBO)
+        let quad: [Float] = [-1, -1,  1, -1,  -1, 1,  1, 1]
+        quad.withUnsafeBufferPointer { ptr in
+            glBufferData(GLenum(GL_ARRAY_BUFFER), quad.count * 4, ptr.baseAddress, GLenum(GL_STATIC_DRAW))
+        }
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(0, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), GLsizei(2 * 4), nil)
+        glBindVertexArray(0)
     }
 
     private func buildGeometry() {
@@ -1255,6 +1415,9 @@ final class OpenGLRenderer: NSObject {
         // MACHINE mode
         machine.buildProgram()
 
+        // Palette grade pass
+        buildGradePass()
+
         for (mode, body) in FunShaders.modes {
             let p = makeProgram(vs: Shaders.liquidVS, fs: FunShaders.prelude + body, mode.rawValue)
             func loc(_ name: String) -> GLint { glGetUniformLocation(p, name) }
@@ -1270,6 +1433,7 @@ final class OpenGLRenderer: NSObject {
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")
                 uBandX = loc("uMX[0]"); uBandWalk = loc("uWalk[0]"); uBandFace = loc("uFace[0]")
                 uBandPlay = loc("uPlay[0]"); uBandHome = loc("uHome[0]")
+                uBandLineupMask = loc("uLineupMask"); uBandPresent = loc("uPresent[0]")
                 uBandGenre = loc("uGenre")
                 uBandGenrePrev = loc("uGenrePrev")
                 uBandGenreMix = loc("uGenreMix")

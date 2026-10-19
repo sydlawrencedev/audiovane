@@ -10,6 +10,24 @@ cd "$SCRIPT_DIR"
 
 APP_NAME="VisualiserMac"
 BUNDLE_ID="com.minithlabs.visualiser"
+# Release version, shown in the app and compared by the update checker.
+VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
+
+# PostHog project key. Public by design (write-only, like Stripe's publishable
+# key) — it can only add events, never read them. Override in the environment
+# or in a .env file sitting next to this script:
+#
+#   POSTHOG_KEY=phc_xxxxxxxxxxxxxxxxxxxx
+#   POSTHOG_HOST=https://eu.i.posthog.com   # or https://us.i.posthog.com
+#
+# Leave POSTHOG_KEY empty to ship a build with no telemetry wired up at all;
+# the in-app toggle then reads "Not configured in this build."
+if [ -f "$SCRIPT_DIR/.env" ]; then
+    # shellcheck disable=SC1091
+    source "$SCRIPT_DIR/.env"
+fi
+POSTHOG_KEY="${POSTHOG_KEY:-}"
+POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 
 if [ "$CONFIG" = "release" ]; then
     swift build -c release
@@ -37,19 +55,19 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>AUDIVANE</string>
+    <string>AUDIOVANE</string>
     <key>CFBundleDisplayName</key>
-    <string>AUDIVANE</string>
+    <string>AUDIOVANE</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleVersion</key>
-    <string>0.1.0</string>
+    <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>
-    <string>0.1</string>
+    <string>$VERSION</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
-    <string>AUDIVANE</string>
+    <string>$APP_NAME</string>
     <key>CFBundleInfoDictionaryVersion</key>
     <string>6.0</string>
     <key>LSMinimumSystemVersion</key>
@@ -61,9 +79,13 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>AUDIVANE listens to the microphone so it can visualize ambient sound. No audio is stored or transmitted.</string>
+    <string>AUDIOVANE listens to the microphone so it can visualize ambient sound. No audio is stored or transmitted.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>AUDIVANE listens to system audio so it can visualize whatever is playing on your Mac. No audio is stored or transmitted.</string>
+    <string>AUDIOVANE listens to system audio so it can visualize whatever is playing on your Mac. No audio is stored or transmitted.</string>
+    <key>PostHogKey</key>
+    <string>${POSTHOG_KEY}</string>
+    <key>PostHogHost</key>
+    <string>${POSTHOG_HOST}</string>
 </dict>
 </plist>
 EOF
@@ -89,8 +111,31 @@ cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 </plist>
 EOF
 
-# codesign ad-hoc so ScreenCaptureKit permission prompts work reliably
-codesign --force --sign - --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" "$APP_BUNDLE" 2>/dev/null || true
+# codesign ad-hoc so ScreenCaptureKit permission prompts work reliably.
+# Fail loudly if this doesn't work — a broken signature makes macOS refuse
+# to launch the app with "may be damaged or incomplete".
+if ! codesign --force --sign - --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" "$APP_BUNDLE"; then
+    echo "ERROR: codesign failed — the app would not open." >&2
+    exit 1
+fi
+
+# Sanity-check the bundle: LaunchServices refuses to open a bundle whose
+# Info.plist points at an executable that isn't there, and the error it shows
+# ("may be damaged or incomplete") gives no hint why.
+PLIST_EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_BUNDLE/Contents/Info.plist")
+if [ ! -x "$APP_BUNDLE/Contents/MacOS/$PLIST_EXEC" ]; then
+    echo "ERROR: Info.plist says CFBundleExecutable=$PLIST_EXEC but" \
+         "Contents/MacOS/$PLIST_EXEC does not exist." >&2
+    exit 1
+fi
+if ! plutil -lint "$APP_BUNDLE/Contents/Info.plist" >/dev/null; then
+    echo "ERROR: Info.plist is malformed." >&2
+    exit 1
+fi
+if ! codesign --verify --deep --strict "$APP_BUNDLE" 2>/dev/null; then
+    echo "ERROR: signature does not verify — the app would not open." >&2
+    exit 1
+fi
 
 echo ""
 echo "Built: $APP_BUNDLE"

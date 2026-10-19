@@ -1,24 +1,26 @@
-# AUDIVANE
+# AUDIOVANE
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
-Twelve modes:
+Thirteen modes, plus Auto Scan:
 
 1. **Tunnel**: fly through concentric rings of spectrum-reactive bars.
 2. **Constellation**: 4,000 bass-pumping particles around you.
 3. **Liquid**: Milkdrop-inspired psychedelic fluid that flows to the music.
-4. **Badger Badger**: rows of badgers pop up and dance, then a mushroom, then a snake.
+4. **Badger Badger**: rows of badgers dancing to the beat; big drops bring out the mushroom (or, every third, the snake).
 5. **Whooping Llama**: dancing llamas in blankets, whooping on every beat.
-6. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/AUDIVANE/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
+6. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/AUDIOVANE/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
 7. **Nyan Cat**: pixel cat on a rainbow trail through the stars.
 8. **Spectrum**: classic segmented LED spectrum bars.
 9. **Kaleidoscope**: mirrored fractal folds that punch in on the bass.
 10. **Warp**: hyperspace star streaks.
-11. **The Band**: five Game Boy–style pixel musicians (drums, bass, guitar, keys, vocals). Apple's on-device sound classifier (SoundAnalysis) decides who is playing, and they get a spotlight. Spectrum onsets time the kick, snare and hi-hat hits, strums, bass plucks, key presses and singing. Anyone not heard stands at rest.
-12. **Machine**: a port of the MIDEM Music Hack Day piece by [@mrdoob and @plamere](https://github.com/mrdoob/midemhackday) — a corridor of drums and a ring of pads, with note events launching bouncing balls that arc over the drums; the struck drum recoils and flashes white. The camera flies a 48-second loop through both machines.
-13. **Auto Scan**: cycles through every other mode, 20 seconds each.
+11. **The Band**: colour pixel-art musicians in ten genre sets (classical hall, DJ booth, rock theatre, pop studio, hip-hop street, jazz club, blues bar, country porch, R&B velvet, ambient), each with its own instruments and outfits. Apple's on-device sound classifier (SoundAnalysis), backed up by beat and bass detection, decides who walks on; the singer's voice (female, male or duet) comes from the vocal pitch. Playing follows the beat clock, with spectrum onsets as accents.
+12. **Machine**: a port of the MIDEM Music Hack Day piece by [@mrdoob and @plamere](https://github.com/mrdoob/midemhackday), rebuilt from its source: twelve stations of lathe-turned cannons and drums (one per pitch class) and a ring of 40 pads. Each note onset fires balls that arc onto the drum and pad for that pitch and loudness; struck drums recoil and flash white. Smooth meshes, 4x MSAA with a depth buffer, and the original's camera path flown over the length of the track (Music/Spotify report it).
+13. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
 
-Modes 4–10 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
+**Auto Scan** cycles through every other mode, 20 seconds each, and always sits at the bottom of the mode list.
+
+Modes 4–11 and 13 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
 
 Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
@@ -43,17 +45,83 @@ Other sources:
 - **Use Microphone** — visualizes whatever the mic hears.
 - **Use Demo Tone** — synthesized kick + sweep, so you can see it work without sharing anything.
 
+## Colour palettes
+
+Five palettes, picked from the header. The palette is applied as a **post-process
+over the finished frame** — a duotone grade that stretches the scene's
+luminance ramp between a shadow and a highlight colour, then adjusts
+saturation and lifts the blacks. Because it runs after the scene rather than
+inside each shader, one palette themes *every* mode at once: the tunnel, the
+band, the machine, all of them.
+
+| Palette | Look |
+|---------|------|
+| **NEON** | The original magenta / cyan look. |
+| **EMBER** | Warm amber — embers, dust, stage light. |
+| **TOXIC** | Green — oscilloscope, matrix, laboratory. |
+| **ABYSS** | Cold blue — moonlight, deep water, sonar. |
+| **MONO** | Greyscale. |
+
+## Credits and support
+
+A small **"Made with ❤️ by Minith Labs"** button sits in the bottom-right
+corner. It opens a popover with a link to [minithlabs.com](https://minithlabs.com)
+and a **"Buy us a coffee"** button that opens Stripe's hosted checkout in the
+default browser. No card details ever touch AudioVane.
+
+> This started life as Stripe's embedded Buy Button (the `<stripe-buy-button>`
+> custom element in a `WKWebView`). It doesn't survive contact with a real app:
+> the element upgrades, the iframe appears, and Stripe leaves the button stuck
+> on its loading shimmer indefinitely — which on a dark popover just reads as a
+> rendering bug. A native button that hands off to the same Stripe payment link
+> can't half-render, and a full browser tab is a far better place to type a card
+> number than a 284pt-wide iframe.
+
+## Analytics
+
+PostHog, wired directly to the capture endpoint — no SDK, no dependency. The
+official iOS SDK also pulls in feature flags, session replay and surveys, and
+session replay has no business inside an app whose entire job is capturing the
+screen.
+
+**What is sent:** which mode you switched to, which palette, the coarse genre
+the detector settled on, and whether the support button got clicked.
+
+**What is never sent:** screen content, audio, window titles, track names, file
+paths, or any hardware identifier. `distinct_id` is a random UUID in
+`UserDefaults` — it identifies an install, not a person.
+
+There's a toggle at the bottom of the credits popover, and the whole subsystem
+compiles out entirely with `POSTHOG_DISABLE=1`.
+
+### Configuration
+
+Create a `.env` next to `build-app.sh`:
+
+```
+POSTHOG_KEY=phc_xxxxxxxxxxxxxxxxxxxx
+POSTHOG_HOST=https://eu.i.posthog.com
+```
+
+`POSTHOG_HOST` defaults to `https://us.i.posthog.com`. Leave `POSTHOG_KEY` empty
+to ship a build with no telemetry at all — the toggle then reads "Not configured
+in this build."
+
+The project key is public by design (write-only, like Stripe's publishable key):
+it can add events but never read them.
+
 ## Header controls
 
 Everything lives in the top bar so the visualiser gets the whole window:
 
-- **Mode picker** (left of the group) — all twelve modes in a drop-down. Each
+- **Mode picker** (left of the group) — all thirteen modes in a drop-down. Each
   row shows its number-row shortcut, so the keyboard route stays discoverable
   now that the list isn't permanently on screen.
 - **Genre picker** — only in band mode (or when Auto Scan is sitting on the
   band), since the genre drives the stage, the lineup and the palette there.
   Clicking a genre locks it for the current song; the next song re-arms auto.
   The confidence bar next to the name shows how sure the detector is.
+- **Palette picker** — the five colour palettes, each with its own swatch.
 - **Source pill** and **BPM** readout.
 
 Click away from an open list to dismiss it.
@@ -67,8 +135,10 @@ Click away from an open list to dismiss it.
 ## Development flags
 
 - `--mode <name>` — start in a given mode (e.g. `--mode machine`)
+- `--palette N` — start with a given colour palette (0–4)
 - `--autoscan` — start in auto scan
 - `--scan-seconds N` — shorten the auto-scan dwell time (default 20s)
+- `--about` — open the credits popover on launch (checks the Stripe embed)
 - `--snapshot` — render one frame of every mode to PNG and exit
 - `--snapshot --genres` — render one frame of every genre and exit
 - `--ui-shot` — render the SwiftUI chrome to PNG (the OpenGL layer won't appear)
