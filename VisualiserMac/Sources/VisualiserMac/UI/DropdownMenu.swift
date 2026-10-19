@@ -90,11 +90,6 @@ struct DropdownMenu<Item: Hashable>: View {
                     .zIndex(100)
             }
         }
-        // Report the pill's on-screen frame so an automated click test can
-        // find it without needing accessibility permissions.
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            NSLog("[DD] pill \(id.rawValue) frame \(frame)")
-        }
     }
 
     private var current: DropdownEntry<Item>? {
@@ -147,9 +142,6 @@ struct DropdownMenu<Item: Hashable>: View {
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                    NSLog("[DD] row \(id.rawValue) '\(entry.title)' frame \(frame)")
-                }
             }
         }
         .padding(6)
