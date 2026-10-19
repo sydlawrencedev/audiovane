@@ -34,6 +34,7 @@ enum FunShaders {
     uniform float uActive;      // 0 in silence, eases to 1 with sound
     uniform float uBeats;       // beat counter at the detected tempo
     uniform float uScroll;      // forward-only distance, faster when louder
+    uniform float uClock;       // wall-clock seconds; keeps running in silence (use sparingly)
     out vec4 fragColor;
 
     const float PI = 3.14159265;
@@ -1574,11 +1575,14 @@ extension FunShaders {
     /// through floating glass polyhedra above a glossy floor. The glass is
     /// ray-traced exactly (each shape is a set of paired face planes, so there
     /// is no raymarching loop): it reflects the room, refracts the ribbons
-    /// behind it and lights up along its edges. The bass bends the ribbons and
-    /// widens them, every beat turns the glass and reshapes the ribbons a step,
-    /// the spectrum shapes each ribbon along its length, and the treble makes
-    /// the edges and the dust sparkle. They flow with the forward-only scroll.
-    /// In silence: dim, and still.
+    /// behind it and lights up along its edges. The whole scene slides right
+    /// to left past the camera, so near glass and near stretches of ribbon
+    /// cross faster than far ones (parallax), and each shape comes back in
+    /// from the right once it has left. The slide speeds up with uScroll. The
+    /// bass bends the ribbons and widens them, every beat turns the glass and
+    /// reshapes the ribbons a step, the spectrum shapes each ribbon along its
+    /// length, and the treble makes the edges and the dust sparkle.
+    /// In silence it dims but keeps a slow drift (on uClock), by design.
     static let ribbons = """
     // Glass polyhedra as pairs of parallel planes: the first 4 axes make an
     // octahedron, all 10 an icosahedron (face normals, unit length).
@@ -1590,7 +1594,7 @@ extension FunShaders {
         vec3(0.9342, 0.0, 0.3568), vec3(-0.9342, 0.0, 0.3568));
 
     const float kFloorY = -0.62;
-    const int kGems = 5;
+    const int kGems = 8;
     const int kStrands = 11;
 
     const vec3 ribbonMagenta = vec3(1.0, 0.16, 0.72);
@@ -1604,6 +1608,13 @@ extension FunShaders {
         float t = fract(f);
         return mix(uBands[i], uBands[min(i + 1, 95)], t * t * (3.0 - 2.0 * t));
     }
+
+    // How far the whole scene has slid to the left, in world units. A slow base
+    // drift on the wall clock (so it never stops, even in silence) plus uScroll,
+    // so it speeds up with the music. Both only ever increase. Because the world
+    // itself moves, perspective gives the parallax: near glass and near stretches
+    // of ribbon cross the screen faster than far ones.
+    float sceneShift() { return uClock * 0.15 + uScroll * 0.85; }
 
     // The world turns a step on every beat: a whole number per beat that eases in
     // over the first part of the beat. Forward-only, so it never runs backwards.
@@ -1621,6 +1632,7 @@ extension FunShaders {
     vec3 ribbonLight(vec2 q, float soft) {
         vec3 acc = vec3(0.0);
         float turn = beatTurn();
+        float X = q.x + sceneShift();                        // position along the ribbon, sliding left
         float hueDrift = 0.08 * sin(uBeats * PI / 32.0);     // colours sway a little over 64 beats
         float x01 = clamp(q.x / 6.0 + 0.5, 0.0, 1.0);
         float edge = smoothstep(-3.8, -2.6, q.x) * smoothstep(3.8, 2.6, q.x);
@@ -1634,17 +1646,17 @@ extension FunShaders {
             float amp = (0.17 + 0.18 * spec + 0.26 * uBass) * mix(0.6, 1.0, uActive);
             float ph = fb * 2.1 + turn * 0.55;
             float k = 0.8 + fb * 0.25;
-            float s = uScroll * (1.1 - fb * 0.35);
-            float a1 = q.x * k + s + ph;
-            float a2 = q.x * k * 2.1 - s * 0.6 + ph * 1.7 + fb;
+            float s = uScroll * (0.35 - fb * 0.12);              // a gentle ripple along the ribbon on top of the slide
+            float a1 = X * k + s + ph;
+            float a2 = X * k * 2.1 - s * 0.6 + ph * 1.7 + fb;
             float yc = (fb > 0.5 ? -0.34 : 0.02) + amp * sin(a1) + amp * 0.4 * sin(a2);
             float lo = kFloorY + 0.13;                       // skim the floor rather than sink into it
             yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
             float slope = amp * k * (cos(a1) + 0.84 * cos(a2));
             // Each bundle is a flat ribbon of fine parallel strands that twists
             // as it travels: wide where it faces you, a bright pinch where it turns.
-            float width = (0.10 + 0.09 * uBass + 0.06 * uBeatStrength) * (0.8 + 0.2 * sin(q.x * 0.7 + fb * 3.0));
-            float twist = q.x * (0.75 + 0.2 * fb) - uScroll * 0.9 + fb * 1.7 + turn * 0.25;
+            float width = (0.10 + 0.09 * uBass + 0.06 * uBeatStrength) * (0.8 + 0.2 * sin(X * 0.7 + fb * 3.0));
+            float twist = X * (0.75 + 0.2 * fb) - uScroll * 0.3 + fb * 1.7 + turn * 0.25;
             float face = cos(twist);
             float radius = width * abs(face);
             float norm = inversesqrt(1.0 + slope * slope);
@@ -1659,12 +1671,12 @@ extension FunShaders {
                     float w = 0.0022 + 0.0022 * (1.0 - abs(u)) + soft;
                     float core = 1.0 - smoothstep(0.0, w, d);
                     float halo = exp(-d / (0.014 + soft * 3.0));
-                    vec3 c = ribbonHue(abs(u) * 0.22 + fb * 0.55 + q.x * 0.02 + hueDrift);
+                    vec3 c = ribbonHue(abs(u) * 0.22 + fb * 0.55 + X * 0.02 + hueDrift);
                     bundle += c * (core * 2.4 + halo * 0.4) * (0.55 + 0.45 * (1.0 - abs(u))) * min(pinch, 1.8);
                 }
             }
             // the ribbon's translucent body, and its glow on the air around it
-            vec3 bodyC = ribbonHue(0.05 + fb * 0.55 + q.x * 0.02 + hueDrift);
+            vec3 bodyC = ribbonHue(0.05 + fb * 0.55 + X * 0.02 + hueDrift);
             bundle += bodyC * exp(-pow(dc / (radius + 0.015 + soft * 2.0), 2.0)) * 0.28;
             bundle += bodyC * exp(-dc / (0.16 + soft * 4.0)) * 0.12;
             acc += bundle;
@@ -1673,13 +1685,14 @@ extension FunShaders {
         return acc * edge * glow / (1.0 + soft * 25.0);
     }
 
-    // The ribbons live on a gently curved sheet that swings towards the camera on
-    // the left. Where a ray meets it (a few fixed-point steps), or -1.
-    float ribbonDepth(float x) { return 0.75 * sin(x * 0.5 + 0.9 + uTime * 0.03) - 0.15; }
+    // The ribbons live on a curved sheet that slides left with the scene, so
+    // stretches of ribbon swing towards the camera (and move faster) and back
+    // away again. Where a ray meets it (a few fixed-point steps), or -1.
+    float ribbonDepth(float x) { return 1.0 * sin((x + sceneShift()) * 0.45 + 0.9) - 0.1; }
     float ribbonT(vec3 ro, vec3 rd) {
         if (abs(rd.z) < 1e-3) return -1.0;
         float t = (ribbonDepth(ro.x) - ro.z) / rd.z;
-        for (int i = 0; i < 3; i++) t = (ribbonDepth(ro.x + rd.x * max(t, 0.0)) - ro.z) / rd.z;
+        for (int i = 0; i < 4; i++) t = (ribbonDepth(ro.x + rd.x * max(t, 0.0)) - ro.z) / rd.z;
         return t;
     }
 
@@ -1698,7 +1711,7 @@ extension FunShaders {
         vec3 col = mix(vec3(0.006, 0.014, 0.050), vec3(0.016, 0.026, 0.095), smoothstep(-0.1, 0.6, rd.y));
         col += vec3(0.16, 0.04, 0.22) * exp(-length(rd.xy - vec2(0.15, 0.02)) * 3.0) * (0.25 + 0.35 * uActive);
         col += vec3(0.01, 0.12, 0.22) * exp(-length(rd.xy - vec2(-0.45, -0.1)) * 3.0) * (0.25 + 0.35 * uActive);
-        vec2 sp = rd.xy / max(rd.z, 0.2) * 90.0;
+        vec2 sp = rd.xy / max(rd.z, 0.2) * 90.0 + vec2(sceneShift() * 5.0, 0.0);   // far dust drifts slowest
         vec2 cell = floor(sp);
         float h = hash21(cell);
         vec2 off = vec2(hash21(cell + 7.1), hash21(cell + 3.3)) - 0.5;
@@ -1718,17 +1731,34 @@ extension FunShaders {
         return col;
     }
 
-    // Where each glass shape is, how it's turned, and how big it is.
+    // Where each glass shape is, how it's turned, and how big it is. Each one
+    // sits at its own depth and slides left with the scene; once it's off the
+    // left edge it comes back in from the right (a little higher or lower, a bit
+    // bigger or smaller, turned differently), so the stream never runs dry. The
+    // starting points are staggered so the shapes don't travel as one clump.
     void gemPose(int j, out vec3 c, out vec2 ang, out float r, out int faces) {
         float fj = float(j);
-        if (j == 0)      { c = vec3(1.25, -0.05, 0.25);  r = 0.60; faces = 10; }
-        else if (j == 1) { c = vec3(-1.10, 0.22, 0.45); r = 0.42; faces = 10; }
-        else if (j == 2) { c = vec3(0.10, 0.55, 1.10);  r = 0.30; faces = 4; }
-        else if (j == 3) { c = vec3(-1.95, -0.30, -0.10); r = 0.24; faces = 4; }
-        else             { c = vec3(0.30, -0.28, 1.50); r = 0.30; faces = 10; }
+        if (j == 0)      { c = vec3(0.0, -0.05, 0.25);  r = 0.58; faces = 10; }
+        else if (j == 1) { c = vec3(0.0, 0.22, 0.55);   r = 0.42; faces = 10; }
+        else if (j == 2) { c = vec3(0.0, 0.55, 1.40);   r = 0.30; faces = 4; }
+        else if (j == 3) { c = vec3(0.0, -0.30, -1.95); r = 0.17; faces = 4; }
+        else if (j == 4) { c = vec3(0.0, -0.26, 2.40);  r = 0.34; faces = 10; }
+        else if (j == 5) { c = vec3(0.0, 0.40, -0.70);  r = 0.26; faces = 4; }
+        else if (j == 6) { c = vec3(0.0, 0.45, 2.00);   r = 0.38; faces = 10; }
+        else             { c = vec3(0.0, -0.22, -1.20); r = 0.20; faces = 10; }
+        // Wrap span: wide enough that the jump happens off screen at this depth.
+        float depth = c.z + 3.4;
+        float span = 2.0 * (depth * 1.1 + r) + 0.6;
+        float x = fract(fj * 0.375 + 0.2) * span - sceneShift();
+        float lap = floor(x / span);
+        c.x = x - lap * span - 0.5 * span;
+        float lh = hash11(lap * 3.7 + fj * 11.3);
+        c.y = clamp(c.y + (lh - 0.5) * 0.4, kFloorY + r + 0.05, 0.75);
+        r *= 0.85 + 0.3 * hash11(lap * 5.1 + fj * 2.9);
         c.y += 0.06 * sin(uTime * 0.45 + fj * 1.9);
-        ang = vec2(uTime * (0.10 + 0.03 * fj) + fj * 1.3, beatTurn() * 0.32 + fj * 2.1);
-        r *= 1.0 + 0.10 * uBeatStrength + 0.05 * uBass;
+        ang = vec2(uTime * (0.10 + 0.03 * fj) + uClock * 0.02 + fj * 1.3 + lh * 6.28,
+                   beatTurn() * 0.32 + fj * 2.1);
+        r *= 1.0 + 0.06 * uBeatStrength + 0.04 * uBass;
     }
 
     vec3 toGem(vec3 v, vec2 ang) { v.xz = rot(ang.x) * v.xz; v.yz = rot(ang.y) * v.yz; return v; }
@@ -1847,10 +1877,10 @@ extension FunShaders {
 
     void main() {
         vec2 p = screenP();
-        // Camera drifts slowly round the scene (the clock stops in silence) and
-        // leans in on the bass.
+        // Camera sways slowly (on the sound-gated clock) and leans in a little
+        // on the bass. The scene itself slides left past it (sceneShift).
         float yaw = 0.22 * sin(uTime * 0.07);
-        vec3 ro = vec3(0.0, 0.16, -3.3 + 0.25 * uBass);
+        vec3 ro = vec3(0.0, 0.16, -3.3 + 0.10 * uBass);
         ro.xz = rot(yaw) * ro.xz;
         vec3 fw = normalize(vec3(0.0, -0.12, 0.0) - ro);
         vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
@@ -1887,7 +1917,7 @@ extension FunShaders {
 
         col = 1.0 - exp(-col * 1.8);                   // soft highlight roll-off
         col *= 1.0 - 0.35 * dot(p, p);                  // vignette
-        col = mix(col * 0.5, col, uActive);             // dims and settles in silence
+        col = mix(col * 0.5, col, uActive);             // dims in silence, but keeps drifting
         fragColor = vec4(col, 1.0);
     }
     """

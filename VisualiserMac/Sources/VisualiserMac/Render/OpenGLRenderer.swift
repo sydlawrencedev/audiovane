@@ -90,7 +90,7 @@ final class OpenGLRenderer: NSObject {
         let program: GLuint
         let time, bass, mid, treble, beat, beatStrength, level, resolution, idle, bands: GLint
         let eventKind, eventAge: GLint
-        let active, beats, peaks, scroll: GLint
+        let active, beats, peaks, scroll, clock: GLint
     }
     private var shaderModes: [VisualizerMode: ShaderMode] = [:]
 
@@ -1215,6 +1215,10 @@ final class OpenGLRenderer: NSObject {
     /// Distance travelled, for things that should move faster when louder.
     /// Accumulated (never time × speed) so a drop in speed can't run it backwards.
     private var scrollClock: Double = 0
+    /// Plain wall-clock seconds that keep running in silence. Only for modes
+    /// that should never stop completely (Ribbons keeps a slow, dim drift);
+    /// everything else should stay on the sound-gated clocks above.
+    private var wallClock: Double = 0
 
     private func advanceDanceClock(_ snap: AudioSnapshot) {
         let now = CACurrentMediaTime()
@@ -1225,6 +1229,7 @@ final class OpenGLRenderer: NSObject {
         danceActivity += (target - danceActivity) * min(1, dt * 6)
         danceClock += dt * danceActivity
         scrollClock += dt * danceActivity * (0.4 + Double(snap.level) * 0.6)
+        wallClock += dt
         let bpm = snap.bpm > 0 ? snap.bpm : 120
         beatClock += dt * danceActivity * bpm / 60
         if snap.beat { beatClock += (beatClock.rounded() - beatClock) * 0.35 }
@@ -1246,6 +1251,7 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.active, Float(danceActivity))
         glUniform1f(m.beats, Float(beatClock.truncatingRemainder(dividingBy: 1024)))
         glUniform1f(m.scroll, Float(scrollClock.truncatingRemainder(dividingBy: 4096)))
+        glUniform1f(m.clock, Float(wallClock.truncatingRemainder(dividingBy: 3600)))
         if mode == .spectrum {
             for i in 0..<spectrumPeaks.count {
                 let v = max(snap.bands[i * 2], snap.bands[i * 2 + 1])
@@ -1446,7 +1452,7 @@ final class OpenGLRenderer: NSObject {
                 level: loc("uLevel"), resolution: loc("uResolution"), idle: loc("uIdle"),
                 bands: loc("uBands[0]"), eventKind: loc("uEventKind"), eventAge: loc("uEventAge"),
                 active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
-                scroll: loc("uScroll"))
+                scroll: loc("uScroll"), clock: loc("uClock"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")
