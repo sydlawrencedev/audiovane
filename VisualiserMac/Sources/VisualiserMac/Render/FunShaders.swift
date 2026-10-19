@@ -1573,17 +1573,22 @@ extension FunShaders {
 extension FunShaders {
     // MARK: - Ribbons
 
-    /// Two ribbons of fine glowing strands, one magenta and one cyan, twist
-    /// through floating glass polyhedra above a glossy floor. The glass is
-    /// ray-traced exactly (each shape is a set of paired face planes, so there
-    /// is no raymarching loop): it reflects the room, refracts the ribbons
-    /// behind it and lights up along its edges. The whole scene slides right
-    /// to left past the camera, so near glass and near stretches of ribbon
-    /// cross faster than far ones (parallax), and each shape comes back in
-    /// from the right once it has left. The slide speeds up with uScroll. The
-    /// bass bends the ribbons and widens them, every beat turns the glass and
-    /// reshapes the ribbons a step, the spectrum shapes each ribbon along its
-    /// length, and the treble makes the edges and the dust sparkle.
+    /// Two sheaves of glowing silk strands, one hot pink and one cyan, weave
+    /// through clear glass polyhedra in a dark navy room above a glossy floor,
+    /// the look of the screens in the AudioVane film. The strands are round
+    /// tubes, hot in the middle and deep at the rim, with a soft bloom; the
+    /// glass is ray-traced exactly (each shape is a set of paired face planes,
+    /// so there is no raymarching loop): it reflects the ribbon lights,
+    /// refracts the ribbons behind it and burns cyan along its edges, and
+    /// shapes far from the lens's focus go soft. The floor mirrors it all and
+    /// pools pink and cyan light. Colours are chosen to land as pink and cyan
+    /// after the NEON grade. The whole scene slides right to left past the
+    /// camera, so near glass and near stretches of ribbon cross faster than
+    /// far ones (parallax), and each shape comes back in from the right once
+    /// it has left. The slide speeds up with uScroll. The bass bends the
+    /// ribbons and widens them, every beat turns the glass and reshapes the
+    /// ribbons a step, the spectrum shapes each ribbon along its length, and
+    /// the treble makes the edges and the dust sparkle.
     /// In silence it dims but keeps a slow drift (on uClock), by design.
     static let ribbons = """
     // Glass polyhedra as pairs of parallel planes: the first 4 axes make an
@@ -1597,11 +1602,14 @@ extension FunShaders {
 
     const float kFloorY = -0.62;
     const int kGems = 8;
-    const int kStrands = 11;
+    const int kStrands = 8;
 
-    const vec3 ribbonMagenta = vec3(1.0, 0.16, 0.72);
-    const vec3 ribbonViolet = vec3(0.52, 0.26, 1.0);
-    const vec3 ribbonCyan = vec3(0.0, 0.85, 1.0);
+    // The film's palette: hot pink and electric cyan light over a dark navy room.
+    const vec3 ribbonPink = vec3(1.0, 0.12, 0.40);
+    const vec3 ribbonDeep = vec3(0.50, 0.0, 0.24);
+    const vec3 ribbonCyan = vec3(0.0, 1.0, 0.72);
+    const vec3 ribbonTeal = vec3(0.0, 0.55, 0.45);
+    const vec3 glassCyan = vec3(0.0, 1.0, 0.64);
 
     // Spectrum at x (0..1), interpolated between bands so it has no steps.
     float ribbonSpec(float x01) {
@@ -1622,75 +1630,78 @@ extension FunShaders {
     // over the first part of the beat. Forward-only, so it never runs backwards.
     float beatTurn() { return floor(uBeats) + smoothstep(0.0, 0.45, fract(uBeats)); }
 
-    vec3 ribbonHue(float t) {
-        t = fract(t);
-        vec3 c = mix(ribbonMagenta, ribbonViolet, smoothstep(0.0, 0.33, t));
-        c = mix(c, ribbonCyan, smoothstep(0.33, 0.66, t));
-        return mix(c, ribbonMagenta, smoothstep(0.66, 1.0, t));
-    }
-
-    // Light from the two ribbon bundles at point q on their plane (z = 0).
+    // Light from the two ribbon bundles at point q on their plane.
     // soft > 0 blurs them, for reflections in the floor.
     vec3 ribbonLight(vec2 q, float soft) {
         vec3 acc = vec3(0.0);
         float turn = beatTurn();
         float X = q.x + sceneShift();                        // position along the ribbon, sliding left
-        float hueDrift = 0.08 * sin(uBeats * PI / 32.0);     // colours sway a little over 64 beats
-        float x01 = clamp(q.x / 6.0 + 0.5, 0.0, 1.0);
-        float edge = smoothstep(-3.8, -2.6, q.x) * smoothstep(3.8, 2.6, q.x);
+        float x01 = clamp(q.x / 7.0 + 0.5, 0.0, 1.0);
+        float edge = smoothstep(-4.8, -3.6, q.x) * smoothstep(4.8, 3.6, q.x);
         for (int b = 0; b < 2; b++) {
             float fb = float(b);
             float sx = fb > 0.5 ? 0.3 + x01 * 0.5 : 0.05 + x01 * 0.35;
             float base = fb > 0.5 ? 0.5 : 0.15;
             float spec = 0.55 * (ribbonSpec(base - 0.1) + ribbonSpec(base) + ribbonSpec(base + 0.1)) / 3.0
                        + 0.45 * (ribbonSpec(sx - 0.08) + ribbonSpec(sx) + ribbonSpec(sx + 0.08)) / 3.0;
-            // Bass bends the bundle harder; each beat reshapes it a little.
-            float amp = (0.17 + 0.18 * spec + 0.26 * uBass) * mix(0.6, 1.0, uActive);
-            float ph = fb * 2.1 + turn * 0.55;
-            float k = 0.8 + fb * 0.25;
-            float s = uScroll * (0.35 - fb * 0.12);              // a gentle ripple along the ribbon on top of the slide
+            // Broad waves; bass bends the bundle harder and each beat reshapes it a little.
+            float amp = (0.36 + 0.14 * spec + 0.24 * uBass) * mix(0.75, 1.0, uActive);
+            float ph = fb * 3.0 + turn * 0.45;
+            float k = 1.2 - fb * 0.3;
+            float s = uScroll * (0.3 - fb * 0.1);              // a gentle ripple along the ribbon on top of the slide
             float a1 = X * k + s + ph;
-            float a2 = X * k * 2.1 - s * 0.6 + ph * 1.7 + fb;
-            float yc = (fb > 0.5 ? -0.34 : 0.02) + amp * sin(a1) + amp * 0.4 * sin(a2);
-            float lo = kFloorY + 0.13;                       // skim the floor rather than sink into it
+            float a2 = X * k * 1.9 - s * 0.6 + ph * 1.7 + fb;
+            float yc = (fb > 0.5 ? 0.02 : 0.36) + amp * sin(a1) + amp * 0.35 * sin(a2);   // close enough that they braid
+            float lo = kFloorY + 0.16;                       // skim the floor rather than sink into it
             yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
-            float slope = amp * k * (cos(a1) + 0.84 * cos(a2));
-            // Each bundle is a flat ribbon of fine parallel strands that twists
-            // as it travels: wide where it faces you, a bright pinch where it turns.
-            float width = (0.10 + 0.09 * uBass + 0.06 * uBeatStrength) * (0.8 + 0.2 * sin(X * 0.7 + fb * 3.0));
-            float twist = X * (0.75 + 0.2 * fb) - uScroll * 0.3 + fb * 1.7 + turn * 0.25;
-            float face = cos(twist);
-            float radius = width * abs(face);
+            float slope = amp * k * (cos(a1) + 0.665 * cos(a2));
             float norm = inversesqrt(1.0 + slope * slope);
             float dc = abs(q.y - yc) * norm;
+            // Each bundle is a sheaf of glowing silk strands that twists as it
+            // travels: fanned wide where it faces you, gathered where it turns,
+            // and each strand weaves a little on its own so they cross.
+            float width = (fb > 0.5 ? 0.21 : 0.24) * (1.0 + 0.35 * uBass + 0.2 * uBeatStrength)
+                        * (0.75 + 0.25 * sin(X * 0.6 + fb * 3.0));
+            float twist = X * (0.55 + 0.15 * fb) - uScroll * 0.25 + fb * 1.7 + turn * 0.2;
+            float face = cos(twist);
+            float sw = fb > 0.5 ? 0.048 : 0.09;            // strand radius
+            vec3 hot = fb > 0.5 ? ribbonCyan : ribbonPink;
+            vec3 deep = fb > 0.5 ? ribbonTeal : ribbonDeep;
             vec3 bundle = vec3(0.0);
             // Only pixels near the bundle pay for its strands.
-            if (dc < radius + 0.12 + soft * 12.0) {
-                float pinch = 1.0 / (0.35 + 0.65 * abs(face));     // strands crowd together and glow hotter at the turn
+            if (dc < width * 1.6 + 0.12 + soft * 12.0) {
+                vec3 strands = vec3(0.0);
+                float halo = 0.0;
                 for (int i = 0; i < kStrands; i++) {
-                    float u = float(i) / float(kStrands - 1) * 2.0 - 1.0;
-                    float d = abs(q.y - yc - u * width * face) * norm;
-                    float w = 0.0022 + 0.0022 * (1.0 - abs(u)) + soft;
-                    float core = 1.0 - smoothstep(0.0, w, d);
-                    float halo = exp(-d / (0.014 + soft * 3.0));
-                    vec3 c = ribbonHue(abs(u) * 0.22 + fb * 0.55 + X * 0.02 + hueDrift);
-                    bundle += c * (core * 2.4 + halo * 0.4) * (0.55 + 0.45 * (1.0 - abs(u))) * min(pinch, 1.8);
+                    float fi = float(i);
+                    float u = fi / float(kStrands - 1) * 2.0 - 1.0;
+                    float off = width * (u * (0.5 + 0.5 * abs(face)) + 0.45 * sin(X * (1.1 + 0.25 * hash11(fi * 3.1 + fb)) + fi * 2.4 + fb * 2.0 + turn * 0.3));
+                    float d = abs(q.y - yc - off) * norm;
+                    float w = sw * (0.45 + 0.9 * hash11(fi + fb * 9.0)) * (0.75 + 0.25 * sin(X * 0.8 + fi * 1.3));
+                    float aa = max(soft, 0.0025);
+                    float cov = 1.0 - smoothstep(w - aa, w + aa, d);     // the strand's outline, anti-aliased
+                    float x = min(d / (w + aa), 1.0);
+                    float tube = sqrt(1.0 - x * x);                       // round strand: hot in the middle, deep at the rim
+                    float shimmer = 0.75 + 0.25 * sin(X * 0.9 + fi * 2.3 - uScroll * 0.4);
+                    vec3 c = mix(deep, hot, tube) * (0.35 + 1.35 * tube) * (1.0 + 0.9 * fb)
+                           + vec3(1.0, 0.85, 0.95) * pow(tube, 40.0) * (0.8 - 0.8 * fb);
+                    strands = mix(strands, c * shimmer, cov * 0.8);      // later strands lie over earlier ones
+                    halo += exp(-max(d - w, 0.0) / (0.06 + soft * 3.0));
                 }
+                bundle = strands + hot * halo * (0.13 - 0.08 * fb);
             }
-            // the ribbon's translucent body, and its glow on the air around it
-            vec3 bodyC = ribbonHue(0.05 + fb * 0.55 + X * 0.02 + hueDrift);
-            bundle += bodyC * exp(-pow(dc / (radius + 0.015 + soft * 2.0), 2.0)) * 0.28;
-            bundle += bodyC * exp(-dc / (0.16 + soft * 4.0)) * 0.12;
-            acc += bundle;
+            // the glow the bundle throws on the air around it
+            bundle += hot * exp(-dc / (0.18 + soft * 4.0)) * (0.13 - 0.07 * fb);
+            acc += bundle * (fb > 0.5 ? 0.95 : 1.0);
         }
-        float glow = (0.4 + 0.6 * uActive) * (0.85 + 0.5 * uLevel + 0.6 * uBeatStrength);
-        return acc * edge * glow / (1.0 + soft * 25.0);
+        float glow = (0.45 + 0.55 * uActive) * (0.9 + 0.35 * uLevel + 0.45 * uBeatStrength);
+        return acc * edge * glow / (1.0 + soft * 20.0);
     }
 
     // The ribbons live on a curved sheet that slides left with the scene, so
     // stretches of ribbon swing towards the camera (and move faster) and back
     // away again. Where a ray meets it (a few fixed-point steps), or -1.
-    float ribbonDepth(float x) { return 1.0 * sin((x + sceneShift()) * 0.45 + 0.9) - 0.1; }
+    float ribbonDepth(float x) { return 0.65 * sin((x + sceneShift()) * 0.45 + 0.9) + 0.1; }
     float ribbonT(vec3 ro, vec3 rd) {
         if (abs(rd.z) < 1e-3) return -1.0;
         float t = (ribbonDepth(ro.x) - ro.z) / rd.z;
@@ -1707,29 +1718,34 @@ extension FunShaders {
         return ribbonLight(p.xy, soft + t * 0.7 / uResolution.y);   // never thinner than a pixel
     }
 
-    // Night sky behind everything: indigo falling to deep navy, a soft glow behind
-    // the ribbons, and a little dust that sparkles with the treble.
+    // The room: deep navy, a little lighter up high, a faint pink haze behind the
+    // pink ribbon, a hot line where the floor meets the dark, and a little dust
+    // that sparkles with the treble.
+    vec3 horizonGlow(vec3 rd) {
+        float band = exp(-max(rd.y, 0.0) * 90.0 - max(-rd.y, 0.0) * 22.0) * 0.7;   // hugs the floor, barely rises into the air
+        vec3 c = mix(ribbonCyan * 0.3, ribbonPink * 0.75, smoothstep(-0.7, 0.2, rd.x));
+        return c * band * exp(-abs(rd.x - 0.05) * 1.2) * (0.45 + 0.55 * uActive);
+    }
     vec3 skyColour(vec3 rd) {
-        vec3 col = mix(vec3(0.006, 0.014, 0.050), vec3(0.016, 0.026, 0.095), smoothstep(-0.1, 0.6, rd.y));
-        col += vec3(0.16, 0.04, 0.22) * exp(-length(rd.xy - vec2(0.15, 0.02)) * 3.0) * (0.25 + 0.35 * uActive);
-        col += vec3(0.01, 0.12, 0.22) * exp(-length(rd.xy - vec2(-0.45, -0.1)) * 3.0) * (0.25 + 0.35 * uActive);
+        vec3 col = mix(vec3(0.0, 0.058, 0.074), vec3(0.0, 0.076, 0.094), smoothstep(-0.05, 0.5, rd.y));
+        col += vec3(0.03, 0.004, 0.03) * exp(-length(rd.xy - vec2(0.12, 0.10)) * 3.5) * (0.3 + 0.4 * uActive);
+        col += vec3(0.0, 0.04, 0.05) * exp(-length(rd.xy - vec2(-0.45, -0.12)) * 3.0) * (0.3 + 0.4 * uActive);
         vec2 sp = rd.xy / max(rd.z, 0.2) * 90.0 + vec2(sceneShift() * 5.0, 0.0);   // far dust drifts slowest
         vec2 cell = floor(sp);
         float h = hash21(cell);
         vec2 off = vec2(hash21(cell + 7.1), hash21(cell + 3.3)) - 0.5;
-        float star = smoothstep(0.12, 0.0, length(fract(sp) - 0.5 - off * 0.6)) * step(0.93, h);
+        float star = smoothstep(0.12, 0.0, length(fract(sp) - 0.5 - off * 0.6)) * step(0.95, h);
         float tw = 0.4 + 0.6 * sin(h * 50.0 + uTime * 2.0);
-        col += vec3(0.7, 0.8, 1.0) * star * tw * (0.25 + 1.5 * uTreble) * (0.3 + 0.7 * uActive);
-        return col;
+        col += vec3(0.5, 0.85, 1.0) * star * tw * (0.15 + 1.2 * uTreble) * (0.3 + 0.7 * uActive);
+        return col + horizonGlow(rd);
     }
 
-    // Soft studio lights for the glass to reflect.
+    // Lights for the glass to reflect: the pink and cyan of the ribbons.
     vec3 envColour(vec3 rd) {
         vec3 col = skyColour(rd);
-        col += ribbonMagenta * 0.9 * pow(max(dot(rd, normalize(vec3(0.7, 0.3, -0.6))), 0.0), 6.0);
-        col += ribbonCyan * 0.8 * pow(max(dot(rd, normalize(vec3(-0.7, 0.2, -0.6))), 0.0), 6.0);
-        col += vec3(0.85, 0.9, 1.0) * 0.9 * pow(max(dot(rd, normalize(vec3(0.1, 1.0, -0.3))), 0.0), 16.0);
-        col += vec3(0.30, 0.15, 0.45) * (0.5 + 0.5 * rd.y) * 0.25;
+        col += ribbonPink * 1.4 * pow(max(dot(rd, normalize(vec3(0.6, 0.25, -0.7))), 0.0), 14.0);
+        col += ribbonCyan * 1.1 * pow(max(dot(rd, normalize(vec3(-0.7, 0.1, -0.6))), 0.0), 14.0);
+        col += vec3(0.8, 0.95, 1.0) * 0.5 * pow(max(dot(rd, normalize(vec3(0.1, 1.0, -0.3))), 0.0), 16.0);
         return col;
     }
 
@@ -1740,27 +1756,27 @@ extension FunShaders {
     // starting points are staggered so the shapes don't travel as one clump.
     void gemPose(int j, out vec3 c, out vec2 ang, out float r, out int faces) {
         float fj = float(j);
-        if (j == 0)      { c = vec3(0.0, -0.05, 0.25);  r = 0.58; faces = 10; }
-        else if (j == 1) { c = vec3(0.0, 0.22, 0.55);   r = 0.42; faces = 10; }
-        else if (j == 2) { c = vec3(0.0, 0.55, 1.40);   r = 0.30; faces = 4; }
-        else if (j == 3) { c = vec3(0.0, -0.30, -1.95); r = 0.17; faces = 4; }
-        else if (j == 4) { c = vec3(0.0, -0.26, 2.40);  r = 0.34; faces = 10; }
-        else if (j == 5) { c = vec3(0.0, 0.40, -0.70);  r = 0.26; faces = 4; }
-        else if (j == 6) { c = vec3(0.0, 0.45, 2.00);   r = 0.38; faces = 10; }
-        else             { c = vec3(0.0, -0.22, -1.20); r = 0.20; faces = 10; }
+        if (j == 0)      { c = vec3(0.0, -0.50, -0.95); r = 0.62; faces = 10; }
+        else if (j == 1) { c = vec3(0.0, 0.55, 3.00);   r = 0.55; faces = 10; }
+        else if (j == 2) { c = vec3(0.0, 1.05, 0.90);   r = 0.42; faces = 10; }
+        else if (j == 3) { c = vec3(0.0, -0.50, -1.30); r = 0.24; faces = 10; }
+        else if (j == 4) { c = vec3(0.0, -0.50, 1.60);  r = 0.48; faces = 4; }
+        else if (j == 5) { c = vec3(0.0, 0.85, -0.70);  r = 0.20; faces = 10; }
+        else if (j == 6) { c = vec3(0.0, 0.20, 0.95);   r = 0.80; faces = 10; }
+        else             { c = vec3(0.0, -0.50, 2.30);  r = 0.62; faces = 10; }
         // Wrap span: wide enough that the jump happens off screen at this depth.
         float depth = c.z + 3.4;
-        float span = 2.0 * (depth * 1.1 + r) + 0.6;
-        float x = fract(fj * 0.375 + 0.2) * span - sceneShift();
+        float span = 2.0 * (depth * 0.85 + r) + 0.4;
+        float x = fract(fj * 0.375 + 0.62) * span - sceneShift();
         float lap = floor(x / span);
         c.x = x - lap * span - 0.5 * span;
         float lh = hash11(lap * 3.7 + fj * 11.3);
-        c.y = clamp(c.y + (lh - 0.5) * 0.4, kFloorY + r + 0.05, 0.75);
+        c.y = clamp(c.y + (lh - 0.5) * 0.4, kFloorY + r * 0.8, 2.0);
         r *= 0.85 + 0.3 * hash11(lap * 5.1 + fj * 2.9);
-        c.y += 0.06 * sin(uTime * 0.45 + fj * 1.9);
+        c.y += 0.05 * sin(uTime * 0.45 + fj * 1.9);
         ang = vec2(uTime * (0.10 + 0.03 * fj) + uClock * 0.02 + fj * 1.3 + lh * 6.28,
                    beatTurn() * 0.32 + fj * 2.1);
-        r *= 1.0 + 0.06 * uBeatStrength + 0.04 * uBass;
+        r *= 1.0 + 0.05 * uBeatStrength + 0.03 * uBass;
     }
 
     vec3 toGem(vec3 v, vec2 ang) { v.xz = rot(ang.x) * v.xz; v.yz = rot(ang.y) * v.yz; return v; }
@@ -1782,15 +1798,16 @@ extension FunShaders {
         }
     }
 
-    // How close a surface point is to an edge: 1 on an edge, 0 mid-face.
-    float gemEdge(vec3 p, int faces, float h, float w) {
-        float a = -1e5, b = -1e5;
+    // How close a surface point is to an edge (x: 1 on an edge, 0 mid-face) and
+    // to a corner (y: 1 where three faces meet).
+    vec2 gemEdge(vec3 p, int faces, float h, float w) {
+        float a = -1e5, b = -1e5, c = -1e5;
         for (int i = 0; i < 10; i++) {
             if (i >= faces) break;
             float d = abs(dot(p, kFaceAxes[i])) - h;
-            if (d > a) { b = a; a = d; } else if (d > b) { b = d; }
+            if (d > a) { c = b; b = a; a = d; } else if (d > b) { c = b; b = d; } else if (d > c) { c = d; }
         }
-        return 1.0 - smoothstep(0.0, w, a - b);
+        return vec2(1.0 - smoothstep(0.0, w, a - b), 1.0 - smoothstep(0.0, w * 2.5, a - c));
     }
 
     // Nearest glass shape along a ray, if any.
@@ -1810,22 +1827,27 @@ extension FunShaders {
         return jHit >= 0;
     }
 
-    // Glow around each shape's silhouette, so the glass seems to give off light.
-    vec3 gemHalo(vec3 ro, vec3 rd, float tMax) {
+    // Cyan glow around each shape's silhouette, so the glass seems to give off
+    // light. pool is the glow the shapes throw on the floor, if ro is on it.
+    vec3 gemHalo(vec3 ro, vec3 rd, float tMax, out vec3 pool) {
         vec3 acc = vec3(0.0);
+        pool = vec3(0.0);
         for (int j = 0; j < kGems; j++) {
             vec3 c; vec2 ang; float r; int faces;
             gemPose(j, c, ang, r, faces);
+            vec2 gd = (ro.xz - c.xz) / r;
+            pool += glassCyan * exp(-dot(gd, gd) * 0.8 - max(c.y - r - kFloorY, 0.0) * 2.5);
             float t = max(dot(c - ro, rd), 0.0);
             if (t > tMax) continue;
             float d = max(length(ro + rd * t - c) - r * 0.85, 0.0);
-            acc += mix(ribbonCyan, ribbonMagenta, step(1.5, float(j)) * 0.6) * exp(-d * 9.0) * 0.05 / (1.0 + t * 0.15);
+            acc += glassCyan * exp(-d * 9.0) * 0.06 / (1.0 + t * 0.15);
         }
         return acc * (0.4 + 0.6 * uActive + 0.8 * uBeatStrength);
     }
 
     // One glass shape: reflection, refraction of the ribbons behind it, and its
-    // bright edges, front and back.
+    // glowing cyan edges, front and back. Shapes far from the focus distance
+    // get softer, wider edges, like a lens out of focus.
     vec3 shadeGem(int j, vec3 ro, vec3 rd, float tHit, bool full) {
         vec3 c; vec2 ang; float r; int faces;
         gemPose(j, c, ang, r, faces);
@@ -1836,58 +1858,60 @@ extension FunShaders {
         vec3 pIn = oro + ord * tn;
         vec3 nW = fromGem(nn, ang);
         float px = 2.0 / uResolution.y;
-        float edgeW = (px * tn * 1.1 + 0.003) / r * h;
-        float edgeFront = gemEdge(pIn, faces, h, edgeW);
+        float blur = smoothstep(4.8, 7.5, length(c - ro));
+        float edgeW = min((px * tn * 1.6 + 0.004 + blur * 0.012) / r * h, h * 0.04);
+        vec2 edgeFront = gemEdge(pIn, faces, h, edgeW);
 
-        float fres = 0.12 + 0.88 * pow(1.0 - clamp(-dot(rd, nW), 0.0, 1.0), 4.0);
+        float fres = 0.07 + 0.93 * pow(1.0 - clamp(-dot(rd, nW), 0.0, 1.0), 4.0);
         vec3 rr = reflect(rd, nW);
-        vec3 col = envColour(rr) * fres * 1.6;
-        col += vec3(0.6, 0.7, 1.0) * pow(max(dot(nW, normalize(vec3(-0.3, 0.8, -0.5))), 0.0), 3.0) * 0.10;
+        vec3 col = envColour(rr) * fres * 0.8;
         float facet = hash11(dot(nn, vec3(12.9, 78.2, 37.7)));   // each face catches the light a little differently
-        col += mix(ribbonViolet, ribbonCyan, facet) * (0.03 + 0.06 * facet) * (0.5 + 0.5 * uActive);
-        vec3 edgeCol = mix(vec3(0.8, 0.95, 1.0), ribbonCyan, 0.55);
+        col += mix(ribbonPink, ribbonCyan, step(0.6, facet)) * 0.12 * facet * facet * (0.5 + 0.5 * uActive);
+        float lit = (0.45 + 0.55 * uActive) * (0.9 + 0.6 * uTreble + 0.8 * uBeatStrength);
 
         if (full) {
             // Through the glass: bend in, cross to the far face, bend out.
-            vec3 d1 = refract(ord, nn, 1.0 / 1.45);
+            vec3 d1 = refract(ord, nn, 1.0 / 1.15);
             float tn2, tf2; vec3 nn2, nf2;
             gemHit(pIn + d1 * 0.002, d1, faces, h, tn2, tf2, nn2, nf2);
             vec3 pOut = pIn + d1 * (0.002 + tf2);
-            vec3 d2 = refract(d1, -nf2, 1.45);
+            vec3 d2 = refract(d1, -nf2, 1.15);
             vec3 wOut = fromGem(pOut, ang) + c;
             vec3 behind;
             if (dot(d2, d2) < 0.5) {
                 // total internal reflection: the face lights up with the room instead
-                behind = envColour(fromGem(reflect(d1, -nf2), ang)) * 1.2;
+                behind = skyColour(fromGem(reflect(d1, -nf2), ang)) * 1.3;
             } else {
                 vec3 wd2 = fromGem(d2, ang);
-                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 30.0) * 1.15;
+                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 30.0) * 0.45;
             }
-            col += behind * vec3(0.78, 0.88, 1.0) * (1.0 - fres) * (0.85 + 0.3 * facet);
-            float edgeBack = gemEdge(pOut, faces, h, edgeW * 1.2);
-            col += edgeCol * edgeBack * 0.35;
-            // A ribbon passing through the middle of the glass glows inside it.
+            col += behind * vec3(0.85, 0.96, 1.0) * (1.0 - fres) * (0.9 + 0.2 * facet);
+            vec2 edgeBack = gemEdge(pOut, faces, h, edgeW * 1.2);
+            // A ribbon passing through the glass lights it from inside.
             float tz = ribbonT(ro, rd);
             if (tz > tHit && tz < tHit + (tf - tn)) col += ribbonLight((ro + rd * tz).xy, 0.0) * 0.6;
+            col += glassCyan * (edgeBack.x * 0.12 + edgeBack.y * 0.15) * lit * (1.0 - 0.7 * blur);
         }
-        float sparkle = 0.9 + 0.8 * uTreble + 1.0 * uBeatStrength;
-        float edgeGlow = gemEdge(pIn, faces, h, edgeW * 5.0);
-        col += edgeCol * (edgeFront + edgeGlow * 0.25) * sparkle * (0.45 + 0.55 * uActive);
-        col += vec3(0.025, 0.035, 0.07);                 // a faint body tint
+        vec2 edgeGlow = gemEdge(pIn, faces, h, min(edgeW * 3.0, h * 0.08));
+        vec3 edgeHot = mix(glassCyan, vec3(0.75, 1.0, 1.0), 0.1);   // edges burn a little whiter than their glow
+        col += edgeHot * (edgeFront.x * 1.7 + edgeFront.y * 1.6) * (1.0 - 0.6 * blur) * lit;
+        col += glassCyan * edgeGlow.x * 0.9 * (1.0 - 0.6 * blur) * lit;
         return col;
     }
 
     void main() {
         vec2 p = screenP();
-        // Camera sways slowly (on the sound-gated clock) and leans in a little
-        // on the bass. The scene itself slides left past it (sceneShift).
-        float yaw = 0.22 * sin(uTime * 0.07);
-        vec3 ro = vec3(0.0, 0.16, -3.3 + 0.10 * uBass);
+        // Camera sits low by the glossy floor and sways slowly (on the
+        // sound-gated clock); it leans in a little on the bass.
+        // The scene itself slides left past it (sceneShift).
+        float yaw = 0.12 * sin(uTime * 0.07);
+        // The lens is shifted up rather than tilted, so the horizon sits low and
+        // the glass stays upright.
+        vec3 ro = vec3(0.0, -0.40, -3.3 + 0.10 * uBass);
         ro.xz = rot(yaw) * ro.xz;
-        vec3 fw = normalize(vec3(0.0, -0.12, 0.0) - ro);
-        vec3 rt = normalize(cross(vec3(0.0, 1.0, 0.0), fw));
-        vec3 up = cross(fw, rt);
-        vec3 rd = normalize(p.x * rt + p.y * up + 1.05 * fw);
+        vec3 fw = vec3(-sin(yaw), 0.0, cos(yaw));
+        vec3 rt = vec3(cos(yaw), 0.0, sin(yaw));
+        vec3 rd = normalize(p.x * rt + vec3(0.0, p.y + 0.24, 0.0) + 1.3 * fw);
 
         float tFloor = rd.y < 0.0 ? (kFloorY - ro.y) / rd.y : 1e5;
         vec3 col = skyColour(rd);
@@ -1898,27 +1922,32 @@ extension FunShaders {
         if (hitGem) {
             col = shadeGem(j, ro, rd, tGem, true);
         } else if (tFloor < 1e4) {
-            // Glossy black floor: a blurred mirror of the ribbons and the glass,
-            // fading into the dark further away.
+            // Glossy black floor: a near-mirror of the ribbons and the glass,
+            // softening with distance and fading into the hot horizon line.
             vec3 fp = ro + rd * tFloor;
             vec3 rr = reflect(rd, vec3(0.0, 1.0, 0.0));
-            float fres = 0.35 + 0.65 * pow(1.0 - clamp(-rd.y, 0.0, 1.0), 5.0);
-            vec3 refl = skyColour(rr) * 0.6;
+            float fres = 0.30 + 0.70 * pow(1.0 - clamp(-rd.y, 0.0, 1.0), 5.0);
+            vec3 refl = skyColour(rr) * 0.8;
             int j2; float t2;
             if (nearestGem(fp, rr, 40.0, j2, t2)) refl = shadeGem(j2, fp, rr, t2, false);
             float tr = ribbonT(fp, rr);
-            refl += ribbonsAlong(fp, rr, 0.008 + 0.03 * max(tr, 0.0), 40.0) + gemHalo(fp, rr, 40.0);
-            col = vec3(0.012, 0.014, 0.035) + refl * fres * 0.32;
-            col += vec3(0.10, 0.05, 0.22) * exp(-abs(fp.z - 2.5) * 0.25) * pow(1.0 - clamp(-rd.y, 0.0, 1.0), 6.0) * (0.4 + 0.6 * uActive);
-            col = mix(col, skyColour(rd), smoothstep(5.0, 30.0, tFloor));
+            vec3 glassPool;
+            refl += ribbonsAlong(fp, rr, 0.01 + 0.035 * max(tr, 0.0), 40.0) + gemHalo(fp, rr, 40.0, glassPool) * 2.0;
+            col = vec3(0.002, 0.006, 0.014) + refl * fres * 0.75;
+            // the ribbons' light pooling on the floor beneath them
+            float pool = exp(-abs(fp.z - ribbonDepth(fp.x)) * 0.8) * smoothstep(-4.8, -2.5, fp.x) * smoothstep(4.8, 2.5, fp.x);
+            col += mix(ribbonCyan * 0.35, ribbonPink * 0.7, smoothstep(-2.0, 1.0, fp.x)) * pool * (0.4 + 0.6 * uActive) * (0.8 + 0.4 * uLevel);
+            col += glassPool * 0.8 * (0.4 + 0.6 * uActive);
+            col = mix(col, skyColour(rd), smoothstep(8.0, 30.0, tFloor));
         }
         // Ribbons in front of whatever we hit.
         col += ribbonsAlong(ro, rd, 0.0, tEnd);
-        col += gemHalo(ro, rd, tEnd);
-        col += vec3(1.0, 0.6, 0.95) * uBeatStrength * 0.04 * uActive;
+        vec3 unused;
+        col += gemHalo(ro, rd, tEnd, unused);
+        col += ribbonPink * uBeatStrength * 0.025 * uActive;
 
         col = 1.0 - exp(-col * 1.8);                   // soft highlight roll-off
-        col *= 1.0 - 0.35 * dot(p, p);                  // vignette
+        col *= 1.0 - 0.3 * dot(p, p);                   // vignette
         col = mix(col * 0.5, col, uActive);             // dims in silence, but keeps drifting
         fragColor = vec4(col, 1.0);
     }
