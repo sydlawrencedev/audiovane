@@ -32,7 +32,8 @@ struct ModePicker: View {
                 }
             ),
             tint: app.activeMode == .band || app.activeMode == .autoScan ? .bandTint : .modeTint,
-            pillExtra: app.activeMode == .autoScan ? AnyView(scanIndicator) : nil
+            pillExtra: app.activeMode == .autoScan ? AnyView(scanIndicator) : nil,
+            showsPillText: app.layout.showsPillText
         )
     }
 

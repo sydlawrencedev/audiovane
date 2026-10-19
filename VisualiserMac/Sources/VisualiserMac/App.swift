@@ -11,7 +11,8 @@ struct VisualiserApp: App {
         WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
-                .frame(minWidth: 960, minHeight: 460)
+                .frame(minWidth: AppState.minimumWindowSize.width,
+                       minHeight: AppState.minimumWindowSize.height)
                 .preferredColorScheme(.dark)
                 .background(Color.black)
         }
@@ -19,7 +20,8 @@ struct VisualiserApp: App {
         WindowGroup("AUDIOVANE") {
             ContentView()
                 .environmentObject(app)
-                .frame(minWidth: 960, minHeight: 460)
+                .frame(minWidth: AppState.minimumWindowSize.width,
+                       minHeight: AppState.minimumWindowSize.height)
                 .preferredColorScheme(.dark)
                 .background(Color.black)
         }
@@ -199,26 +201,40 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("source-open", .tunnel, .source),
             ("palette-open", .tunnel, .palette),
         ]
+        // Window widths that trigger each layout tier: wide shows everything,
+        // compact drops the footer numbers, narrow drops the pill labels, tiny
+        // drops the pills.
+        let sizes: [(String, CGSize)] = [
+            ("", size),
+            ("-compact", CGSize(width: 1000, height: 420)),
+            ("-narrow", CGSize(width: 760, height: 380)),
+            ("-tiny", AppState.minimumWindowSize),
+        ]
         for (name, mode, open) in shots {
             app.showIntro = false
             app.activeMode = mode
             app.openDropdown = open
-            // let the body re-evaluate with the new mode
-            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
-            let renderer = ImageRenderer(content: ContentView()
-                .environmentObject(app)
-                .frame(width: size.width, height: size.height)
-                .background(Color.black))
-            renderer.scale = 1
-            guard let image = renderer.nsImage,
-                  let tiff = image.tiffRepresentation,
-                  let rep = NSBitmapImageRep(data: tiff),
-                  let png = rep.representation(using: .png, properties: [:]) else {
-                NSLog("[UI] could not encode \(name)"); continue
+            for (suffix, shotSize) in sizes {
+                // The chrome reads the tier from the window's width, which the
+                // shot has to fake — ImageRenderer has no window.
+                app.setWindowWidthForTesting(shotSize.width)
+                // let the body re-evaluate with the new mode
+                RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+                let renderer = ImageRenderer(content: ContentView()
+                    .environmentObject(app)
+                    .frame(width: shotSize.width, height: shotSize.height)
+                    .background(Color.black))
+                renderer.scale = 1
+                guard let image = renderer.nsImage,
+                      let tiff = image.tiffRepresentation,
+                      let rep = NSBitmapImageRep(data: tiff),
+                      let png = rep.representation(using: .png, properties: [:]) else {
+                    NSLog("[UI] could not encode \(name)"); continue
+                }
+                let path = "\(outDir)/ui-\(name)\(suffix).png"
+                try? png.write(to: URL(fileURLWithPath: path))
+                NSLog("[UI] wrote \(path)")
             }
-            let path = "\(outDir)/ui-\(name).png"
-            try? png.write(to: URL(fileURLWithPath: path))
-            NSLog("[UI] wrote \(path)")
         }
         exit(0)
     }

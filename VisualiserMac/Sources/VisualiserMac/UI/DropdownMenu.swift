@@ -45,6 +45,10 @@ struct DropdownMenu<Item: Hashable>: View {
     /// something different from their selection (the source pill names what's
     /// flowing, not what's chosen).
     var pillTitle: String? = nil
+    /// False when the window is too narrow for the label: the pill keeps its
+    /// glyph, swatch or dot and drops the words, which still leaves it obvious
+    /// what it is — the menu underneath is unchanged either way.
+    var showsPillText: Bool = true
 
     @EnvironmentObject var app: AppState
 
@@ -67,12 +71,14 @@ struct DropdownMenu<Item: Hashable>: View {
                         .foregroundStyle(tint)
                         .frame(width: 16, alignment: .leading)
                 }
-                Text(pillTitle ?? current?.title ?? "")
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .tracking(1.6)
-                    .lineLimit(1)
-                    .truncationMode(.tail)
-                    .foregroundStyle(Color(white: 0.85))
+                if showsPillText {
+                    Text(pillTitle ?? current?.title ?? "")
+                        .font(.system(size: 10, weight: .regular, design: .monospaced))
+                        .tracking(1.6)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .foregroundStyle(Color(white: 0.85))
+                }
                 if let extra = pillExtra {
                     extra
                 }

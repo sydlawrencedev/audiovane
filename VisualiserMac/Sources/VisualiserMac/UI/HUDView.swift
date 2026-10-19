@@ -33,20 +33,26 @@ struct HUDView: View {
 
             Spacer()
 
-            // mode picker (header drop-down)
-            ModePicker()
+            // Below the narrowest tier the pills go entirely: at that size the
+            // scene is the point, and the same choices are still one keystroke
+            // away (1–0, -, [, ], ; and =) or in the Visualizer menu.
+            if app.layout.showsPills {
+                // mode picker (header drop-down)
+                ModePicker()
 
-            // genre picker (band mode only)
-            GenrePicker()
+                // genre picker (band mode only)
+                GenrePicker()
 
-            // colour palette picker
-            PalettePicker()
+                // colour palette picker
+                PalettePicker()
 
-            // source picker
-            SourcePicker()
+                // source picker
+                SourcePicker()
+            }
 
-            // BPM
-            if app.bpm > 30 {
+            // BPM — the last thing to survive, and only when there's a beat to
+            // show.
+            if app.bpm > 30 && app.layout.showsPills {
                 HStack(spacing: 6) {
                     Text("\(Int(app.bpm.rounded()))")
                         .font(.system(size: 14, weight: .bold, design: .monospaced))
@@ -99,7 +105,8 @@ struct SourcePicker: View {
                     .frame(width: 8, height: 8)
                     .shadow(color: tint, radius: 6)
             ),
-            pillTitle: app.activeSource?.title ?? app.sourceLabel.uppercased()
+            pillTitle: app.activeSource?.title ?? app.sourceLabel.uppercased(),
+            showsPillText: app.layout.showsPillText
         )
         .animation(.easeInOut(duration: 0.2), value: app.sourceState)
         .help("Change what AudioVane listens to")

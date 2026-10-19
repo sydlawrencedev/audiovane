@@ -51,7 +51,8 @@ struct PalettePicker: View {
                 get: { app.paletteIndex },
                 set: { app.paletteIndex = $0 }
             ),
-            tint: .bandTint
+            tint: .bandTint,
+            showsPillText: app.layout.showsPillText
         )
     }
 }

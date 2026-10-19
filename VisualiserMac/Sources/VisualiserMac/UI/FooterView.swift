@@ -13,14 +13,19 @@ struct FooterView: View {
             FooterCell(key: "MODE", value: app.activeMode == .autoScan
                        ? app.scanTarget.displayName
                        : app.activeMode.displayName)
-            FooterCell(key: "RMS",   value: String(format: "%.2f", snap.rms))
-            FooterCell(key: "BASS",  value: String(format: "%.2f", snap.bass))
-            FooterCell(key: "MID",   value: String(format: "%.2f", snap.mid))
-            FooterCell(key: "TREB",  value: String(format: "%.2f", snap.treble))
-            FooterCell(key: "BEAT",  value: snap.beatStrength > 0.05
-                ? String(format: "%.2f", snap.beatStrength)
-                : "—",
-                       flash: snap.beatStrength > 0.4)
+            // The mode is the one value someone watching actually wants. The
+            // other five are diagnostics — ours, not theirs — so they're the
+            // first thing to go when the window narrows.
+            if app.layout.showsFooterNumbers {
+                FooterCell(key: "RMS",   value: String(format: "%.2f", snap.rms))
+                FooterCell(key: "BASS",  value: String(format: "%.2f", snap.bass))
+                FooterCell(key: "MID",   value: String(format: "%.2f", snap.mid))
+                FooterCell(key: "TREB",  value: String(format: "%.2f", snap.treble))
+                FooterCell(key: "BEAT",  value: snap.beatStrength > 0.05
+                    ? String(format: "%.2f", snap.beatStrength)
+                    : "—",
+                           flash: snap.beatStrength > 0.4)
+            }
         }
     }
 }

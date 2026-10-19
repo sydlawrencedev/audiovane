@@ -86,6 +86,22 @@ AudioVane --watch-on / --watch-off
 ~/Library/Logs/AudioVane/music-watch.log    # the watcher's own log
 ```
 
+## A window that gets out of the way
+
+The window goes down to 420×280 — small enough to sit in a corner while you
+work. The chrome sheds pieces as it narrows, in the order least useful first:
+
+| Width | What happens |
+|---|---|
+| ≥ 1100 | Everything: pills with labels, footer numbers, BPM |
+| < 1100 | Footer numbers go (RMS, BASS, MID, TREB, BEAT). The mode stays — it's the one value someone watching wants |
+| < 880 | Pills lose their labels and keep their glyph, swatch or dot. The menus underneath are unchanged |
+| < 620 | The pills go entirely. The scene is the point at that size, and every choice is still a keystroke (1–0, `-`, `[`, `]`, `;`, `=`) or in the Visualizer menu |
+
+The tier is decided in one place (`LayoutTier`) from the window's own resize
+notifications, and `--ui-shot` renders the chrome at all four widths, so the
+progression is reviewable in a PNG rather than by resizing a window and looking.
+
 ## Floating above other apps
 
 **Float above other apps** (credits popover, or the Visualizer menu) puts the

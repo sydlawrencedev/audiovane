@@ -106,6 +106,13 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// How much room the window has, which decides how much of the chrome is
+    /// worth drawing. Driven by the window's own resize notifications rather
+    /// than a GeometryReader, because the HUD is in an overlay and would
+    /// otherwise have to measure a container it isn't in.
+    @Published private(set) var windowWidth: CGFloat = 1280
+    private static var resizeObserver: NSObjectProtocol?
+
     /// The main window, once the view tree has built it. Owned here so the
     /// window's level can be set from a toggle, from the menu, or at launch —
     /// none of which are the view that found the window.
@@ -392,6 +399,13 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// For the headless UI shots, which render the view tree with no window
+    /// behind it. Never called in the running app.
+    func setWindowWidthForTesting(_ width: CGFloat) { windowWidth = width }
+
+    /// Which layer of chrome fits in the window right now.
+    var layout: LayoutTier { LayoutTier.tier(forWidth: windowWidth) }
+
     func setMode(_ mode: VisualizerMode) {
         activeMode = mode
     }
@@ -407,6 +421,24 @@ final class AppState: ObservableObject {
     /// takes effect without the user touching anything.
     func windowDidAppear() {
         applyWindowLevel()
+        startWatchingWidth()
+    }
+
+    /// A visualiser is worth having in a corner of the screen as much as full
+    /// screen, so the window goes down to a fraction of a full-screen one. The
+    /// chrome sheds pieces as it narrows (see `LayoutTier`) rather than the
+    /// window refusing to get there.
+    static let minimumWindowSize = CGSize(width: 420, height: 280)
+
+    private func startWatchingWidth() {
+        guard Self.resizeObserver == nil, let window else { return }
+        windowWidth = window.frame.width
+        Self.resizeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.didResizeNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            guard let self, let w = self.window else { return }
+            self.windowWidth = w.frame.width
+        }
     }
 
     private func applyWindowLevel() {
@@ -588,6 +620,32 @@ enum SingerVoice: String, CaseIterable, Identifiable {
         case .duet: return "Duet (female + male)"
         }
     }
+}
+
+/// How much of the header and footer there is room for.
+///
+/// The order matters and is the reverse of what people actually use: the footer
+/// numbers go first (they're diagnostics for us, not for the person watching),
+/// then the pill labels, then the pills themselves. What's left at the narrowest
+/// size is the brand and the thing on screen.
+enum LayoutTier: Int, Comparable {
+    case wide, compact, narrow, tiny
+
+    static func tier(forWidth width: CGFloat) -> LayoutTier {
+        switch width {
+        case 1100...: return .wide
+        case 880..<1100: return .compact
+        case 620..<880: return .narrow
+        default: return .tiny
+        }
+    }
+
+    static func < (lhs: LayoutTier, rhs: LayoutTier) -> Bool { lhs.rawValue < rhs.rawValue }
+
+    // The raw values run wide → tiny, so "at least this much room" is `<=`.
+    var showsFooterNumbers: Bool { self == .wide }
+    var showsPillText: Bool { self <= .compact }
+    var showsPills: Bool { self <= .narrow }
 }
 
 enum SourceState: String {
