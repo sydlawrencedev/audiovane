@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AudioVane — a music visualiser for your Mac</title>
-<meta name="description" content="AudioVane turns whatever your Mac is playing into 13 live scenes. Proudly shareware: free to use, yours to share, no account or paid tier.">
+<meta name="description" content="AudioVane turns whatever your Mac is playing into 13 live scenes. Proudly shareware, free to use and yours to share.">
 <link rel="canonical" href="https://audiovane.minithlabs.com/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#06010d">
@@ -12,14 +12,14 @@
 <meta property="og:site_name" content="AudioVane">
 <meta property="og:url" content="https://audiovane.minithlabs.com/">
 <meta property="og:title" content="AudioVane — a music visualiser for your Mac">
-<meta property="og:description" content="Thirteen live scenes driven by whatever your Mac is playing. Proudly shareware — free to use, yours to share.">
+<meta property="og:description" content="Thirteen live scenes driven by whatever your Mac is playing. Proudly shareware, free to use and yours to share.">
 <meta property="og:image" content="https://audiovane.minithlabs.com/media/share.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="AudioVane turning a song into neon spectrum bars">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="AudioVane — a music visualiser for your Mac">
-<meta name="twitter:description" content="Thirteen live scenes driven by whatever your Mac is playing. Proudly shareware — free to use, yours to share.">
+<meta name="twitter:description" content="Thirteen live scenes driven by whatever your Mac is playing. Proudly shareware, free to use and yours to share.">
 <meta name="twitter:image" content="https://audiovane.minithlabs.com/media/share.jpg">
 <!-- PostHog project key: public by design, write-only (the same key the Mac
      app carries in its Info.plist). Keep in sync with VisualiserMac/.env —
@@ -48,7 +48,7 @@
       "@id": "https://audiovane.minithlabs.com/#app",
       "name": "AudioVane",
       "alternateName": "AUDIOVANE",
-      "description": "A music visualiser for Mac that turns whatever is playing into live scenes, from neon waveforms to a pixel-art band. Proudly shareware: free to use, yours to share.",
+      "description": "A music visualiser for Mac. Turns whatever is playing into live scenes, from neon waveforms to a pixel-art band. Free to use and yours to share.",
       "url": "https://audiovane.minithlabs.com/",
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Music visualisers",
@@ -107,8 +107,6 @@
   .hero h1 span { background: linear-gradient(90deg, var(--magenta), var(--cyan)); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .hero p.lede { max-width: 700px; margin: 0 auto 30px; color: var(--muted); font-size: 19px; }
   .proclaim { font: 600 14px/1.5 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 2.6px; text-transform: uppercase; color: var(--gold); margin: -6px 0 16px; }
-  .lede-note { max-width: 660px; margin: 0 auto 26px; color: var(--muted); font-size: 15px; }
-  .lede-note a { color: var(--gold); }
 
   .ctas { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
   .btn { display: inline-flex; align-items: center; gap: 10px; padding: 14px 24px; border-radius: 999px; font-weight: 700; text-decoration: none; font-size: 16px; }
@@ -198,9 +196,8 @@
 
   <div class="hero">
     <h1>Your music, <span>made visible.</span></h1>
-    <p class="lede">AudioVane is a music visualiser for your Mac. It listens to whatever's playing — Spotify, Apple Music, YouTube, anything — and turns it into thirteen live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.</p>
-    <p class="proclaim">Proudly shareware. Free to use. Yours to share.</p>
-    <p class="lede-note">No account, no trial, no paid tier — every mode is yours from the first launch, and you can pass it on to anyone. If you enjoy it, a <a href="#shareware">coffee</a> keeps the next visualiser coming. Nothing about the app changes if you don't.</p>
+    <p class="lede">AudioVane is a music visualiser for your Mac. It listens to whatever's playing (Spotify, Apple Music, YouTube, anything) and turns it into thirteen live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.</p>
+    <p class="proclaim">Proudly shareware: free to use, and yours to share.</p>
     <div class="ctas">
       <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
       <a class="btn coffee" data-track="coffee_clicked" data-placement="hero" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
@@ -276,25 +273,25 @@
 
   <section id="changelog">
     <h2>Changelog</h2>
-    <p class="sub">Every release, newest first — fetched from GitHub, so this is what actually shipped.</p>
+    <p class="sub">Every release, newest first, straight from GitHub.</p>
     <div id="changelog-list"><p class="gh-empty">Loading releases…</p></div>
   </section>
 
   <section id="issues">
     <h2>What's open</h2>
-    <p class="sub">Known problems, in the open, where you can watch them get fixed. Found something new? <a href="https://github.com/sydlawrencedev/audiovane/issues">Report it</a>.</p>
+    <p class="sub">Known problems we are working on. Found something new? <a href="https://github.com/sydlawrencedev/audiovane/issues">Report it</a>.</p>
     <div id="issues-list"><p class="gh-empty">Loading open issues…</p></div>
   </section>
 
   <section id="shareware">
     <h2>Proudly shareware</h2>
-    <p class="sub">Free to use. Yours to share. No ads, no account, no trial that expires.</p>
+    <p class="sub">Free to use, and yours to pass on. No ads, no account.</p>
     <div class="shareware">
-      <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click — no subscription, no upgrade button, no paid tier that unlocks the modes you already have.</p></div>
+      <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click. Every mode you have now keeps working, and every one added later comes with the same download.</p></div>
       <div class="fact"><h3>Your audio stays on your Mac</h3><p>Nothing is recorded or uploaded. Usage stats are anonymous, and you can switch them off in the app.</p></div>
-      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone you like. The source is on GitHub under the MIT licence — read it, fork it, or send a patch: new visualisations are welcome, and most are a single shader.</p></div>
+      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone. The source is on GitHub under the MIT licence, so read it, fork it or send a patch. New visualisations are welcome, and most are a single shader.</p></div>
     </div>
-    <p class="small" style="text-align:center;max-width:560px;margin:22px auto 0">If it's made your music look better, <a href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">buy me a coffee</a> — it pays for the time that goes into the next visualiser, and nothing else changes about the app.</p>
+    <p class="small" style="text-align:center;max-width:560px;margin:22px auto 0">If it has made your music look better, <a href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">buy me a coffee</a>. It pays for the next visualiser.</p>
   </section>
 
   <div class="coffee-band">
@@ -305,7 +302,7 @@
 
   <footer>
     Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/audiovane">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/audiovane/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/audiovane/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine mode after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
-    <span class="privacy">This page counts visits and clicks anonymously (which button, which mode card you scroll to). No cookies, no account, nothing about you. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden> — done, this page won't report anything.</span></span>
+    <span class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></span>
   </footer>
 </div>
 <script src="/analytics.js" defer></script>

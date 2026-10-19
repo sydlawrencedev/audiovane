@@ -169,7 +169,7 @@
             url: issue.html_url,
           };
         });
-      fill(container, items, "Nothing open — which is a nice problem to have.");
+      fill(container, items, "No open issues right now.");
       footerLink(container, "Report something on GitHub →");
     });
   }
