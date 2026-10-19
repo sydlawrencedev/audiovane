@@ -48,6 +48,8 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 cp "$BIN_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+# Regenerate with: swift scripts/make-icon.swift (from the repo root)
+cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
@@ -64,6 +66,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <string>$VERSION</string>
     <key>CFBundleShortVersionString</key>
     <string>$VERSION</string>
+    <key>CFBundleIconFile</key>
+    <string>AppIcon</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleExecutable</key>
