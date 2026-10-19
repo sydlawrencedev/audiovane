@@ -45,6 +45,55 @@ Other sources:
 - **Use Microphone** — visualizes whatever the mic hears.
 - **Use Demo Tone** — synthesized kick + sweep, so you can see it work without sharing anything.
 
+## Startup
+
+Two optional switches, both **off until asked for** and both in the credits
+popover (bottom right, "Made with ❤️"):
+
+- **Start at login** — AudioVane opens by itself when you log in.
+- **Open with Music or Spotify** — a small background watcher opens AudioVane
+  when Apple Music or Spotify starts.
+
+Both are ordinary user login items in `~/Library/LaunchAgents`:
+
+```
+com.minithlabs.visualiser.login          the app itself, at login
+com.minithlabs.visualiser.music-watch     Contents/Helpers/AudioVaneWatcher
+```
+
+Each plist points at a binary inside the app bundle, so it's rewritten on every
+launch — the in-app updater replaces the bundle, and a plist that still pointed
+at the old copy would launch nothing. That self-healing is the reason the
+toggles can't silently rot.
+
+Two deliberate choices worth knowing about:
+
+- **Not `SMAppService`.** macOS's supported API refuses to register an app that
+  isn't properly signed ("Operation not permitted" on every ad-hoc build), and
+  a fallback to a hand-written plist would mean two mechanisms — and the
+  possibility of the same item being registered twice. One plist, one switch.
+- **Not listed in System Settings.** Login items registered this way don't
+  appear under General → Login Items, so switch them off from the popover (or
+  `AudioVane --login-off` / `--watch-off`).
+
+The watcher sees only which apps launch — no window titles, no audio, no
+playback state. From support, without a window to click in:
+
+```
+AudioVane --startup-status     # what both switches currently believe
+AudioVane --login-on / --login-off
+AudioVane --watch-on / --watch-off
+~/Library/Logs/AudioVane/music-watch.log    # the watcher's own log
+```
+
+## First launch
+
+A fresh install starts in **Auto Scan**, cycling every twenty seconds — with
+thirteen modes, nobody should have to guess that the good ones are behind a
+menu, and a visualiser that sits on one scene forever looks like it missed
+something. Pick a mode and that's remembered from then on; going back to Auto
+Scan clears the memory, so "no choice" always means Auto Scan.
+
 ## Colour palettes
 
 Five palettes, picked from the header. The palette is applied as a **post-process
@@ -85,7 +134,8 @@ session replay has no business inside an app whose entire job is capturing the
 screen.
 
 **What is sent:** which mode you switched to, which palette, the coarse genre
-the detector settled on, and whether the support button got clicked.
+the detector settled on, whether the support button got clicked, and crash
+reports (what was on screen when it died, plus a stack trace — see below).
 
 **What is never sent:** screen content, audio, window titles, track names, file
 paths, or any hardware identifier. `distinct_id` is a random UUID in
@@ -109,6 +159,44 @@ in this build."
 
 The project key is public by design (write-only, like Stripe's publishable key):
 it can add events but never read them.
+
+## Crash reports
+
+Without this, a band-mode crash arrives as "it crashed sometimes" and a stack
+trace from a friend three timezones away. So the app catches its own.
+
+**On crash.** A handler on the fatal signals (and on uncaught Objective-C
+exceptions) writes a report to
+`~/Library/Application Support/AudioVane/Crashes/AudioVane-<stamp>-<id>.crash.json`,
+then re-raises with the default disposition so macOS still writes its own `.ips`
+into `~/Library/Logs/DiagnosticReports` exactly as before. Ours carries what the
+system's can't: the mode and genre on screen, the band lineup, the audio source,
+the last dozen actions, and a `backtrace()` of the faulting thread. The newest
+20 reports are kept.
+
+**On next launch.** Each report is sent to PostHog as an `app_crashed` event —
+mode, genre, reason, top 12 frames, last 12 breadcrumbs — and then deleted from
+disk. Three uploads per launch, so a machine crashing in a loop doesn't spend a
+minute talking about it.
+
+**What goes in:** app state and stack traces. Nothing derived from what the user
+is watching or listening to — no track names, no audio, no screen content, and
+the machine's hostname stays local (the analytics line is "identifies an install,
+not a person").
+
+**The switch.** Uploads ride on the same "Share anonymous usage" toggle as
+everything else, because a crash report is usage data by another name. Reports
+stay on disk either way, and **AudioVane → Report a Problem…** emails the latest
+one to you as a readable summary plus the JSON attachment — user-initiated, so it
+works with the toggle off. **Reveal Crash Reports…** opens the folder.
+
+`--simulate-crash` faults on purpose three seconds in, so the whole
+report-and-upload path can be checked without waiting for a real one:
+
+```
+open build/AudioVane.app --args --simulate-crash   # writes a report
+open build/AudioVane.app                            # uploads it, deletes it
+```
 
 ## Header controls
 
@@ -143,6 +231,10 @@ Click away from an open list to dismiss it.
 - `--snapshot --genres` — render one frame of every genre and exit
 - `--ui-shot` — render the SwiftUI chrome to PNG (the OpenGL layer won't appear)
 - `--record <dir>` — capture consecutive frames of the GL output
+- `--simulate-crash` — crash on purpose after 3s, to exercise the crash reporter
+- `--startup-status` — print whether the login item and music watcher are on
+- `--login-on` / `--login-off` — toggle "start at login" and exit
+- `--watch-on` / `--watch-off` — toggle "open with Music or Spotify" and exit
 - `MACHINE_CAM="ex,ey,ez,tx,ty,tz"` — pin the machine mode's camera
 
 ## Band mode: 10 genres

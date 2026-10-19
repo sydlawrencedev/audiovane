@@ -7,6 +7,13 @@ final class AppState: ObservableObject {
         didSet {
             if activeMode != oldValue {
                 NSLog("[DD] mode changed \(oldValue.rawValue) -> \(activeMode.rawValue)")
+                // Remembered, so the next launch opens where they left off
+                // rather than snapping back to auto-scan.
+                Self.savedMode = activeMode
+                // The breadcrumb half of a crash report: "it crashed in band
+                // mode" is only half a bug report, "…after switching jazz to
+                // country, mid cross-fade" is the other half.
+                CrashReporter.shared.log("mode \(oldValue.rawValue) -> \(activeMode.rawValue)")
                 // Tallied rather than sent individually: a user cycling
                 // through modes generates 40 events in a minute and PostHog
                 // only wants the histogram.
@@ -55,6 +62,7 @@ final class AppState: ObservableObject {
                 genreLockAtChange = audio.tracks.changeCount
             }
             guard genre != oldValue else { return }
+            CrashReporter.shared.log("genre \(oldValue.name) -> \(genre.name) (\(genreIsAuto ? "auto" : "locked"))")
             Task {
                 await Analytics.shared.track(
                     genreIsAuto ? "genre_detected" : "genre_locked",
@@ -122,6 +130,14 @@ final class AppState: ObservableObject {
         let audio = AudioEngine()
         self.audio = audio
         self.renderer = OpenGLRenderer(audio: audio)
+        // Whatever mode the user was last in, or auto-scan on a fresh install.
+        // Auto-scan is the right first impression for thirteen modes: nobody
+        // should have to guess that the good ones are behind a menu, and a
+        // visualiser that sits on one scene forever looks like it missed
+        // something.
+        self.activeMode = Self.savedMode ?? .autoScan
+        self.renderer.setMode(self.activeMode)
+        NSLog("[DD] starting in mode \(self.activeMode.rawValue)")
         // Restore the genre the user last chose so a relaunch doesn't snap
         // back to Rock. Genre *detection* still re-arms per song as usual.
         self.genre = Self.savedGenre
@@ -160,6 +176,14 @@ final class AppState: ObservableObject {
         audio.$sourceState
             .receive(on: RunLoop.main)
             .assign(to: &$sourceState)
+        // System audio / mic / demo / denied are all the states that have gone
+        // wrong before, so they're worth a line in a crash report.
+        audio.$sourceState
+            .receive(on: RunLoop.main)
+            .sink { state in
+                CrashReporter.shared.log("audio source \(state.rawValue)")
+            }
+            .store(in: &cancellables)
         audio.$showIntro
             .receive(on: RunLoop.main)
             .assign(to: &$showIntro)
@@ -190,6 +214,7 @@ final class AppState: ObservableObject {
             self?.pumpAutoGenre()
             self?.syncScanTarget()
             self?.writeEvalLine()
+            self?.refreshCrashState()
         }
         // `--genre-auto` forces auto-detect on (ignoring a remembered lock) and
         // `--system-audio` starts listening straight away: both used by the
@@ -232,6 +257,42 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Keeps the app-state half of the crash report current. Once a second,
+    /// alongside the genre bookkeeping that already runs on this timer.
+    ///
+    /// Band mode is the reason this exists: a stage with a cross-fade mid-way,
+    /// three musicians held on and two more waiting to be re-confirmed is a
+    /// crash nobody can reason about from a stack trace alone.
+    private func refreshCrashState() {
+        let drawing = renderer.effectiveMode
+        var snapshot: [String: String] = [
+            "mode": activeMode.rawValue,
+            "drawing": drawing.rawValue,
+            "palette": paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?",
+            "genre": genre.name,
+            "genre_auto": genreIsAuto ? "yes" : "no",
+            "genre_confidence": String(format: "%.2f", genreConfidence),
+            "singer": singerVoice.rawValue,
+            "source": sourceLabel,
+            "source_state": sourceState.rawValue,
+        ]
+        if drawing == .band {
+            let band = renderer.bandEvalState()
+            let onStage = (band["on_stage"] as? [String] ?? []).joined(separator: "+")
+            snapshot["band_on_stage"] = onStage.isEmpty ? "(empty stage)" : onStage
+            if let singers = band["singers"] as? String, !singers.isEmpty {
+                snapshot["band_singers"] = singers
+            }
+            if let parts = band["parts"] as? [String: Double] {
+                snapshot["band_parts"] = parts
+                    .sorted { $0.key < $1.key }
+                    .map { "\($0.key) \(String(format: "%.2f", $0.value))" }
+                    .joined(separator: " ")
+            }
+        }
+        CrashReporter.shared.setState(snapshot)
+    }
+
     /// Mirror the renderer's auto-scan position into the UI. The renderer
     /// owns the scanner (it's the thing that knows which mode is being
     /// drawn); this just republishes it so SwiftUI can show it.
@@ -244,6 +305,27 @@ final class AppState: ObservableObject {
 
     private static let genreDefaultsKey = "audiovane.genre"
     private static let genreAutoDefaultsKey = "audiovane.genreAuto"
+    private static let modeDefaultsKey = "audiovane.mode"
+
+    /// The mode they were last looking at. Nil on a fresh install, which is
+    /// how "no choice made yet" is distinguished from "chose Tunnel" — the
+    /// caller falls back to auto-scan, and the first deliberate switch writes
+    /// this.
+    private static var savedMode: VisualizerMode? {
+        get {
+            guard let raw = UserDefaults.standard.object(forKey: modeDefaultsKey) as? String else { return nil }
+            return VisualizerMode(rawValue: raw)
+        }
+        set {
+            // Storing auto-scan is pointless: it's the default, and clearing
+            // the key instead keeps one source of truth for "nothing chosen".
+            if let newValue, newValue != .autoScan {
+                UserDefaults.standard.set(newValue.rawValue, forKey: modeDefaultsKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: modeDefaultsKey)
+            }
+        }
+    }
 
     /// Last manually-picked genre, so a relaunch starts on the genre the
     /// user actually chose rather than defaulting to Rock.

@@ -7,7 +7,8 @@ let package = Package(
         .macOS("14.2")
     ],
     products: [
-        .executable(name: "AudioVane", targets: ["AudioVane"])
+        .executable(name: "AudioVane", targets: ["AudioVane"]),
+        .executable(name: "AudioVaneWatcher", targets: ["AudioVaneWatcher"])
     ],
     targets: [
         .executableTarget(
@@ -25,6 +26,16 @@ let package = Package(
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("Accelerate"),
                 .linkedFramework("CoreVideo")
+            ]
+        ),
+        // Launched by launchd, not by the user: sits in the bundle as
+        // Contents/Helpers and opens AudioVane when Apple Music or Spotify
+        // starts. Plain AppKit so it stays tiny.
+        .executableTarget(
+            name: "AudioVaneWatcher",
+            path: "Sources/AudioVaneWatcher",
+            linkerSettings: [
+                .linkedFramework("AppKit")
             ]
         )
     ]

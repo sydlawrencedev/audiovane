@@ -1,8 +1,10 @@
 #!/bin/bash
 # Publishes a release of AudioVane:
 #   1. checks the landing page lists every visualiser mode,
-#   2. builds the release app and zips it as AudioVane.zip,
-#   3. creates GitHub release v$VERSION (VERSION file) with the zip attached.
+#   2. checks the landing page and the app report to the same PostHog project,
+#   3. checks no Discord webhook URL has been committed,
+#   4. builds the release app and zips it as AudioVane.zip,
+#   5. creates GitHub release v$VERSION (VERSION file) with the zip attached.
 # The installer and the in-app update checker always fetch the latest
 # release's AudioVane.zip, so publishing here ships the update.
 #
@@ -15,13 +17,15 @@ VERSION="$(tr -d '[:space:]' < VERSION)"
 TAG="v$VERSION"
 
 ../scripts/check-modes.sh
+../scripts/check-posthog.sh
+../scripts/check-no-webhook-leak.sh
 
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
     echo "Release $TAG already exists — bump VERSION first." >&2
     exit 1
 fi
 
-./build-app.sh release
+REQUIRE_WATCHER=1 ./build-app.sh release
 rm -rf dist && mkdir dist
 ditto build/AudioVane.app dist/AudioVane.app
 (cd dist && ditto -c -k --keepParent AudioVane.app AudioVane.zip)

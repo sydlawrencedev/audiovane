@@ -18,6 +18,7 @@ Everything here is copy-paste. Project **673583**.
 
    | Property | Type | Note |
    |---|---|---|
+   | `surface` | string | `mac_app` for the app, `web` for the landing page. **Filter on this** in any insight that mixes the two. |
    | `app_version` | string | matches `CFBundleShortVersionString` |
    | `arch` | string | `arm64` / `x86_64` |
    | `os_version` | string | e.g. `Version 26.6.2 (Build 25G83)` |
@@ -138,16 +139,72 @@ Captured live against a local sink during development:
 ```
 app_launched    {mode: tunnel, palette: NEON, autoscan: false,
                  is_release: true, fresh_install: true,
-                 app_version, build, arch, os_version, locale, session_seconds}
+                 surface: mac_app, app_version, build, arch, os_version,
+                 locale, session_seconds}
 mode_changed    {mode: llama, from_mode: tunnel, via: system}
 palette_changed {palette: TOXIC, from_palette: NEON}
 genre_detected  {genre: Jazz, genre_id: 5, confidence: 0, auto: true}
 genre_locked    {genre: Rock, genre_id: 2, confidence: 0.8, auto: false}
 support_view    {}
 checkout_started{source: native_button | fallback_link | stripe_embed}
+app_crashed     {reason, kind, mode, drawing, genre, source, band_on_stage,
+                 frames (top 12, oldest last), breadcrumbs (last 12)}
 session_summary {mode, mode_switches, palette_switches, session_seconds, …}
 ```
 
 `via` on `mode_changed` is the useful one — `picker` means a deliberate click,
 `auto_scan` means the cycling did it, `system` means a launch flag or restore.
 Without it, auto-scan makes every mode look equally popular.
+
+## One project, two surfaces
+
+The landing page (`site/analytics.js`) reports here too, so installs and page
+views land in the same place and can be compared. **`surface` separates them**:
+`mac_app` for the app, `web` for the page. Any insight that mixes the two
+without filtering on `surface` is meaningless — a `count()` of "people" would
+double-count anyone who read the page and then installed.
+
+Note also that `distinct_id` means different things on each side: a UUID in
+`UserDefaults` for an install, a UUID in `localStorage` for a browser. They will
+never match, and that is deliberate — there is no join key between a visitor
+and an install, and adding one would mean putting an identifier in a download
+link.
+
+## Dashboard 3 — "AudioVane — landing page"
+
+| Insight | Type | Query |
+|---|---|---|
+| Visits | Trends | `count()` where event = `page_view` and `surface` = `web`, interval = day |
+| Unique visitors | Trends | `uniques(distinct_id)` where event = `page_view` |
+| Downloads | Trends | `count()` where event = `download_clicked` |
+| Page → download | Funnel | `page_view` → `download_clicked` |
+| Install command copied | Bar chart | `count()` where event = `install_command_copied`, breakdown by `properties.command` |
+| Coffee clicks (web) | Trends | `count()` where event = `coffee_clicked`, breakdown by `properties.placement` |
+| Modes people scroll to | Bar chart | `count()` where event = `mode_card_viewed`, breakdown by `properties.target` |
+| Demo autoplay | Trends | `count()` where event = `demo_played` — a floor on engagement |
+
+Two things worth watching together: if `mode_card_viewed` is concentrated on one
+card but downloads aren't, the cards aren't selling what the page is; and if
+`page_view` climbs while `download_clicked` flattens, the CTA or the install
+instructions are where the drop is.
+
+## Dashboard 4 — "AudioVane — crashes"
+
+| Insight | Type | Query |
+|---|---|---|
+| Crashes per day | Trends | `count()` where event = `app_crashed`, interval = day |
+| Crashed installs | Trends | `uniques(distinct_id)` where event = `app_crashed` |
+| Crash rate | Trends | `count()` where event = `app_crashed` ÷ `uniques(distinct_id)` where event = `app_launched` |
+| Where it breaks | Bar chart | `count()` where event = `app_crashed`, breakdown by `properties.mode` |
+| Which genre | Bar chart | `count()` where event = `app_crashed`, breakdown by `properties.genre` |
+| Signatures | Table | `properties.frames`, grouped, to spot the same crash from different installs |
+
+`mode` and `genre` are the reason this dashboard exists: a crash that only
+happens in band mode, or only in one genre, is a much shorter conversation than
+"it crashed sometimes". Group the `frames` property to find identical stacks
+across installs.
+
+Crashes only upload when the user has anonymous usage switched on in the app —
+a crash report is usage data by another name, and the switch is theirs. Reports
+stay on disk either way, and the app's **AudioVane → Report a Problem…** menu
+item emails one to us directly.

@@ -5,7 +5,7 @@ import Foundation
 /// Deliberately not the official SDK: that pulls in feature flags, session
 /// replay and surveys, and session replay in particular has no business inside
 /// an app whose entire job is capturing the screen. This speaks the same
-/// `/capture` endpoint with nothing attached.
+/// `/batch` endpoint with nothing attached.
 ///
 /// Privacy: this app watches audio and draws the screen, so the rule is that
 /// nothing derived from *what the user is watching or listening to* ever
@@ -140,6 +140,9 @@ actor Analytics {
     private func defaultProperties() -> [String: Any] {
         let info = Bundle.main.infoDictionary ?? [:]
         var props: [String: Any] = [
+            // The website reports into the same PostHog project (`site/analytics.js`),
+            // so this is what keeps an install apart from a page view.
+            "surface": "mac_app",
             "app_version": info["CFBundleShortVersionString"] ?? "0",
             "build": info["CFBundleVersion"] ?? "0",
             "os_version": ProcessInfo.processInfo.operatingSystemVersionString,
@@ -167,10 +170,12 @@ actor Analytics {
         }
     }
 
-    /// Sends everything queued, then any per-session tallies.
-    func flush() async {
+    /// Sends everything queued, then any per-session tallies. Returns whether
+    /// PostHog took it — crash reports only get deleted from disk on a `true`.
+    @discardableResult
+    func flush() async -> Bool {
         flushTask = nil
-        guard !Self.disabledAtBuild, let apiKey, defaults.bool(forKey: Self.enabledKey) else { return }
+        guard !Self.disabledAtBuild, let apiKey, defaults.bool(forKey: Self.enabledKey) else { return false }
 
         var batch = queue
         queue.removeAll()
@@ -190,31 +195,38 @@ actor Analytics {
             ])
         }
 
-        guard !batch.isEmpty else { return }
+        guard !batch.isEmpty else { return true }
 
-        var request = URLRequest(url: URL(string: host)!)
+        // `/batch/`, not `/capture/`: the capture endpoint takes one event per
+        // request, and this queue is a batch. Posting to the bare host root (as
+        // this used to) gets a 404 back, which reads exactly like "no events
+        // ever arrived".
+        var request = URLRequest(url: URL(string: host)!.appendingPathComponent("batch"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["batch": batch])
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["api_key": apiKey, "batch": batch])
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             if (200..<300).contains(code) {
                 NSLog("[analytics] sent \(batch.count) event(s)")
-            } else {
-                NSLog("[analytics] HTTP \(code)")
+                return true
             }
+            NSLog("[analytics] HTTP \(code)")
+            return false
         } catch {
             // Fire and forget. Failed sends are dropped rather than retried:
             // an offline visualiser shouldn't accumulate a backlog, and the
-            // next session re-reports the same aggregate anyway.
+            // next session re-reports the same aggregate anyway. Crash reports
+            // are the exception — they're on disk and re-read next launch.
             NSLog("[analytics] send failed: \(error.localizedDescription)")
+            return false
         }
     }
 
-    func flushNow() async {
+    func flushNow() async -> Bool {
         await flush()
     }
 

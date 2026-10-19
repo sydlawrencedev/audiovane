@@ -29,6 +29,12 @@ struct VisualiserApp: App {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { UpdateChecker.shared.check(userInitiated: true) }
+                Divider()
+                // The pair a crashed user needs without having to know where
+                // macOS keeps its reports: email us the latest, or open the
+                // folder and attach it yourself.
+                Button("Report a Problem…") { CrashReporter.shared.composeProblemReport() }
+                Button("Reveal Crash Reports…") { CrashReporter.shared.revealReports() }
             }
             CommandMenu("Visualizer") {
                 ForEach(VisualizerMode.allCases) { mode in
@@ -56,6 +62,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // First thing in: a crash handler that installs after the app has
+        // already started crashing is a handler that misses the first crash.
+        CrashReporter.shared.install()
+        // Whatever the last run left behind. Safe to do now — the reports are
+        // written to disk by the handler, not by the dying process, and the
+        // upload happens once the user is actually up and running again.
+        Task { await CrashReporter.shared.uploadPendingReports() }
+
+        // The music-app watcher points at a binary inside this bundle, which the
+        // in-app updater just replaced. Put the agent back where it belongs.
+        Task { @MainActor in StartupManager.shared.reconcile() }
+
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -92,6 +110,45 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 AppState.shared?.openAbout()
             }
         }
+
+        // `--simulate-crash` faults on purpose so the crash-report path can be
+        // verified end to end (report written, uploaded next launch) without
+        // waiting for a real band-mode crash to turn up.
+        if CommandLine.arguments.contains("--simulate-crash") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                CrashReporter.shared.log("simulated crash requested on the command line")
+                CrashReporter.shared.simulateCrash()
+            }
+        }
+
+        // `--login-on` / `--login-off`, `--watch-on` / `--watch-off` and
+        // `--startup-status` exist for support and for testing: they do exactly
+        // what the two toggles in the credits popover do, without needing a
+        // window to click in.
+        runStartupCommandIfRequested()
+    }
+
+    @MainActor
+    private func runStartupCommandIfRequested() {
+        let args = CommandLine.arguments
+        let manager = StartupManager.shared
+        if args.contains("--login-on") {
+            manager.setLaunchAtLogin(true)
+        } else if args.contains("--login-off") {
+            manager.setLaunchAtLogin(false)
+        } else if args.contains("--watch-on") {
+            manager.setWatchMusicApps(true)
+        } else if args.contains("--watch-off") {
+            manager.setWatchMusicApps(false)
+        } else if !args.contains("--startup-status") {
+            return
+        }
+
+        manager.refresh()
+        print("[startup] launch at login: \(manager.launchAtLogin) — \(manager.launchAtLoginDetail)")
+        print("[startup] music watcher:   \(manager.watchMusicApps) — \(manager.watchMusicAppsDetail)")
+        if let error = manager.errorMessage { print("[startup] error: \(error)") }
+        exit(0)
     }
 
     /// Session tallies (mode switches, palette switches) only reach PostHog on

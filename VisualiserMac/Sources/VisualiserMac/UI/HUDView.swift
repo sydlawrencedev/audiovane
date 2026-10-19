@@ -3,6 +3,12 @@ import SwiftUI
 struct HUDView: View {
     @EnvironmentObject var app: AppState
 
+    /// From the bundle, so it can't drift from the released build. Falls back
+    /// to "dev" for a bare `swift build`, where there is no Info.plist.
+    private static let version: String = {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "dev"
+    }()
+
     var body: some View {
         HStack(alignment: .center) {
             // brand
@@ -13,7 +19,11 @@ struct HUDView: View {
                         .font(.system(size: 17, weight: .bold, design: .default))
                         .tracking(3.5)
                         .foregroundStyle(Color.white)
-                    Text("audio visualiser · v1")
+                    // The real version, not a standing "v1": someone reporting
+                    // a crash or a mode that looks wrong needs to be able to
+                    // read it off the screen. Uppercased by .textCase, like
+                    // the rest of the header.
+                    Text("audio visualiser · v\(Self.version)")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .tracking(1.6)
                         .foregroundStyle(Color(white: 0.45))

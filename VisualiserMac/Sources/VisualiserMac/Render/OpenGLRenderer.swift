@@ -436,6 +436,9 @@ final class OpenGLRenderer: NSObject {
             } else {
                 NSLog("[BAND] genre \(genre.name): lineup \(visual.lineup.map(\.rawValue).sorted())")
             }
+            // The lineup is what a band-mode crash report needs: a stage with
+            // two drummers on it is a different bug from an empty one.
+            CrashReporter.shared.log("band lineup for \(genre.name): \(genreVisual.noMusicians ? "(none)" : visual.lineup.map(\.shortName).sorted().joined(separator: "+"))")
         }
 
         if trackChanged || (silenceFor >= Self.songBreakSilence && musicFor >= Self.songMinLength) {
@@ -728,6 +731,7 @@ final class OpenGLRenderer: NSObject {
             }
             autoScanJustChanged = true
             NSLog("[SCAN] now showing \(autoScanTarget.rawValue)")
+            CrashReporter.shared.log("auto-scan now showing \(autoScanTarget.rawValue)")
         }
     }
 

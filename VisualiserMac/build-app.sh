@@ -1,6 +1,10 @@
 #!/bin/bash
 # Builds the Swift package and packages it as a Mac .app bundle.
 # Usage: ./build-app.sh [debug|release]
+#
+# Set REQUIRE_WATCHER=1 to make a missing startup watcher a hard failure rather
+# than a warning — release.sh does, since a release that ships without it has a
+# toggle that silently does nothing.
 
 set -e
 
@@ -32,9 +36,11 @@ POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 if [ "$CONFIG" = "release" ]; then
     swift build -c release
     BIN_PATH=".build/release/$APP_NAME"
+    WATCHER_PATH=".build/release/AudioVaneWatcher"
 else
     swift build
     BIN_PATH=".build/debug/$APP_NAME"
+    WATCHER_PATH=".build/debug/AudioVaneWatcher"
 fi
 
 if [ ! -f "$BIN_PATH" ]; then
@@ -46,8 +52,17 @@ APP_BUNDLE="build/$APP_NAME.app"
 rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
+# The watcher runs from inside the bundle as a launchd agent — see
+# Sources/VisualiserMac/Startup/WatcherControl.swift.
+mkdir -p "$APP_BUNDLE/Contents/Helpers"
 
 cp "$BIN_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
+if [ -f "$WATCHER_PATH" ]; then
+    cp "$WATCHER_PATH" "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher"
+    chmod +x "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher"
+else
+    echo "WARNING: no AudioVaneWatcher binary — 'Open with Music or Spotify' will be unavailable." >&2
+fi
 # Regenerate with: swift scripts/make-icon.swift (from the repo root)
 cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
@@ -130,6 +145,12 @@ PLIST_EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_BUNDLE
 if [ ! -x "$APP_BUNDLE/Contents/MacOS/$PLIST_EXEC" ]; then
     echo "ERROR: Info.plist says CFBundleExecutable=$PLIST_EXEC but" \
          "Contents/MacOS/$PLIST_EXEC does not exist." >&2
+    exit 1
+fi
+# The watcher is referenced by absolute path in a LaunchAgent the app writes at
+# runtime, so a missing helper is a silent feature failure unless it's checked.
+if [ "$REQUIRE_WATCHER" = "1" ] && [ ! -x "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher" ]; then
+    echo "ERROR: the startup watcher helper is missing from the bundle." >&2
     exit 1
 fi
 if ! plutil -lint "$APP_BUNDLE/Contents/Info.plist" >/dev/null; then

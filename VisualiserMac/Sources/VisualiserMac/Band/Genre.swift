@@ -53,4 +53,17 @@ enum Genre: Int, CaseIterable, Identifiable {
 /// `uMX[]` / `uPlay[]` so changes here must travel with the shader.
 enum WalkerSlot: Int, CaseIterable {
     case drums = 0, bass, guitar, keys, femaleSinger, maleSinger
+
+    /// Readable name, for logs and crash reports. The raw values are integers
+    /// and "3" on stage tells nobody which instrument walked off.
+    var shortName: String {
+        switch self {
+        case .drums: return "drums"
+        case .bass: return "bass"
+        case .guitar: return "guitar"
+        case .keys: return "keys"
+        case .femaleSinger: return "female_singer"
+        case .maleSinger: return "male_singer"
+        }
+    }
 }

@@ -7,6 +7,7 @@ import AppKit
 /// button (Stripe's hosted checkout).
 struct AboutButton: View {
     @EnvironmentObject var app: AppState
+    @StateObject private var startup = StartupManager.shared
 
     private static let site = URL(string: "https://minithlabs.com")!
 
@@ -73,6 +74,10 @@ struct AboutButton: View {
 
             Divider().overlay(Color.white.opacity(0.1))
 
+            StartupToggles(manager: startup)
+
+            Divider().overlay(Color.white.opacity(0.1))
+
             AnalyticsToggle()
         }
         .padding(18)
@@ -81,11 +86,71 @@ struct AboutButton: View {
     }
 }
 
+/// "Start at login" and "Open when Music or Spotify starts".
+///
+/// Both belong here rather than in the header: they're settings you set once,
+/// and putting them behind a visible control is the difference between a
+/// feature and something that startles someone.
+private struct StartupToggles: View {
+    @ObservedObject var manager: StartupManager
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("STARTUP")
+                .font(.system(size: 9, weight: .semibold))
+                .tracking(1.2)
+                .foregroundStyle(Color(white: 0.45))
+
+            toggle("Start at login",
+                   detail: manager.launchAtLoginDetail,
+                   isOn: manager.launchAtLogin,
+                   help: "AudioVane opens by itself when you log in.") {
+                manager.setLaunchAtLogin($0)
+            }
+
+            toggle("Open with Music or Spotify",
+                   detail: manager.watchMusicAppsDetail,
+                   isOn: manager.watchMusicApps,
+                   help: "A small background watcher opens AudioVane when Apple Music or Spotify starts. No audio, no window titles — it just watches which apps launch.") {
+                manager.setWatchMusicApps($0)
+            }
+
+            if let message = manager.errorMessage {
+                Text(message)
+                    .font(.system(size: 9))
+                    .foregroundStyle(Color(red: 1.0, green: 0.55, blue: 0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .task { manager.refresh() }
+    }
+
+    private func toggle(_ title: String, detail: String, isOn: Bool,
+                        help: String, action: @escaping (Bool) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Toggle(isOn: Binding(get: { isOn }, set: action)) {
+                Text(title)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.white)
+            }
+            .toggleStyle(.switch)
+            .controlSize(.mini)
+            .help(help)
+
+            Text(detail)
+                .font(.system(size: 9))
+                .foregroundStyle(Color(white: 0.45))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
 /// Anonymous usage toggle.
 ///
 /// This app watches audio and draws the screen, so the line between "harmless"
 /// and "creepy" telemetry is drawn on purpose: the client only ever sends
-/// feature usage (which mode, which palette, did you click the coffee button).
+/// feature usage (which mode, which palette, did you click the coffee button)
+/// and crash reports (what was on screen when it died, plus a stack trace).
 /// Nothing about *what is playing or on screen* is ever included. The toggle is
 /// here so that's a decision the user makes rather than one we make for them.
 private struct AnalyticsToggle: View {
@@ -107,7 +172,7 @@ private struct AnalyticsToggle: View {
             .disabled(!configured)
 
             Text(configured
-                 ? "Counts which modes and palettes you use, and whether the support button got clicked. Never screen content, audio, window titles or track names."
+                 ? "Counts which modes and palettes you use, and whether the support button got clicked. Also sends crash reports: what was on screen (mode, genre, stage) and a stack trace. Never screen content, audio, window titles or track names."
                  : "Not configured in this build.")
                 .font(.system(size: 9))
                 .foregroundStyle(Color(white: 0.45))
