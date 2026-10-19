@@ -1,14 +1,14 @@
 # Cloudflare Workers Static Assets response headers.
-# Picked up automatically because it sits in the assets directory (wrangler.toml
-# points [assets] at ./site). Rules apply in order; later rules for the same
-# header win, so the per-path ones below override the catch-all.
-
-/media/*
-  # Filenames include a content hash only when the demo does — these don't, so
-  # "immutable" would be a lie and a stale image would stick for a year. A
-  # month is long enough to make repeat visits free and short enough that
-  # renaming a file is never the fix you have to remember.
-  Cache-Control: public, max-age=2592000
+#
+# Caching: Cloudflare's static assets are served with `max-age=0,
+# must-revalidate`, and a Cache-Control rule here *appends* to that rather than
+# replacing it — the response ends up carrying two contradicting values, so the
+# first one wins and the rule does nothing. Verified: repeat visits get a 304
+# from the ETag rather than a re-download, which is the part that matters, so
+# media caching is left to the asset service.
+#
+# The headers below are the ones the asset service does *not* set, which is why
+# they're safe to do here.
 
 /analytics.js
   Cache-Control: public, max-age=3600
@@ -19,8 +19,6 @@
   Cache-Control: public, max-age=300
 
 /*
-  # HTML is revalidated every time so a deploy is visible immediately.
-  Cache-Control: public, max-age=0, must-revalidate
   X-Content-Type-Options: nosniff
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: SAMEORIGIN

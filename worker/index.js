@@ -239,6 +239,15 @@ export default {
 
     if (url.pathname === "/download") return handleDownload(request, url, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
+    // Note: Cloudflare serves a request that matches an existing asset straight
+    // from the edge, without invoking this Worker at all (only misses reach it,
+    // which is how `x-av-worker` showed up on a 404 and nowhere else). So
+    // response headers for the site's own files come from site/_headers, not
+    // from here — and `_headers` appends to the asset server's own
+    // `cache-control` rather than replacing it, which is why media stays at
+    // Cloudflare's default `max-age=0, must-revalidate`. That costs a 304
+    // (ETag) round trip per asset on a repeat visit, not a re-download, so
+    // it's left alone rather than fought.
     return env.ASSETS.fetch(request);
   },
 };
