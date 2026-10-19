@@ -153,7 +153,7 @@ final class AppState: ObservableObject {
         self.audio = audio
         self.renderer = OpenGLRenderer(audio: audio)
         // Whatever mode the user was last in, or auto-scan on a fresh install.
-        // Auto-scan is the right first impression for fifteen modes: nobody
+        // Auto-scan is the right first impression for sixteen modes: nobody
         // should have to guess that the good ones are behind a menu, and a
         // visualiser that sits on one scene forever looks like it missed
         // something.
@@ -656,6 +656,8 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     case ribbons
     /// Flying forward through satin ribbons and tumbling glass cubes.
     case silk
+    /// Falling through a vortex of magenta and gold light.
+    case wormhole
     /// Cycles through every other mode, 20 seconds each.
     /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
     case autoScan
@@ -678,16 +680,17 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
         case .waveform: return "NEON WAVE"
         case .ribbons: return "RIBBONS"
         case .silk: return "SILK FLIGHT"
+        case .wormhole: return "WORMHOLE"
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }
     var glyph: String { String(format: "%02d", index + 1) }
-    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ; '
+    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ; ' \
     /// Auto Scan is always =.
     var shortcutKey: Character {
         if self == .autoScan { return "=" }
         if index < 10 { return Character(String((index + 1) % 10)) }
-        let extra: [Character] = ["-", "[", "]", ";", "'"]
+        let extra: [Character] = ["-", "[", "]", ";", "'", "\\"]
         return extra[min(index - 10, extra.count - 1)]
     }
 }

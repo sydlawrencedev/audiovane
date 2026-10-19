@@ -2,7 +2,7 @@
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
-Fifteen modes, plus Auto Scan:
+Sixteen modes, plus Auto Scan:
 
 1. **Tunnel**: fly through concentric rings of spectrum-reactive bars.
 2. **Constellation**: 4,000 bass-pumping particles around you.
@@ -19,10 +19,11 @@ Fifteen modes, plus Auto Scan:
 13. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
 14. **Ribbons**: luminous magenta and cyan ribbons twisting through floating glass polyhedra above a glossy floor, the whole scene sliding right to left with depth parallax. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble. It keeps a slow, dim drift in silence.
 15. **Silk Flight**: flying forward through satin ribbons that spiral away into a smoky nebula, with cyan glass cubes tumbling past. The camera races when the music is loud, the bass widens the spiral, every beat turns the cubes and throws a burst of sparks, and the treble makes the dust sparkle.
+16. **Wormhole**: falling through a vortex of light, as a magenta stream and a gold stream of fine filaments twist down into a funnel and sparks, soft debris and cyan glass shards race past. It rushes when the music is loud, the bass tightens the twist, the spectrum runs round the circle, and every beat turns the vortex a step.
 
 **Auto Scan** cycles through every other mode, 20 seconds each, and always sits at the bottom of the mode list.
 
-Modes 4–11 and 13–15 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
+Modes 4–11 and 13–16 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
 
 Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
@@ -98,7 +99,7 @@ work. The chrome sheds pieces as it narrows, in the order least useful first:
 | ≥ 1100 | Everything: pills with labels, footer numbers, BPM |
 | < 1100 | Footer numbers go (RMS, BASS, MID, TREB, BEAT). The mode stays — it's the one value someone watching wants |
 | < 880 | Pills lose their labels and keep their glyph, swatch or dot. The menus underneath are unchanged |
-| < 620 | The pills go entirely. The scene is the point at that size, and every choice is still a keystroke (1–0, `-`, `[`, `]`, `;`, `'`, `=`) or in the Visualizer menu |
+| < 620 | The pills go entirely. The scene is the point at that size, and every choice is still a keystroke (1–0, `-`, `[`, `]`, `;`, `'`, `\`, `=`) or in the Visualizer menu |
 
 The tier is decided in one place (`LayoutTier`) from the window's own resize
 notifications, and `--ui-shot` renders the chrome at all four widths, so the
@@ -119,7 +120,7 @@ is the only way to answer "is it supposed to be on top?" from a bug report.
 ## First launch
 
 A fresh install starts in **Auto Scan**, cycling every twenty seconds — with
-fifteen modes, nobody should have to guess that the good ones are behind a
+sixteen modes, nobody should have to guess that the good ones are behind a
 menu, and a visualiser that sits on one scene forever looks like it missed
 something. Pick a mode and that's remembered from then on; going back to Auto
 Scan clears the memory, so "no choice" always means Auto Scan.
@@ -240,7 +241,7 @@ open build/AudioVane.app                            # uploads it, deletes it
 
 Everything lives in the top bar so the visualiser gets the whole window:
 
-- **Mode picker** (left of the group) — all fifteen modes in a drop-down. Each
+- **Mode picker** (left of the group) — all sixteen modes in a drop-down. Each
   row shows its number-row shortcut, so the keyboard route stays discoverable
   now that the list isn't permanently on screen.
 - **Genre picker** — only in band mode (or when Auto Scan is sitting on the
@@ -254,7 +255,7 @@ Click away from an open list to dismiss it.
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'` — switch visualiser mode
+- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch visualiser mode
 - `=` — auto scan
 - `Space` / `Esc` — toggle the intro overlay
 
@@ -326,7 +327,7 @@ Electronic vs Rock, 75bpm Blues vs Country, tempo-less ballad vs Ambient).
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-`, `[`, `]`, `;` — switch mode (`0` is Warp, `-` is The Band, `[` Machine, `]` Neon Wave, `;` Ribbons, `'` Silk Flight)
+- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch mode (`0` is Warp, `-` is The Band, `[` Machine, `]` Neon Wave, `;` Ribbons, `'` Silk Flight, `\` Wormhole)
 - `Space` / `Esc` — toggle intro overlay
 
 ## Implementation notes

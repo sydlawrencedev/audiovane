@@ -72,6 +72,7 @@ extension VisualizerMode {
         case .waveform: return "waveform.path"
         case .ribbons: return "scribble.variable"
         case .silk: return "wind"
+        case .wormhole: return "hurricane"
         }
     }
 }
