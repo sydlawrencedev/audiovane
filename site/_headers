@@ -1,0 +1,27 @@
+# Cloudflare Workers Static Assets response headers.
+# Picked up automatically because it sits in the assets directory (wrangler.toml
+# points [assets] at ./site). Rules apply in order; later rules for the same
+# header win, so the per-path ones below override the catch-all.
+
+/media/*
+  # Filenames include a content hash only when the demo does — these don't, so
+  # "immutable" would be a lie and a stale image would stick for a year. A
+  # month is long enough to make repeat visits free and short enough that
+  # renaming a file is never the fix you have to remember.
+  Cache-Control: public, max-age=2592000
+
+/analytics.js
+  Cache-Control: public, max-age=3600
+
+/install.sh
+  # Short: this is how people upgrade, and a cached copy of the installer
+  # pointing at a stale download would be a bad day.
+  Cache-Control: public, max-age=300
+
+/*
+  # HTML is revalidated every time so a deploy is visible immediately.
+  Cache-Control: public, max-age=0, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+  Permissions-Policy: geolocation=(), camera=(), microphone=(), interest-cohort=()

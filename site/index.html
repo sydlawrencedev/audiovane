@@ -5,16 +5,84 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AudioVane — a music visualiser for your Mac</title>
 <meta name="description" content="AudioVane is a free macOS music visualiser. It listens to whatever your Mac is playing and turns it into 13 live scenes, from neon waveforms to a pixel-art band.">
+<link rel="canonical" href="https://audiovane.minithlabs.com/">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#06010d">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="AudioVane">
+<meta property="og:url" content="https://audiovane.minithlabs.com/">
 <meta property="og:title" content="AudioVane — a music visualiser for your Mac">
 <meta property="og:description" content="Listens to whatever your Mac is playing and turns it into 13 live scenes.">
 <meta property="og:image" content="https://audiovane.minithlabs.com/media/share.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="AudioVane turning a song into neon spectrum bars">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2306010d'/%3E%3Cpath d='M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16' stroke='%23ff2bd6' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<meta name="twitter:title" content="AudioVane — a music visualiser for your Mac">
+<meta name="twitter:description" content="Listens to whatever your Mac is playing and turns it into 13 live scenes.">
+<meta name="twitter:image" content="https://audiovane.minithlabs.com/media/share.jpg">
+<!-- PostHog project key: public by design, write-only (the same key the Mac
+     app carries in its Info.plist). Keep in sync with VisualiserMac/.env —
+     scripts/check-posthog.sh fails the release if they drift. -->
+<meta name="posthog-key" content="phc_pzYyxiM6u2pYa6FbCkRY8HPudHDopu5LrTwnoamHaeg2">
+<meta name="posthog-host" content="https://us.i.posthog.com">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/media/share.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Loaded without blocking the first paint: the stylesheet arrives as a
+     print stylesheet, then swaps itself to `all` once it's in. The local
+     font stack in the CSS below carries the design until it does. -->
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
+<!-- Structured data: this is a downloadable app, so the useful types are the
+     software itself and whoever publishes it. Tells search engines and AI
+     assistants the price, the platform and where to get it without having to
+     infer it from prose. -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://audiovane.minithlabs.com/#app",
+      "name": "AudioVane",
+      "alternateName": "AUDIOVANE",
+      "description": "A free macOS music visualiser that listens to whatever your Mac is playing and turns it into live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.",
+      "url": "https://audiovane.minithlabs.com/",
+      "applicationCategory": "MultimediaApplication",
+      "applicationSubCategory": "Music visualisers",
+      "operatingSystem": "macOS 14.2 or later, Apple silicon",
+      "softwareVersion": "0.2.4",
+      "downloadUrl": "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip",
+      "installUrl": "https://audiovane.minithlabs.com/install.sh",
+      "screenshot": "https://audiovane.minithlabs.com/media/share.jpg",
+      "image": "https://audiovane.minithlabs.com/media/share.jpg",
+      "license": "https://github.com/sydlawrencedev/audiovane/blob/main/LICENSE",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "featureList": [
+        "Thirteen live visual modes, from neon waveforms to a pixel-art band",
+        "Listens to system audio from any app, or to the microphone",
+        "Detects tempo, beats and instruments, and notices track changes",
+        "Auto-detects the genre of what is playing and stages the band to match",
+        "Free, no account, and it updates itself"
+      ],
+      "author": { "@id": "https://minithlabs.com/#org" },
+      "publisher": { "@id": "https://minithlabs.com/#org" }
+    },
+    {
+      "@type": "Organization",
+      "@id": "https://minithlabs.com/#org",
+      "name": "Minith Labs",
+      "url": "https://minithlabs.com/"
+    }
+  ]
+}
+</script>
 <style>
   :root {
     --bg: #06010d; --panel: #110820; --line: #2a1840; --text: #f1eaf7; --muted: #a596b8;
@@ -80,6 +148,7 @@
 
   footer { padding: 46px 0 60px; color: var(--muted); font-size: 14px; text-align: center; }
   footer a { color: var(--muted); }
+  .privacy { display: inline-block; margin-top: 14px; max-width: 640px; font-size: 13px; color: #8b7d9e; }
 
   @media (max-width: 640px) {
     nav { display: none; }
@@ -105,17 +174,17 @@
     <h1>Your music, <span>made visible.</span></h1>
     <p class="lede">AudioVane is a free music visualiser for your Mac. It listens to whatever's playing (Spotify, Apple Music, YouTube, anything) and turns it into thirteen live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.</p>
     <div class="ctas">
-      <a class="btn primary" href="https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip">Download for Mac</a>
-      <a class="btn coffee" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
+      <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
+      <a class="btn coffee" data-track="coffee_clicked" data-placement="hero" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
     </div>
     <p class="small">macOS 14.2 or later · Apple silicon · free · updates itself</p>
 
     <div class="install" id="install">
       <h2>Install</h2>
       <p style="margin:0 0 4px">Ask your AI assistant (Claude, ChatGPT, …):</p>
-      <div class="cmd"><code>install audiovane from https://audiovane.minithlabs.com</code><button data-copy>Copy</button></div>
+      <div class="cmd"><code>install audiovane from https://audiovane.minithlabs.com</code><button data-copy data-command="ask-ai">Copy</button></div>
       <p style="margin:12px 0 4px">Or paste this into Terminal:</p>
-      <div class="cmd"><code>curl -fsSL https://audiovane.minithlabs.com/install.sh | bash</code><button data-copy>Copy</button></div>
+      <div class="cmd"><code>curl -fsSL https://audiovane.minithlabs.com/install.sh | bash</code><button data-copy data-command="curl">Copy</button></div>
       <p class="small" style="margin-top:10px">On first launch, choose <b>Share System Audio</b> and allow AudioVane to record system audio. Nothing is recorded or sent anywhere; the audio is only analysed on your Mac.</p>
     </div>
   </div>
@@ -130,19 +199,19 @@
     <h2>Thirteen ways to see a song</h2>
     <p class="sub">Switch with the number keys, or let Auto Scan cycle through them all. Every mode follows the music, and every mode holds still when it stops.</p>
     <div class="modes">
-      <article class="mode" data-mode="tunnel"><img src="media/modes/tunnel.jpg" alt="Tunnel mode" loading="lazy"><div class="body"><div class="num">01 · KEY 1</div><h3>Tunnel</h3><p>Fly through rings of spectrum bars that pulse with the bass.</p></div></article>
-      <article class="mode" data-mode="particles"><img src="media/modes/particles.jpg" alt="Constellation mode" loading="lazy"><div class="body"><div class="num">02 · KEY 2</div><h3>Constellation</h3><p>A swarm of orbs. The louder it gets, the more of them light up, each pushed by its own frequency.</p></div></article>
-      <article class="mode" data-mode="liquid"><img src="media/modes/liquid.jpg" alt="Liquid mode" loading="lazy"><div class="body"><div class="num">03 · KEY 3</div><h3>Liquid</h3><p>Milkdrop-style psychedelic fluid that flows and folds to the music.</p></div></article>
-      <article class="mode" data-mode="badger"><img src="media/modes/badger.jpg" alt="Badger Badger mode" loading="lazy"><div class="body"><div class="num">04 · KEY 4</div><h3>Badger Badger</h3><p>Rows of dancing badgers, in time with the beat. Big drops bring out the mushroom, or the snake.</p></div></article>
-      <article class="mode" data-mode="llama"><img src="media/modes/llama.jpg" alt="Whooping Llama mode" loading="lazy"><div class="body"><div class="num">05 · KEY 5</div><h3>Whooping Llama</h3><p>Llamas in bright blankets hop to the beat and whoop on every hit.</p></div></article>
-      <article class="mode" data-mode="hamster"><img src="media/modes/hamster.jpg" alt="Hamster Dance mode" loading="lazy"><div class="body"><div class="num">06 · KEY 6</div><h3>Hamster Dance</h3><p>A wall of dancing hamsters, played at the song's tempo. Drop your own GIFs in to use them instead.</p></div></article>
-      <article class="mode" data-mode="nyan"><img src="media/modes/nyan.jpg" alt="Nyan Cat mode" loading="lazy"><div class="body"><div class="num">07 · KEY 7</div><h3>Nyan Cat</h3><p>A pixel cat on a rainbow trail, flying faster when the music's louder.</p></div></article>
-      <article class="mode" data-mode="spectrum"><img src="media/modes/spectrum.jpg" alt="Spectrum mode" loading="lazy"><div class="body"><div class="num">08 · KEY 8</div><h3>Spectrum</h3><p>Classic segmented LED bars with falling peak caps.</p></div></article>
-      <article class="mode" data-mode="kaleidoscope"><img src="media/modes/kaleidoscope.jpg" alt="Kaleidoscope mode" loading="lazy"><div class="body"><div class="num">09 · KEY 9</div><h3>Kaleidoscope</h3><p>Mirrored fractal folds that punch in on the bass and shift colour every few bars.</p></div></article>
-      <article class="mode" data-mode="warp"><img src="media/modes/warp.jpg" alt="Warp mode" loading="lazy"><div class="body"><div class="num">10 · KEY 0</div><h3>Warp</h3><p>Hyperspace star streaks. More stars, and longer trails, the louder it gets.</p></div></article>
-      <article class="mode" data-mode="band"><img src="media/modes/band.jpg" alt="The Band mode" loading="lazy"><div class="body"><div class="num">11 · KEY -</div><h3>The Band</h3><p>A pixel-art band in ten genre sets, from a concert hall to a jazz club. Musicians walk on when AudioVane hears their instrument, and the singer matches the voice.</p></div></article>
-      <article class="mode" data-mode="machine"><img src="media/modes/machine.jpg" alt="Machine mode" loading="lazy"><div class="body"><div class="num">12 · KEY [</div><h3>Machine</h3><p>Cannons fire balls at drums in time with the notes, after mrdoob's MIDEM Hack Day machine.</p></div></article>
-      <article class="mode" data-mode="waveform"><img src="media/modes/waveform.jpg" alt="Neon Wave mode" loading="lazy"><div class="body"><div class="num">13 · KEY ]</div><h3>Neon Wave</h3><p>Glowing green waveforms, shaped by the spectrum like an analogue sound analyser.</p></div></article>
+      <article class="mode" data-mode="tunnel"><img src="media/modes/tunnel.jpg" alt="Tunnel mode: neon spectrum bars flying past in a ring" loading="lazy"><div class="body"><div class="num">01 · KEY 1</div><h3>Tunnel</h3><p>Fly through rings of spectrum bars that pulse with the bass.</p></div></article>
+      <article class="mode" data-mode="particles"><img src="media/modes/particles.jpg" alt="Constellation mode: a swarm of glowing orbs lit by the music" loading="lazy"><div class="body"><div class="num">02 · KEY 2</div><h3>Constellation</h3><p>A swarm of orbs. The louder it gets, the more of them light up, each pushed by its own frequency.</p></div></article>
+      <article class="mode" data-mode="liquid"><img src="media/modes/liquid.jpg" alt="Liquid mode: psychedelic fluid flowing and folding like Milkdrop" loading="lazy"><div class="body"><div class="num">03 · KEY 3</div><h3>Liquid</h3><p>Milkdrop-style psychedelic fluid that flows and folds to the music.</p></div></article>
+      <article class="mode" data-mode="badger"><img src="media/modes/badger.jpg" alt="Badger Badger mode: rows of dancing badgers bobbing to the beat" loading="lazy"><div class="body"><div class="num">04 · KEY 4</div><h3>Badger Badger</h3><p>Rows of dancing badgers, in time with the beat. Big drops bring out the mushroom, or the snake.</p></div></article>
+      <article class="mode" data-mode="llama"><img src="media/modes/llama.jpg" alt="Whooping Llama mode: llamas in bright blankets hopping on the beat" loading="lazy"><div class="body"><div class="num">05 · KEY 5</div><h3>Whooping Llama</h3><p>Llamas in bright blankets hop to the beat and whoop on every hit.</p></div></article>
+      <article class="mode" data-mode="hamster"><img src="media/modes/hamster.jpg" alt="Hamster Dance mode: a wall of pixel hamsters dancing at the song tempo" loading="lazy"><div class="body"><div class="num">06 · KEY 6</div><h3>Hamster Dance</h3><p>A wall of dancing hamsters, played at the song's tempo. Drop your own GIFs in to use them instead.</p></div></article>
+      <article class="mode" data-mode="nyan"><img src="media/modes/nyan.jpg" alt="Nyan Cat mode: a pixel cat on a rainbow trail streaking across the screen" loading="lazy"><div class="body"><div class="num">07 · KEY 7</div><h3>Nyan Cat</h3><p>A pixel cat on a rainbow trail, flying faster when the music's louder.</p></div></article>
+      <article class="mode" data-mode="spectrum"><img src="media/modes/spectrum.jpg" alt="Spectrum mode: classic segmented LED bars with falling peak caps" loading="lazy"><div class="body"><div class="num">08 · KEY 8</div><h3>Spectrum</h3><p>Classic segmented LED bars with falling peak caps.</p></div></article>
+      <article class="mode" data-mode="kaleidoscope"><img src="media/modes/kaleidoscope.jpg" alt="Kaleidoscope mode: mirrored fractal folds pulsing with the bass" loading="lazy"><div class="body"><div class="num">09 · KEY 9</div><h3>Kaleidoscope</h3><p>Mirrored fractal folds that punch in on the bass and shift colour every few bars.</p></div></article>
+      <article class="mode" data-mode="warp"><img src="media/modes/warp.jpg" alt="Warp mode: hyperspace star streaks trailing behind the music" loading="lazy"><div class="body"><div class="num">10 · KEY 0</div><h3>Warp</h3><p>Hyperspace star streaks. More stars, and longer trails, the louder it gets.</p></div></article>
+      <article class="mode" data-mode="band"><img src="media/modes/band.jpg" alt="The Band mode: a pixel-art band walking on stage when their instrument is heard" loading="lazy"><div class="body"><div class="num">11 · KEY -</div><h3>The Band</h3><p>A pixel-art band in ten genre sets, from a concert hall to a jazz club. Musicians walk on when AudioVane hears their instrument, and the singer matches the voice.</p></div></article>
+      <article class="mode" data-mode="machine"><img src="media/modes/machine.jpg" alt="Machine mode: cannons firing balls at the drums" loading="lazy"><div class="body"><div class="num">12 · KEY [</div><h3>Machine</h3><p>Cannons fire balls at drums in time with the notes, after mrdoob's MIDEM Hack Day machine.</p></div></article>
+      <article class="mode" data-mode="waveform"><img src="media/modes/waveform.jpg" alt="Neon Wave mode: glowing green waveforms shaped by the spectrum" loading="lazy"><div class="body"><div class="num">13 · KEY ]</div><h3>Neon Wave</h3><p>Glowing green waveforms, shaped by the spectrum like an analogue sound analyser.</p></div></article>
       <article class="mode scan"><div class="body"><div class="num">KEY =</div><h3>Auto Scan</h3><p>Cycles through every mode, twenty seconds each.</p></div></article>
     </div>
   </section>
@@ -151,7 +220,7 @@
     <h2>How it works</h2>
     <div class="facts">
       <div class="fact"><h3>Hears everything</h3><p>Uses macOS system-audio capture, so it reacts to any app. No plug-ins, no browser tab, no microphone needed.</p></div>
-      <div class="fact"><h3>Stays on your Mac</h3><p>Audio is analysed on-device and never recorded or uploaded; instrument detection uses Apple's built-in sound classifier. Optional anonymous usage stats (which modes get used) never include track names, and you can switch them off in the app.</p></div>
+      <div class="fact"><h3>Stays on your Mac</h3><p>Audio is analysed on-device and never recorded or uploaded; instrument detection uses Apple's built-in sound classifier. Optional anonymous usage stats (which modes get used, and crash reports if it goes wrong) never include track names, and you can switch them off in the app. This website counts visits and clicks anonymously, with a one-click opt-out in the footer.</p></div>
       <div class="fact"><h3>Knows the song</h3><p>It finds the tempo, the beats and the instruments, and notices track changes in Apple Music and Spotify.</p></div>
       <div class="fact"><h3>Keeps itself current</h3><p>Checks for a new version each time it opens, and installs it in one click.</p></div>
     </div>
@@ -180,13 +249,15 @@
   <div class="coffee-band">
     <h2>Enjoying AudioVane?</h2>
     <p>It's free, with no ads and no account. If it's made your music look better, a coffee keeps it going.</p>
-    <a class="btn coffee" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
+    <a class="btn coffee" data-track="coffee_clicked" data-placement="band" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
   </div>
 
   <footer>
-    Made by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/audiovane">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/audiovane/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/audiovane/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine mode after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a>
+    Made by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/audiovane">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/audiovane/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/audiovane/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine mode after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
+    <span class="privacy">This page counts visits and clicks anonymously (which button, which mode card you scroll to). No cookies, no account, nothing about you. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden> — done, this page won't report anything.</span></span>
   </footer>
 </div>
+<script src="/analytics.js" defer></script>
 <script>
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {

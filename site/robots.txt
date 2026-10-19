@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+
+# llms.txt and install.md are deliberately left crawlable: llms.txt exists for
+# AI assistants to read, and install.md is the plain-text version of the same
+# instructions the page shows. Neither is listed in sitemap.xml — the sitemap
+# carries the one URL we actually want ranked.
+
+Sitemap: https://audiovane.minithlabs.com/sitemap.xml

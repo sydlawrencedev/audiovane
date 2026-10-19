@@ -1,11 +1,23 @@
 # Landing page for https://audiovane.minithlabs.com — static files in ./site,
 # served by a Cloudflare Worker on the custom domain.
 #   npx wrangler deploy
+#
+# The Worker exists for one route: /download, which redirects to the latest
+# GitHub release and tells Discord about it (see worker/index.js). Everything
+# else is served straight from ./site, including its _headers and _redirects.
 name = "audiovane"
+main = "worker/index.js"
 compatibility_date = "2026-10-01"
 
 [assets]
 directory = "./site"
+binding = "ASSETS"
+
+[vars]
+# Plain settings; the webhook URL is a secret, never a var:
+#   npx wrangler secret put DISCORD_WEBHOOK_URL
+DISCORD_NOTIFICATIONS_ENABLED = "true"
+DISCORD_BOT_USERNAME = "AudioVane"
 
 [[routes]]
 pattern = "audiovane.minithlabs.com"

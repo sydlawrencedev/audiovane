@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Single-page site. Kept deliberately small: only URLs that are meant to be
+     in search results belong here, and that is the homepage and the two
+     plain-text pages an assistant reads (install.md, llms.txt). Submit to
+     Google Search Console at
+     https://search.google.com/search-console/sitemaps/submit
+     after each `npx wrangler deploy`. -->
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://audiovane.minithlabs.com/</loc>
+    <lastmod>2026-10-19</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+  </url>
+</urlset>

@@ -1,0 +1,8 @@
+# Cloudflare Workers Static Assets redirects.
+# One rule per line, destination must be relative. The http → https and
+# www → apex redirects live in worker/index.js instead: this format can't
+# express a scheme or a hostname change.
+
+# One canonical URL for the homepage. The sitemap, the canonical tag and the
+# og:url all say "https://audiovane.minithlabs.com/"; make the server agree.
+/index.html  /  301
