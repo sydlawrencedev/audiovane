@@ -2,7 +2,7 @@
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
-Thirteen modes, plus Auto Scan:
+Fourteen modes, plus Auto Scan:
 
 1. **Tunnel**: fly through concentric rings of spectrum-reactive bars.
 2. **Constellation**: 4,000 bass-pumping particles around you.
@@ -17,10 +17,11 @@ Thirteen modes, plus Auto Scan:
 11. **The Band**: colour pixel-art musicians in ten genre sets (classical hall, DJ booth, rock theatre, pop studio, hip-hop street, jazz club, blues bar, country porch, R&B velvet, ambient), each with its own instruments and outfits. Apple's on-device sound classifier (SoundAnalysis), backed up by beat and bass detection, decides who walks on; the singer's voice (female, male or duet) comes from the vocal pitch. Playing follows the beat clock, with spectrum onsets as accents.
 12. **Machine**: a port of the MIDEM Music Hack Day piece by [@mrdoob and @plamere](https://github.com/mrdoob/midemhackday), rebuilt from its source: twelve stations of lathe-turned cannons and drums (one per pitch class) and a ring of 40 pads. Each note onset fires balls that arc onto the drum and pad for that pitch and loudness; struck drums recoil and flash white. Smooth meshes, 4x MSAA with a depth buffer, and the original's camera path flown over the length of the track (Music/Spotify report it).
 13. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
+14. **Ribbons**: luminous magenta and cyan ribbons twisting through floating glass polyhedra above a glossy floor. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble.
 
 **Auto Scan** cycles through every other mode, 20 seconds each, and always sits at the bottom of the mode list.
 
-Modes 4–11 and 13 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
+Modes 4–11, 13 and 14 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
 
 Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
@@ -117,7 +118,7 @@ is the only way to answer "is it supposed to be on top?" from a bug report.
 ## First launch
 
 A fresh install starts in **Auto Scan**, cycling every twenty seconds — with
-thirteen modes, nobody should have to guess that the good ones are behind a
+fourteen modes, nobody should have to guess that the good ones are behind a
 menu, and a visualiser that sits on one scene forever looks like it missed
 something. Pick a mode and that's remembered from then on; going back to Auto
 Scan clears the memory, so "no choice" always means Auto Scan.
@@ -238,7 +239,7 @@ open build/AudioVane.app                            # uploads it, deletes it
 
 Everything lives in the top bar so the visualiser gets the whole window:
 
-- **Mode picker** (left of the group) — all thirteen modes in a drop-down. Each
+- **Mode picker** (left of the group) — all fourteen modes in a drop-down. Each
   row shows its number-row shortcut, so the keyboard route stays discoverable
   now that the list isn't permanently on screen.
 - **Genre picker** — only in band mode (or when Auto Scan is sitting on the
@@ -252,7 +253,7 @@ Click away from an open list to dismiss it.
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-` — switch visualiser mode
+- `1`–`9`, `0`, `-`, `[`, `]`, `;` — switch visualiser mode
 - `=` — auto scan
 - `Space` / `Esc` — toggle the intro overlay
 
@@ -324,7 +325,7 @@ Electronic vs Rock, 75bpm Blues vs Country, tempo-less ballad vs Ambient).
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-` — switch mode (`0` is Warp, `-` is The Band)
+- `1`–`9`, `0`, `-`, `[`, `]`, `;` — switch mode (`0` is Warp, `-` is The Band, `[` Machine, `]` Neon Wave, `;` Ribbons)
 - `Space` / `Esc` — toggle intro overlay
 
 ## Implementation notes

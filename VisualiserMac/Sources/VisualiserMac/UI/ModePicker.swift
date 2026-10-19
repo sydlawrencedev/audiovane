@@ -70,6 +70,7 @@ extension VisualizerMode {
         case .autoScan: return "arrow.trianglehead.2.clockwise.rotate.90"
         case .machine: return "gearshape.2"
         case .waveform: return "waveform.path"
+        case .ribbons: return "scribble.variable"
         }
     }
 }

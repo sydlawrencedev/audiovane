@@ -153,7 +153,7 @@ final class AppState: ObservableObject {
         self.audio = audio
         self.renderer = OpenGLRenderer(audio: audio)
         // Whatever mode the user was last in, or auto-scan on a fresh install.
-        // Auto-scan is the right first impression for thirteen modes: nobody
+        // Auto-scan is the right first impression for fourteen modes: nobody
         // should have to guess that the good ones are behind a menu, and a
         // visualiser that sits on one scene forever looks like it missed
         // something.
@@ -652,6 +652,8 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     case machine
     /// Glowing neon-green waveforms shaped by the spectrum.
     case waveform
+    /// Luminous ribbons twisting through floating glass shapes.
+    case ribbons
     /// Cycles through every other mode, 20 seconds each.
     /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
     case autoScan
@@ -672,6 +674,7 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
         case .autoScan: return "AUTO SCAN"
         case .machine: return "MACHINE"
         case .waveform: return "NEON WAVE"
+        case .ribbons: return "RIBBONS"
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }
