@@ -21,7 +21,13 @@ struct GenrePicker: View {
             DropdownMenu(
                 id: .genre,
                 entries: entries,
-                selection: $app.genre,
+                // A pick goes through userPickedGenre so it turns auto-detect
+                // off for this song; writing app.genre directly left auto on,
+                // and the detector put its own genre straight back.
+                selection: Binding(
+                    get: { app.genre },
+                    set: { app.userPickedGenre($0) }
+                ),
                 tint: app.genreIsAuto ? .bandTint : .modeTint,
                 pillExtra: AnyView(confidenceBar)
             )
