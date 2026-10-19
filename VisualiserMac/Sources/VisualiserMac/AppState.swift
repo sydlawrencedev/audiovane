@@ -39,6 +39,8 @@ final class AppState: ObservableObject {
     @Published var viaAutoScan: Bool = false
     @Published var sourceLabel: String = "idle"
     @Published var sourceState: SourceState = .idle
+    /// Mirrors `audio.activeSource`, so the header pill can say what's flowing.
+    @Published var activeSource: AudioSource? = nil
     @Published var showIntro: Bool = true
     @Published var bpm: Double = 0
     @Published var lastBeat: Double = 0
@@ -176,6 +178,9 @@ final class AppState: ObservableObject {
         audio.$sourceState
             .receive(on: RunLoop.main)
             .assign(to: &$sourceState)
+        audio.$activeSource
+            .receive(on: RunLoop.main)
+            .assign(to: &$activeSource)
         // System audio / mic / demo / denied are all the states that have gone
         // wrong before, so they're worth a line in a crash report.
         audio.$sourceState
@@ -222,7 +227,20 @@ final class AppState: ObservableObject {
         if CommandLine.arguments.contains("--genre-auto") { genreIsAuto = true }
         if CommandLine.arguments.contains("--system-audio") {
             Task { await audio.startSystemCapture() }
+        } else if !isHeadlessRun {
+            // Otherwise reconnect whatever was in use last time. Granting
+            // system audio should be a one-time thing, not a question every
+            // launch — and if it can't be restored the intro comes back with
+            // the reason, which is what the user needs to see.
+            Task { await audio.restoreLastSource() }
         }
+    }
+
+    /// Snapshot and record modes have no window and no audio; starting capture
+    /// there would fight them for the same device.
+    private var isHeadlessRun: Bool {
+        let args = CommandLine.arguments
+        return args.contains("--snapshot") || args.contains("--record") || args.contains("--ui-shot")
     }
 
     /// One `app_launched` per run. Fired from init rather than from
@@ -363,6 +381,21 @@ final class AppState: ObservableObject {
 
     func setMode(_ mode: VisualizerMode) {
         activeMode = mode
+    }
+
+    /// The single path into `AudioEngine`'s source switching, so the header
+    /// pill and the intro can't drift apart, and so switching is reported once
+    /// whichever control was used.
+    func selectSource(_ source: AudioSource, via origin: String) {
+        Task { await Analytics.shared.track("source_changed", [
+            "source": source.rawValue,
+            "via": origin,
+        ]) }
+        switch source {
+        case .system: Task { await audio.startSystemCapture() }
+        case .microphone: audio.startMicrophone()
+        case .demo: audio.startDemo()
+        }
     }
 
     func restart() {
@@ -522,4 +555,41 @@ enum SingerVoice: String, CaseIterable, Identifiable {
 
 enum SourceState: String {
     case idle, live, demo, error
+}
+
+/// Where the audio comes from. Ordered as it appears in the picker: system
+/// audio first because it's what the app is for, the microphone second because
+/// it's the fallback people reach for, the demo tone last because it needs no
+/// permissions at all.
+enum AudioSource: String, CaseIterable, Identifiable {
+    case system, microphone, demo
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .system: return "SYSTEM AUDIO"
+        case .microphone: return "MICROPHONE"
+        case .demo: return "DEMO TONE"
+        }
+    }
+
+    var menuTitle: String {
+        switch self {
+        case .system: return "Share System Audio"
+        case .microphone: return "Use Microphone"
+        case .demo: return "Use Demo Tone"
+        }
+    }
+
+    var subtitle: String {
+        switch self {
+        case .system: return "Spotify, YouTube, anything playing"
+        case .microphone: return "Plays whatever the mic hears"
+        case .demo: return "No permissions needed"
+        }
+    }
+
+    /// Nothing is captured from these, so switching between them needs no
+    /// permission of its own.
+    var restoresOnLaunch: Bool { self != .microphone }
 }

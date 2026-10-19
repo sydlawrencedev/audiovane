@@ -14,6 +14,7 @@
 // `ctx.waitUntil` so Discord can never delay a download.
 
 const CANONICAL_HOST = "audiovane.minithlabs.com";
+const CANONICAL_SITE = `https://${CANONICAL_HOST}/`;
 const RELEASE_ZIP =
   "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip";
 
@@ -40,9 +41,18 @@ const DISCORD_DESC_LIMIT = 4096;
 // at Discord and rotating the secret do that job.
 const MIN_SECONDS_BETWEEN = 5;
 const MAX_PER_HOUR = 30;
+// Errors are rarer but more valuable, and they arrive from installs rather
+// than from the site, so they get their own budget — including their own
+// cooldown, because one broken install can fail every second while the user
+// fights with a permission dialog.
+const ERROR_MIN_SECONDS_BETWEEN = 60;
+const ERROR_MAX_PER_HOUR = 60;
 let lastSentAt = 0;
 let sentThisHour = 0;
 let hourStartedAt = 0;
+let lastErrorAt = 0;
+let errorsThisHour = 0;
+let errorHourStartedAt = 0;
 
 function truncate(value, limit) {
   const text = String(value ?? "");
@@ -77,6 +87,24 @@ export function resetRateLimiter() {
   lastSentAt = 0;
   sentThisHour = 0;
   hourStartedAt = 0;
+  lastErrorAt = 0;
+  errorsThisHour = 0;
+  errorHourStartedAt = 0;
+}
+
+// Same idea, separate budget: a download in a loop shouldn't silence the one
+// crash report that matters.
+function errorRateLimited() {
+  const now = Date.now();
+  if (now - errorHourStartedAt > 3_600_000) {
+    errorHourStartedAt = now;
+    errorsThisHour = 0;
+  }
+  if (now - lastErrorAt < ERROR_MIN_SECONDS_BETWEEN * 1000) return true;
+  if (errorsThisHour >= ERROR_MAX_PER_HOUR) return true;
+  lastErrorAt = now;
+  errorsThisHour += 1;
+  return false;
 }
 
 // Kept pure and exported so the payload can be asserted on without a network.
@@ -197,9 +225,87 @@ function handleDownload(request, url, env, ctx) {
   return Response.redirect(RELEASE_ZIP, 302);
 }
 
+/// Builds the embed for a report from the app. Kept pure for the same reason
+/// as `buildDownloadEmbed`: the tests assert on the payload without a network.
+export function buildErrorEmbed({ title, message, priority = "high", fields = [] }) {
+  const style = STYLES[priority] || STYLES.default;
+  return {
+    username: undefined, // filled in from env at send time
+    embeds: [
+      {
+        author: { name: "AudioVane app" },
+        title: truncate(`${style.emoji} ${title}`, DISCORD_TITLE_LIMIT),
+        description: truncate(message ?? "", DISCORD_DESC_LIMIT),
+        url: CANONICAL_SITE,
+        color: style.color,
+        fields: fields
+          .filter((f) => f && f.name && f.value)
+          .slice(0, 10)
+          .map((f) => ({
+            name: truncate(f.name, 256),
+            value: truncate(f.value, DISCORD_FIELD_LIMIT),
+            inline: f.inline !== false,
+          })),
+        footer: { text: "audiovane.minithlabs.com" },
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+}
+
+/// `POST /api/notify` — how the Mac app reports problems.
+///
+/// Authenticated with a shared token so this can't be used as a free posting
+/// service for anyone who finds the URL; that token is a Worker secret, and the
+/// app ships with it compiled in, which means it should be treated as
+/// "public-ish" and rotated if it ever leaks. Discord's own limits and the
+/// cooldown above are the real backstop.
+async function handleNotify(request, env, ctx) {
+  const token = request.headers.get("x-av-token") || "";
+  if (!env.NOTIFY_TOKEN || token !== env.NOTIFY_TOKEN) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: "bad json" }, { status: 400 });
+  }
+  // Honeypot: a bot fills in every field it finds. Nothing in the app ever
+  // sends this.
+  if (body.website) return Response.json({ ok: true });
+
+  const errorsEnabled = env.DISCORD_ERRORS_ENABLED !== "false" && !!env.DISCORD_WEBHOOK_URL;
+  if (!errorsEnabled) return Response.json({ ok: true, posted: false });
+
+  if (errorRateLimited()) {
+    console.log(`[notify] suppressed: ${body.kind} (cooldown)`);
+    return Response.json({ ok: true, posted: false, reason: "rate limited" });
+  }
+
+  const payload = buildErrorEmbed({
+    title: body.title || "Something went wrong",
+    message: body.message || "",
+    priority: body.priority || "high",
+    fields: Array.isArray(body.fields) ? body.fields : [],
+  });
+  payload.username = env.DISCORD_BOT_USERNAME || "AudioVane";
+  // Fire and forget: the app is waiting on this, and Discord is not on the
+  // critical path of anything it is trying to do. Logged anyway, because
+  // "we didn't hear about that crash" needs an answer you can grep for.
+  ctx.waitUntil(
+    postDiscord(env, payload).then((result) => {
+      console.log(`[notify] ${result.ok ? "posted" : "FAILED"}: ${body.kind}${result.ok ? "" : ` (${result.error || result.status})`}`);
+    })
+  );
+  return Response.json({ ok: true });
+}
+
 function handleHealth(env) {
   return Response.json({
     ok: true,
+    notify: env.NOTIFY_TOKEN ? "accepting app reports" : "no NOTIFY_TOKEN (wrangler secret put NOTIFY_TOKEN)",
     discord: isDiscordEnabled(env)
       ? "configured"
       : env.DISCORD_WEBHOOK_URL
@@ -238,6 +344,7 @@ export default {
     }
 
     if (url.pathname === "/download") return handleDownload(request, url, env, ctx);
+    if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
     // Note: Cloudflare serves a request that matches an existing asset straight
     // from the edge, without invoking this Worker at all (only misses reach it,

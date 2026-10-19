@@ -8,7 +8,7 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 
-import worker, { buildDownloadEmbed, isDiscordEnabled, resetRateLimiter } from "./index.js";
+import worker, { buildDownloadEmbed, buildErrorEmbed, isDiscordEnabled, resetRateLimiter } from "./index.js";
 
 const RELEASE_ZIP =
   "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip";
@@ -24,7 +24,7 @@ function makeEnv(overrides = {}) {
 }
 
 /** Runs the worker with fetch stubbed, returning the response and every POST. */
-async function run(url, { env = makeEnv(), headers = {}, cf = {} } = {}) {
+async function run(url, { env = makeEnv(), headers = {}, cf = {}, method = "GET", body } = {}) {
   const posts = [];
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (target, init) => {
@@ -32,7 +32,7 @@ async function run(url, { env = makeEnv(), headers = {}, cf = {} } = {}) {
     // 204 is what a Discord webhook actually answers, and it carries no body.
     return new Response(null, { status: 204 });
   };
-  const request = new Request(url, { headers });
+  const request = new Request(url, { method, headers, body });
   Object.defineProperty(request, "cf", { value: cf });
   const waits = [];
   const ctx = { waitUntil: (promise) => waits.push(promise) };
@@ -190,9 +190,145 @@ test("everything else falls through to the static assets", async () => {
   assert.equal(posts.length, 0);
 });
 
+test("the app can report a problem, but only with the token", async () => {
+  const body = {
+    kind: "audio_error",
+    title: "Audio source failed: denied",
+    message: "Failed to create process tap (OSStatus -536905213).",
+    priority: "urgent",
+    fields: [{ name: "mode", value: "band" }],
+  };
+  const env = makeEnv({ NOTIFY_TOKEN: "s3cret" });
+
+  const wrong = await run("https://audiovane.minithlabs.com/api/notify", {
+    env,
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", "x-av-token": "nope" },
+  });
+  assert.equal(wrong.response.status, 401, "a bad token gets nothing");
+  assert.equal(wrong.posts.length, 0);
+
+  const ok = await run("https://audiovane.minithlabs.com/api/notify", {
+    env,
+    method: "POST",
+    body: JSON.stringify(body),
+    headers: { "content-type": "application/json", "x-av-token": "s3cret" },
+  });
+  assert.equal(ok.response.status, 200);
+});
+
+test("an error report reaches Discord shaped like an error", async () => {
+  const body = JSON.stringify({
+    kind: "audio_error",
+    title: "Audio source failed: system audio failed",
+    message: "Failed to create process tap.",
+    priority: "urgent",
+    fields: [{ name: "mode", value: "band" }, { name: "genre", value: "Jazz" }],
+  });
+  const posts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (target, init) => {
+    posts.push({ url: String(target), body: JSON.parse(init.body) });
+    return new Response(null, { status: 204 });
+  };
+  const request = new Request("https://audiovane.minithlabs.com/api/notify", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-av-token": "s3cret" },
+    body,
+  });
+  const waits = [];
+  try {
+    const response = await worker.fetch(request, makeEnv({ NOTIFY_TOKEN: "s3cret" }), {
+      waitUntil: (p) => waits.push(p),
+    });
+    await Promise.all(waits);
+    assert.equal(response.status, 200);
+    const embed = posts[0].body.embeds[0];
+    assert.equal(embed.color, 0xe74c3c, "urgent is red");
+    assert.match(embed.title, /Audio source failed/);
+    assert.deepEqual(embed.fields.map((f) => f.name), ["mode", "genre"]);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("reports stop at one a minute, so a broken install can't flood the channel", async () => {
+  const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
+  const body = JSON.stringify({ kind: "audio_error", title: "still broken", message: "again" });
+  const env = makeEnv({ NOTIFY_TOKEN: "s3cret" });
+  const send = () => run("https://audiovane.minithlabs.com/api/notify", { env, method: "POST", headers, body });
+
+  const first = await send();
+  assert.equal(first.posts.length, 1);
+  for (let i = 0; i < 4; i++) await send(); // inside the cooldown
+  const last = await send();
+  assert.equal(last.posts.length, 0);
+});
+
+test("a bot filling in the honeypot gets a polite nothing", async () => {
+  const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
+  const request = new Request("https://audiovane.minithlabs.com/api/notify", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ title: "buy followers", message: "cheap links", website: "http://spam" }),
+  });
+  const posts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (t, i) => { posts.push(i); return new Response(null, { status: 204 }); };
+  try {
+    const response = await worker.fetch(request, makeEnv({ NOTIFY_TOKEN: "s3cret" }), {
+      waitUntil: () => {},
+    });
+    assert.equal(response.status, 200);
+    assert.equal(posts.length, 0);
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+});
+
+test("errors can be switched off without taking downloads with them", async () => {
+  const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
+  const { response, posts } = await run("https://audiovane.minithlabs.com/api/notify", {
+    env: makeEnv({ NOTIFY_TOKEN: "s3cret", DISCORD_ERRORS_ENABLED: "false" }),
+    method: "POST",
+    headers,
+    body: JSON.stringify({ kind: "audio_error", title: "quiet please", message: "" }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(posts.length, 0);
+
+  const dl = await run("https://audiovane.minithlabs.com/download?src=hero&seen=0", {
+    env: makeEnv({ DISCORD_ERRORS_ENABLED: "false" }),
+    headers: { "user-agent": BROWSER_UA },
+  });
+  assert.equal(dl.posts.length, 1, "downloads still notify");
+});
+
+test("a long report is trimmed to what Discord accepts", () => {
+  const embed = buildErrorEmbed({
+    title: "t".repeat(400),
+    message: "m".repeat(6000),
+    fields: Array.from({ length: 30 }, (_, i) => ({ name: `f${i}`, value: "v".repeat(2000) })),
+  });
+  assert.ok(embed.embeds[0].title.length <= 256);
+  assert.ok(embed.embeds[0].description.length <= 4096);
+  assert.ok(embed.embeds[0].fields.length <= 10);
+  for (const f of embed.embeds[0].fields) assert.ok(f.value.length <= 1024);
+});
+
 test("health reports which state the webhook is in", async () => {
-  const ok = await run("https://audiovane.minithlabs.com/api/health");
-  assert.deepEqual(await ok.response.json(), { ok: true, discord: "configured" });
+  const ok = await run("https://audiovane.minithlabs.com/api/health", {
+    env: makeEnv({ NOTIFY_TOKEN: "s3cret" }),
+  });
+  assert.deepEqual(await ok.response.json(), {
+    ok: true,
+    notify: "accepting app reports",
+    discord: "configured",
+  });
+
+  const noToken = await run("https://audiovane.minithlabs.com/api/health");
+  assert.match((await noToken.response.json()).notify, /NOTIFY_TOKEN/);
 
   const off = await run("https://audiovane.minithlabs.com/api/health", {
     env: makeEnv({ DISCORD_NOTIFICATIONS_ENABLED: "false" }),

@@ -33,6 +33,19 @@ fi
 POSTHOG_KEY="${POSTHOG_KEY:-}"
 POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 
+# Where the app reports crashes and audio failures, and the shared token that
+# says it's us. Same site the landing page is served from, so the Discord
+# webhook behind /api/notify stays a Worker secret instead of shipping inside
+# the app. Leave empty to build an app that reports nothing.
+#
+#   REPORT_TOKEN=…            (the same value as the NOTIFY_TOKEN secret)
+#   REPORT_ENDPOINT=https://…  (defaults to the live site)
+REPORT_TOKEN="${REPORT_TOKEN:-}"
+REPORT_ENDPOINT="${REPORT_ENDPOINT:-https://audiovane.minithlabs.com/api/notify}"
+if [ -z "$REPORT_TOKEN" ]; then
+    echo "NOTE: no REPORT_TOKEN set — this build won't report crashes to Discord."
+fi
+
 if [ "$CONFIG" = "release" ]; then
     swift build -c release
     BIN_PATH=".build/release/$APP_NAME"
@@ -105,6 +118,10 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <string>${POSTHOG_KEY}</string>
     <key>PostHogHost</key>
     <string>${POSTHOG_HOST}</string>
+    <key>ReportEndpoint</key>
+    <string>${REPORT_ENDPOINT}</string>
+    <key>ReportToken</key>
+    <string>${REPORT_TOKEN}</string>
 </dict>
 </plist>
 EOF

@@ -53,7 +53,7 @@
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Music visualisers",
       "operatingSystem": "macOS 14.2 or later, Apple silicon",
-      "softwareVersion": "0.2.4",
+      "softwareVersion": "0.2.5",
       "downloadUrl": "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip",
       "installUrl": "https://audiovane.minithlabs.com/install.sh",
       "screenshot": "https://audiovane.minithlabs.com/media/share.jpg",
@@ -142,6 +142,9 @@
   .agents ol { padding-left: 20px; }
   .agents li { margin: 6px 0; }
 
+  section#shareware .shareware { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  section#shareware .small a { color: var(--gold); }
+
   .coffee-band { margin: 56px 0 0; text-align: center; padding: 40px 20px; border-radius: 18px; background: radial-gradient(circle at 50% 0%, rgba(255, 195, 90, 0.18), transparent 70%), var(--panel); border: 1px solid var(--line); }
   .coffee-band h2 { margin: 0 0 8px; }
   .coffee-band p { color: var(--muted); margin: 0 0 20px; }
@@ -166,6 +169,7 @@
     <nav>
       <a href="#modes">Modes</a>
       <a href="#install">Install</a>
+      <a href="#shareware">Shareware</a>
       <a href="https://github.com/sydlawrencedev/audiovane">GitHub</a>
     </nav>
   </header>
@@ -177,7 +181,7 @@
       <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
       <a class="btn coffee" data-track="coffee_clicked" data-placement="hero" href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">☕ Buy me a coffee</a>
     </div>
-    <p class="small">macOS 14.2 or later · Apple silicon · free · updates itself</p>
+    <p class="small">macOS 14.2 or later · Apple silicon · free · updates itself · <a href="#shareware">proudly shareware</a></p>
 
     <div class="install" id="install">
       <h2>Install</h2>
@@ -244,6 +248,17 @@
       </ol>
       <p class="small">Plain-text versions: <a href="/install.md">install.md</a> · <a href="/llms.txt">llms.txt</a></p>
     </div>
+  </section>
+
+  <section id="shareware">
+    <h2>Proudly shareware</h2>
+    <p class="sub">No ads, no account, no trial that expires. Here's the whole deal:</p>
+    <div class="shareware">
+      <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click — no subscription, no upgrade button, no paid tier that unlocks the modes you already have.</p></div>
+      <div class="fact"><h3>Your audio stays on your Mac</h3><p>Nothing is recorded or uploaded. Usage stats are anonymous, and you can switch them off in the app.</p></div>
+      <div class="fact"><h3>Open source, contributions welcome</h3><p>The source is on GitHub under a permissive licence. Bug reports, new visualisations and patches are all welcome — a new mode is one shader in most cases.</p></div>
+    </div>
+    <p class="small" style="text-align:center;max-width:560px;margin:22px auto 0">If it's made your music look better, <a href="https://buy.stripe.com/fZu14mb8B9Li9Xd5BObEA00">buy me a coffee</a> — it pays for the time that goes into the next visualiser, and nothing else changes about the app.</p>
   </section>
 
   <div class="coffee-band">

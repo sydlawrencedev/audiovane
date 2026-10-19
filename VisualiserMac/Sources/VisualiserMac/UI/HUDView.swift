@@ -42,8 +42,8 @@ struct HUDView: View {
             // colour palette picker
             PalettePicker()
 
-            // source pill
-            SourcePill(state: app.sourceState, label: app.sourceLabel)
+            // source picker
+            SourcePicker()
 
             // BPM
             if app.bpm > 30 {
@@ -72,39 +72,46 @@ struct HUDView: View {
     }
 }
 
-struct SourcePill: View {
-    let state: SourceState
-    let label: String
+/// The audio source, as a header picker.
+///
+/// This used to be a status display — you could see "system audio" but the only
+/// way to change it was the intro screen or the Visualizer menu, which meant
+/// quitting what you were doing to switch inputs. Same list, same click-away,
+/// same visual language as the mode and palette pickers; the dot still says
+/// whether anything is actually flowing.
+struct SourcePicker: View {
+    @EnvironmentObject var app: AppState
 
     var body: some View {
-        HStack(spacing: 10) {
-            Circle()
-                .fill(color)
-                .frame(width: 8, height: 8)
-                .shadow(color: color, radius: 6)
-            Text(label.uppercased())
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .tracking(1.6)
-                .foregroundStyle(color)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 100)
-                .fill(Color.black.opacity(0.45))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 100)
-                        .stroke(color.opacity(0.4), lineWidth: 1)
-                )
+        DropdownMenu(
+            id: .source,
+            entries: AudioSource.allCases.map { source in
+                DropdownEntry(value: source,
+                              title: source.menuTitle,
+                              subtitle: source.subtitle)
+            },
+            selection: Binding(get: { app.audio.savedSource },
+                               set: { app.selectSource($0, via: "pill") }),
+            tint: tint,
+            pillLeading: AnyView(
+                Circle()
+                    .fill(tint)
+                    .frame(width: 8, height: 8)
+                    .shadow(color: tint, radius: 6)
+            ),
+            pillTitle: app.activeSource?.title ?? app.sourceLabel.uppercased()
         )
-        .animation(.easeInOut(duration: 0.2), value: state)
+        .animation(.easeInOut(duration: 0.2), value: app.sourceState)
+        .help("Change what AudioVane listens to")
     }
 
-    var color: Color {
-        switch state {
-        case .live:  return Color(red: 1.0, green: 0.17, blue: 0.84)
-        case .demo:  return Color(red: 1.0, green: 0.71, blue: 0.28)
-        case .idle:  return Color(white: 0.55)
+    /// Live is magenta, demo is amber, idle is grey and anything that failed is
+    /// red — the same four meanings the pill always had.
+    private var tint: Color {
+        switch app.sourceState {
+        case .live: return Color(red: 1.0, green: 0.17, blue: 0.84)
+        case .demo: return Color(red: 1.0, green: 0.71, blue: 0.28)
+        case .idle: return Color(white: 0.55)
         case .error: return Color(red: 1.0, green: 0.35, blue: 0.35)
         }
     }

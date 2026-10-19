@@ -185,14 +185,26 @@ private struct AnalyticsToggle: View {
     }
 }
 
-/// "Proudly Shareware", linking to the AudioVane website. Sits just above
-/// the credits button.
+/// "Proudly Shareware" — the one place in the app that asks to be passed on,
+/// so it opens the same share sheet Finder and Mail use (AirDrop, Messages,
+/// Slack, a mail draft, whatever they actually use) rather than sending them to
+/// the website. The URL travels with the message, so a share that lands in a
+/// message is already a link.
 struct SharewareLink: View {
     private static let site = URL(string: "https://audiovane.minithlabs.com")!
+    private static let pitch = "I think you'll love AudioVane, it's free and proudly shareware"
     @State private var hovering = false
+    @State private var isSharing = false
 
     var body: some View {
-        Link(destination: Self.site) {
+        Button {
+            isSharing = true
+            // Fires when the sheet opens, not when something is actually
+            // shared — NSSharingServicePicker doesn't report the outcome, and
+            // claiming a share that never happened would be worse than a
+            // slightly generous count.
+            Task { await Analytics.shared.track("share_opened", ["source": "shareware_link"]) }
+        } label: {
             Text("Proudly Shareware")
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(1.2)
@@ -202,6 +214,58 @@ struct SharewareLink: View {
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
-        .help("audiovane.minithlabs.com")
+        .background(SharePickerAnchor(isPresented: $isSharing, items: Self.shareItems))
+        .help("Share AudioVane with someone")
+        .task {
+            // `--about --share` opens the share sheet without a click, for
+            // checking it still behaves on this version of macOS (Apple moves
+            // these menus around between releases).
+            if CommandLine.arguments.contains("--share") {
+                try? await Task.sleep(nanoseconds: 600_000_000)
+                isSharing = true
+            }
+        }
+    }
+
+    /// The message first, the link second: services that compose a post use the
+    /// first item for the body and still render the URL as a link, and the ones
+    /// that only understand a single string still get both.
+    static var shareItems: [Any] { [pitch, site] }
+}
+
+/// SwiftUI has no share sheet, so this is the AppKit one in a 1×1 view parked
+/// behind the label: `NSSharingServicePicker` positions its menu relative to a
+/// view, and this is the only way to say *which* one without asking the user to
+/// click it.
+private struct SharePickerAnchor: NSViewRepresentable {
+    @Binding var isPresented: Bool
+    let items: [Any]
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        // Not hidden: a zero-alpha view still gets a frame, and the picker needs
+        // one to point at.
+        view.alphaValue = 0
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        guard isPresented, !context.coordinator.isShowing else { return }
+        context.coordinator.isShowing = true
+        let picker = NSSharingServicePicker(items: items)
+        picker.show(relativeTo: nsView.bounds, of: nsView, preferredEdge: .maxY)
+        // Re-arming after the menu closes, so a second share works without a
+        // relaunch. Done on the next runloop turn: `isShowing` is only ever read
+        // from `updateNSView`.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            context.coordinator.isShowing = false
+            if self.isPresented { self.isPresented = false }
+        }
+    }
+
+    final class Coordinator {
+        var isShowing = false
     }
 }

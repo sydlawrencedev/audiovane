@@ -12,6 +12,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
+# The /api/notify token counts as well: it is the thing standing between a
+# stranger and our Discord channel now that the app reports to us.
+matches=$(git grep -InE 'NOTIFY_TOKEN\s*=\s*["'\'']?[A-Za-z0-9_-]{16,}' -- . 2>/dev/null || true)
+
 # Include .env / .dev.vars in the sweep even though they're ignored: the point
 # is to catch the moment one of them gets force-added.
 matches=$(git grep -InE 'discord(app)?\.com/api/webhooks/[0-9]+/[A-Za-z0-9_.-]{20,}' -- . 2>/dev/null || true)
@@ -20,13 +24,17 @@ for f in .env .dev.vars; do
   if grep -qE 'discord(app)?\.com/api/webhooks/' "$f"; then
     matches+="${f}: contains a Discord webhook URL (ignored file — do not commit it)"
   fi
+  if grep -qE '^\s*NOTIFY_TOKEN\s*=\s*\S{16,}' "$f"; then
+    matches+="${f}: contains the /api/notify token (ignored file — do not commit it)"
+  fi
 done
 
 if [ -n "$matches" ]; then
-  echo "Discord webhook URL found in the working tree:" >&2
+  echo "A secret that shouldn't be in git found in the working tree:" >&2
   echo "$matches" >&2
   echo "" >&2
-  echo "Treat it as leaked: recreate the webhook in Discord, then npx wrangler secret put DISCORD_WEBHOOK_URL" >&2
+  echo "Treat it as leaked: rotate the webhook in Discord (npx wrangler secret put" >&2
+echo "DISCORD_WEBHOOK_URL) and the notify token (NOTIFY_TOKEN), then rebuild." >&2
   exit 1
 fi
-echo "no Discord webhook URLs in tracked files"
+echo "no webhook URLs or notify tokens in tracked files"

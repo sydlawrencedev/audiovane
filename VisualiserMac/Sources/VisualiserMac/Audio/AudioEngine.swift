@@ -8,6 +8,9 @@ final class AudioEngine: ObservableObject {
     @Published private(set) var sourceLabel: String = "idle"
     @Published private(set) var sourceState: SourceState = .idle
     @Published private(set) var showIntro: Bool = true
+    /// What's actually running, nil while idle or errored. The picker shows
+    /// this as the current choice; the header pill shows its label.
+    @Published private(set) var activeSource: AudioSource? = nil
     @Published private(set) var bpm: Double = 0
     @Published private(set) var lastBeatStrength: Float = 0
     /// True while there's audible sound (RMS gate with hysteresis). Overlays
@@ -55,14 +58,73 @@ final class AudioEngine: ObservableObject {
         self.systemCapture = SystemAudioCapture(ringBuffer: rb)
         self.systemCapture.onError = { [weak self] msg in
             DispatchQueue.main.async {
-                self?.sourceLabel = "error"
-                self?.sourceState = .error
-                self?.showIntro = true
+                self?.fail(reason: "capture stopped", detail: msg)
             }
         }
     }
 
     // MARK: - Source switching
+
+    private static let sourceDefaultsKey = "audiovane.source"
+
+    /// The source to pick next time. System audio is the default because the
+    /// app exists to visualise it; the microphone is remembered too, but is
+    /// never started without being asked for (see `restoreLastSource`).
+    private(set) var savedSource: AudioSource {
+        get {
+            guard let raw = UserDefaults.standard.string(forKey: Self.sourceDefaultsKey),
+                  let source = AudioSource(rawValue: raw) else { return .system }
+            return source
+        }
+        set { UserDefaults.standard.set(newValue.rawValue, forKey: Self.sourceDefaultsKey) }
+    }
+
+    /// Whether a source has ever been chosen on this install. A fresh install
+    /// hasn't, so the intro still explains what's about to happen before macOS
+    /// asks for anything.
+    private var hasChosenSource: Bool {
+        UserDefaults.standard.string(forKey: Self.sourceDefaultsKey) != nil
+    }
+
+    /// Reconnects the source the user was last on, so granting system audio is
+    /// a one-time thing rather than a question on every launch.
+    ///
+    /// The microphone is the exception: it can pick up a room, so it always
+    /// takes a deliberate click, even when it was the last thing in use. If the
+    /// remembered source can't start — permission revoked, no mic attached —
+    /// the intro comes back with the error, which is the honest answer.
+    func restoreLastSource() async {
+        guard hasChosenSource else { return }
+        let source = savedSource
+        guard source.restoresOnLaunch else { return }
+        // Don't flash the intro on the way past it. Every start path below puts
+        // it back if the attempt fails.
+        showIntro = false
+        switch source {
+        case .system: await startSystemCapture()
+        case .demo: startDemo()
+        case .microphone: break
+        }
+    }
+
+    /// Every failure lands here, so the UI state, the crash breadcrumb and the
+    /// Discord report can never disagree about what happened. `detail` is the
+    /// human-readable reason; `report` is whether it's worth telling us — a
+    /// user who declines the permission prompt is a normal outcome, not a bug,
+    /// so those don't get reported.
+    private func fail(reason: String, detail: String, report: Bool = true) {
+        sourceLabel = reason
+        sourceState = .error
+        showIntro = true
+        activeSource = nil
+        CrashReporter.shared.log("audio failed: \(reason) — \(detail)")
+        guard report else { return }
+        ProblemReporter.report(.current(
+            kind: "audio_error",
+            title: "Audio source failed: \(reason)",
+            message: detail,
+            state: CrashReporter.shared.currentState()))
+    }
 
     func startSystemCapture() async {
         stopAll()
@@ -74,10 +136,19 @@ final class AudioEngine: ObservableObject {
             sourceLabel = "system audio"
             sourceState = .live
             showIntro = false
+            activeSource = .system
+            savedSource = .system
         } catch {
-            sourceLabel = "denied"
-            sourceState = .error
-            showIntro = true
+            // A denied permission is a choice, not a fault. It arrives as a
+            // CoreAudio status like any other failure and there's no public
+            // constant for it, so it's identified by the text the system
+            // produces — which is a heuristic, and deliberately one that only
+            // *suppresses* a report rather than inventing one.
+            let denied = error.localizedDescription.lowercased()
+                .contains("permi") || error.localizedDescription.lowercased().contains("denied")
+            fail(reason: denied ? "denied" : "system audio failed",
+                 detail: error.localizedDescription,
+                 report: !denied)
             NSLog("System audio failed: \(error.localizedDescription)")
         }
     }
@@ -90,8 +161,7 @@ final class AudioEngine: ObservableObject {
         let inputNode = micEngine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
         guard format.sampleRate > 0 else {
-            sourceLabel = "no mic input"
-            sourceState = .error
+            fail(reason: "no mic input", detail: "The input device reports a zero sample rate.")
             return
         }
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
@@ -118,9 +188,10 @@ final class AudioEngine: ObservableObject {
             sourceLabel = "microphone"
             sourceState = .live
             showIntro = false
+            activeSource = .microphone
+            savedSource = .microphone
         } catch {
-            sourceLabel = "mic failed"
-            sourceState = .error
+            fail(reason: "mic failed", detail: error.localizedDescription)
             inputNode.removeTap(onBus: 0)
             micTapInstalled = false
         }
@@ -134,9 +205,10 @@ final class AudioEngine: ObservableObject {
             sourceLabel = "demo tone"
             sourceState = .demo
             showIntro = false
+            activeSource = .demo
+            savedSource = .demo
         } catch {
-            sourceLabel = "demo failed"
-            sourceState = .error
+            fail(reason: "demo failed", detail: error.localizedDescription)
         }
     }
 
@@ -145,6 +217,7 @@ final class AudioEngine: ObservableObject {
         sourceLabel = "idle"
         sourceState = .idle
         showIntro = true
+        activeSource = nil
     }
 
     /// Inject synthetic audio into the ring buffer. Used by snapshot mode to

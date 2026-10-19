@@ -53,6 +53,7 @@ Everything here is copy-paste. Project **673583**.
 | Insight | Type | Query |
 |---|---|---|
 | Mode switch-overs | Bar chart | `count()` where event = `mode_changed`, breakdown by `properties.mode` |
+| Audio source mix | Bar chart | `count()` where event = `source_changed`, breakdown by `properties.source` — and by `properties.via` for how people switch (the header pill was added late; `intro` is falling share) |
 | Mode reached via | Bar chart | `count()` where event = `mode_changed`, breakdown by `properties.via` |
 | Palette mix | Pie | `count()` where event = `palette_changed`, breakdown by `properties.palette` |
 | Genre the detector picks | Bar chart | `count()` where event = `genre_detected`, breakdown by `properties.genre` |
@@ -74,6 +75,7 @@ Small and Stripe-backed, so keep it separate:
 |---|---|---|
 | Coffee clicks | Trends | `count()` where event = `checkout_started`, breakdown by `properties.source` |
 | Popover opens | Trends | `count()` where event = `support_view` |
+| Share sheet opened | Trends | `count()` where event = `share_opened` — the ceiling on word of mouth |
 | Conversion | Funnel | `support_view` → `checkout_started` |
 | Paying users | Trends | `count(distinct_id)` where event = `checkout_started` |
 
@@ -142,10 +144,12 @@ app_launched    {mode: tunnel, palette: NEON, autoscan: false,
                  surface: mac_app, app_version, build, arch, os_version,
                  locale, session_seconds}
 mode_changed    {mode: llama, from_mode: tunnel, via: system}
+source_changed  {source: system | microphone | demo, via: pill | intro | menu}
 palette_changed {palette: TOXIC, from_palette: NEON}
 genre_detected  {genre: Jazz, genre_id: 5, confidence: 0, auto: true}
 genre_locked    {genre: Rock, genre_id: 2, confidence: 0.8, auto: false}
 support_view    {}
+share_opened    {source: shareware_link}   — the share sheet opened, not that a share happened
 checkout_started{source: native_button | fallback_link | stripe_embed}
 app_crashed     {reason, kind, mode, drawing, genre, source, band_on_stage,
                  frames (top 12, oldest last), breadcrumbs (last 12)}

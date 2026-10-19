@@ -64,6 +64,9 @@ final class CrashReporter {
     private var installed = false
     private let startedAt = Date()
 
+    /// When this run began, for uptime in problem reports.
+    var sessionStartedAt: Date { startedAt }
+
     private init() {}
 
     // MARK: - Setup
@@ -119,6 +122,13 @@ final class CrashReporter {
         lock.unlock()
     }
 
+    /// The app-state half of the next report, for callers that build their own.
+    func currentState() -> [String: String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return state
+    }
+
     /// What's known right now, for the "Report a Problem…" path when nothing
     /// has crashed.
     func currentSnapshot() -> (state: [String: String], breadcrumbs: [String]) {
@@ -140,9 +150,29 @@ final class CrashReporter {
         // Skip this handler, the C trampoline, its thunk and _sigtramp — what's
         // left is the code that actually faulted, which is the frame anyone
         // will want to look at.
-        write(makeReport(kind: "signal", reason: avSignalName(sig), signal: sig,
-                         exceptionReason: nil, skipFrames: 4))
+        let report = makeReport(kind: "signal", reason: avSignalName(sig), signal: sig,
+                                exceptionReason: nil, skipFrames: 4)
+        write(report)
+        // Deliberately no network call here: this returns into a process that
+        // is about to re-raise and die, so the request would never be sent.
+        // Verified the hard way — a report started from this handler never left
+        // the machine. Crashes reach Discord and PostHog on the *next* launch,
+        // from the copy on disk.
         avReraise(sig)
+    }
+
+    /// Called from `AppState` when the app ends a run because the audio source
+    /// couldn't be started or died — the "it opened and there was nothing to
+    /// show" failure, which no stack trace will ever reveal.
+    func reportSourceFailure(label: String, detail: String) {
+        let report = makeReport(kind: "source_failure", reason: label, signal: nil,
+                                exceptionReason: nil, skipFrames: 4)
+        ProblemReporter.report(.current(
+            kind: "source_failure",
+            title: "Audio source failed: \(label)",
+            message: detail,
+            priority: "high",
+            state: report.state))
     }
 
     fileprivate func handleException(_ exception: NSException) {
@@ -345,6 +375,11 @@ final class CrashReporter {
                 NSLog("[crash] upload failed — %@ kept for next launch", report.id)
                 break
             }
+            // Discord gets the same report on the same trip. It can't come from
+            // the crash handler — see there — so this is the earliest it can
+            // arrive, and it doesn't wait on the analytics switch having been
+            // left on.
+            ProblemReporter.report(.from(report))
             uploaded.insert(report.id)
             try? FileManager.default.removeItem(at: url)
             NSLog("[crash] uploaded %@ (%@)", report.id, report.reason)

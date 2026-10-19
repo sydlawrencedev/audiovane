@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Identifies which header dropdown is open. Only one at a time.
 enum DropdownID: String {
-    case mode, genre, palette
+    case mode, genre, palette, source
 }
 
 /// One selectable row in a `DropdownMenu`.
@@ -38,6 +38,13 @@ struct DropdownMenu<Item: Hashable>: View {
     var pillWidth: CGFloat? = nil
     /// Extra content rendered inside the pill, after the title.
     var pillExtra: AnyView? = nil
+    /// Rendered inside the pill, before the title — the source pill's status
+    /// dot, for instance.
+    var pillLeading: AnyView? = nil
+    /// Overrides the title the pill shows, for pickers whose pill means
+    /// something different from their selection (the source pill names what's
+    /// flowing, not what's chosen).
+    var pillTitle: String? = nil
 
     @EnvironmentObject var app: AppState
 
@@ -50,7 +57,9 @@ struct DropdownMenu<Item: Hashable>: View {
             }
         } label: {
             HStack(spacing: 8) {
-                if let swatch = current?.swatch {
+                if let leading = pillLeading {
+                    leading
+                } else if let swatch = current?.swatch {
                     PaletteSwatch(shadow: swatch.shadow, highlight: swatch.highlight)
                 } else if let glyph = current?.glyph {
                     Text(glyph)
@@ -58,7 +67,7 @@ struct DropdownMenu<Item: Hashable>: View {
                         .foregroundStyle(tint)
                         .frame(width: 16, alignment: .leading)
                 }
-                Text(current?.title ?? "")
+                Text(pillTitle ?? current?.title ?? "")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .tracking(1.6)
                     .lineLimit(1)

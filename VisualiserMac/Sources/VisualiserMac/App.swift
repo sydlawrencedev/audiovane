@@ -42,9 +42,11 @@ struct VisualiserApp: App {
                         .keyboardShortcut(KeyEquivalent(mode.shortcutKey), modifiers: [])
                 }
                 Divider()
-                Button("Start System Audio") { Task { await app.audio.startSystemCapture() } }
-                Button("Use Microphone")     { app.audio.startMicrophone() }
-                Button("Use Demo Tone")      { app.audio.startDemo() }
+                // Routed through AppState so the menu, the header pill and the
+                // intro all change the source the same way — and report it once.
+                Button("Start System Audio") { app.selectSource(.system, via: "menu") }
+                Button("Use Microphone")     { app.selectSource(.microphone, via: "menu") }
+                Button("Use Demo Tone")      { app.selectSource(.demo, via: "menu") }
                 Divider()
                 Button("Open Hamster Folder…") {
                     SpriteAtlas.ensureFolder()
@@ -121,6 +123,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // `--report-test` sends one report to the site's /api/notify and
+        // prints whether the build is wired up to do it at all.
+        if CommandLine.arguments.contains("--report-test") {
+            ProblemReporter.report(.current(
+                kind: "test",
+                title: "Test report from a build",
+                message: "Sent by --report-test. If this is in Discord, reporting works.",
+                priority: "default",
+                state: CrashReporter.shared.currentState()))
+            print("[report] endpoint: \(ProblemReporter.isConfigured ? "configured" : "not configured (no ReportToken in this build)")")
+            // Give the request a moment to land before the process goes away.
+            Thread.sleep(forTimeInterval: 2.0)
+            exit(0)
+        }
+
         // `--login-on` / `--login-off`, `--watch-on` / `--watch-off` and
         // `--startup-status` exist for support and for testing: they do exactly
         // what the two toggles in the credits popover do, without needing a
@@ -175,6 +192,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("band", .band, nil),
             ("mode-open", .tunnel, .mode),
             ("genre-open", .band, .genre),
+            ("source-open", .tunnel, .source),
             ("palette-open", .tunnel, .palette),
         ]
         for (name, mode, open) in shots {

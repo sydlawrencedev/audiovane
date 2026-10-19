@@ -174,6 +174,14 @@ system's can't: the mode and genre on screen, the band lineup, the audio source,
 the last dozen actions, and a `backtrace()` of the faulting thread. The newest
 20 reports are kept.
 
+**Also straight to Discord.** If the build has a `ReportToken` (see the root
+README), the report is posted to the site's `/api/notify` in the moment it
+happens rather than waiting for the next launch — and it doesn't wait for the
+analytics switch, because a crash is the report you can least afford to lose.
+Audio failures (`audio_error`) and a source that couldn't be started
+(`source_failure`) go the same way; a declined permission prompt doesn't,
+because that's a choice rather than a fault.
+
 **On next launch.** Each report is sent to PostHog as an `app_crashed` event —
 mode, genre, reason, top 12 frames, last 12 breadcrumbs — and then deleted from
 disk. Three uploads per launch, so a machine crashing in a loop doesn't spend a
@@ -227,6 +235,7 @@ Click away from an open list to dismiss it.
 - `--autoscan` — start in auto scan
 - `--scan-seconds N` — shorten the auto-scan dwell time (default 20s)
 - `--about` — open the credits popover on launch (checks the Stripe embed)
+- `--share` — with `--about`, opens the share sheet without a click
 - `--snapshot` — render one frame of every mode to PNG and exit
 - `--snapshot --genres` — render one frame of every genre and exit
 - `--ui-shot` — render the SwiftUI chrome to PNG (the OpenGL layer won't appear)

@@ -77,6 +77,28 @@ npx wrangler deploy
 curl https://audiovane.minithlabs.com/api/health   # {"discord":"configured"}
 ```
 
+**Errors from the app.** The app can't hold the webhook (it's in the app
+bundle, where anyone can read it), so it posts to `POST /api/notify` on this
+site and the Worker forwards it. Set the shared token as a second secret, then
+bake the same value into the app:
+
+```bash
+npx wrangler secret put NOTIFY_TOKEN          # any random string
+REPORT_TOKEN=<the same string> ./build-app.sh release
+```
+
+Three things arrive: `audio_error` (the audio source failed or was cut off —
+the failure a stack trace will never show you), `source_failure` and
+`app_crash` (with the top frames). A denied permission prompt is a choice, not
+a fault, so it isn't reported.
+
+Unlike usage analytics, this is **not** behind the in-app toggle: a crash is
+the report you can least afford to lose, and the user asked for that source
+explicitly. What's sent is app state — mode, genre, error text — never audio or
+track names. Errors get their own cooldown (one a minute, 60/hour) so a broken
+install can't flood the channel, and `DISCORD_ERRORS_ENABLED = "false"` turns
+them off without touching download alerts.
+
 Locally, `.dev.vars` (gitignored) points the webhook at a stub:
 
 ```bash
@@ -87,8 +109,8 @@ npm test                                        # 13 tests, no network
 
 Notes:
 
-- **The webhook URL is a credential.** `scripts/check-no-webhook-leak.sh` fails
-  if one appears in the tree — delphina had the same problem and it ended up
+- **The webhook URL and the notify token are both credentials.**
+  `scripts/check-no-webhook-leak.sh` fails if either appears in the tree — delphina had the same problem and it ended up
   baked into dozens of release tags. If it ever leaks, recreate the webhook in
   Discord and put the new one back with `wrangler secret put`.
 - Bots and link previewers are filtered out, a double-clicked button only posts

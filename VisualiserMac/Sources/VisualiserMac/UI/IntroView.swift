@@ -36,19 +36,19 @@ struct IntroView: View {
                         label: "Share System Audio",
                         sub: "Spotify, YouTube, Logic, anything playing on your Mac.",
                         primary: true,
-                        action: { Task { await app.audio.startSystemCapture() } }
+                        action: { app.selectSource(.system, via: "intro") }
                     )
                     SourceButton(
                         label: "Use Microphone",
                         sub: "Plays whatever the mic hears. Good for ambient testing.",
                         primary: false,
-                        action: { app.audio.startMicrophone() }
+                        action: { app.selectSource(.microphone, via: "intro") }
                     )
                     SourceButton(
                         label: "Use Demo Tone",
                         sub: "Generated kick + pad sweep. No permissions needed.",
                         primary: false,
-                        action: { app.audio.startDemo() }
+                        action: { app.selectSource(.demo, via: "intro") }
                     )
                 }
                 .frame(maxWidth: 580)
