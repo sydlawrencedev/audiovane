@@ -418,12 +418,14 @@ final class AppState: ObservableObject {
 
     /// The name to show for a mode. A custom mode's name lives with the
     /// mode, not with the identifier, so it has to be looked up.
+    ///
+    /// Shown in capitals, like every other mode name in the app.
     func displayName(for id: ModeID) -> String {
         switch id {
         case .builtin(let v):
             return v.displayName
         case .custom(let slug):
-            return customModes.first(where: { $0.id == slug })?.name ?? "Custom Mode"
+            return (customModes.first(where: { $0.id == slug })?.name ?? "Custom Mode").uppercased()
         }
     }
 
@@ -511,9 +513,9 @@ final class AppState: ObservableObject {
     /// the order a fresh install gets; once the user rearranges it, their
     /// arrangement is what counts.
     static let defaultModeOrder: [VisualizerMode] = [
-        .ribbons, .silk, .flux, .spectrum, .tunnel, .liquid, .kaleidoscope,
-        .waveform, .machine, .warp, .particles, .nyan, .hamster, .badger,
-        .llama, .danceFloor, .band,
+        .ribbons, .vortex, .silk, .flux, .spectrum, .tunnel, .liquid,
+        .kaleidoscope, .waveform, .machine, .warp, .particles, .nyan,
+        .hamster, .badger, .llama, .danceFloor, .band,
     ]
 
     /// Every mode, in the order the user arranged them.
@@ -522,11 +524,11 @@ final class AppState: ObservableObject {
         let builtins = VisualizerMode.allCases
             .filter { $0 != .autoScan }
             .map { mode -> ModeEntry in
-                var entry = ModeEntry(builtin: mode)
+                var entry = ModeEntry(builtin: mode, shortcut: nil)
                 entry.isEnabled = !hidden.contains(mode.rawValue)
                 return entry
             }
-        let customs = customModes.map { ModeEntry(custom: $0) }
+        let customs = customModes.map { ModeEntry(custom: $0, shortcut: nil) }
 
         var entries: [ModeEntry] = []
         var used = Set<ModeID>()
@@ -543,7 +545,42 @@ final class AppState: ObservableObject {
             entries.append(entry)
             used.insert(entry.id)
         }
+
+        // The shortcuts follow the list, so the keys always match what's on
+        // screen: the first thing in the list is `1`, the second is `2`, and
+        // so on. They're handed out to the modes that are actually switched
+        // on, because those are the ones in the list.
+        let visible = entries.filter { $0.isEnabled }
+        var keys: [ModeID: Character] = [:]
+        for (index, entry) in visible.enumerated() where index < Self.shortcutKeys.count {
+            keys[entry.id] = Self.shortcutKeys[index]
+        }
+        for index in entries.indices {
+            let id = entries[index].id
+            let key = keys[id]
+            entries[index].shortcut = key
+            // The mark in the list is the key, so it has to be set here
+            // too — it was made when the entry was built, before the order
+            // was known.
+            entries[index].glyph = key.map(String.init) ?? ""
+        }
         return entries
+    }
+
+    /// The keys the mode shortcuts are handed out in.
+    ///
+    /// The first ten are the number row. Then the punctuation nothing else
+    /// in the app uses. Then the shifted punctuation, which needs a shift
+    /// held — a last resort for a long list, so that adding modes doesn't
+    /// quietly take shortcuts away. A mode past the end of this list simply
+    /// has no shortcut, and is still picked from the list.
+    static let shortcutKeys: [Character] = Array("1234567890")
+        + ["-", "[", "]", ";", "'", "\\", ",", ".", "/", "`"]
+        + Array("!@#$%^&*()")
+
+    /// The keyboard shortcut for a mode, or nil if it has none.
+    func shortcutKey(for id: ModeID) -> Character? {
+        enabledModes.first { $0.id == id }?.shortcut
     }
 
     /// The modes that show in the list and take part in Auto Scan.
@@ -554,6 +591,18 @@ final class AppState: ObservableObject {
     /// The Auto Scan rotation, as the renderer wants it.
     var scanCycle: [ModeID] {
         enabledModes.map { $0.id }
+    }
+
+    /// True when the list has been rearranged from the order it shipped in.
+    var hasCustomOrder: Bool {
+        !storedModeOrder.isEmpty && storedModeOrder != Self.defaultModeOrder.map { ModeID.builtin($0) }
+    }
+
+    /// Puts the list back the way it shipped, forgetting the arrangement
+    /// the user made.
+    func resetModeOrder() {
+        UserDefaults.standard.removeObject(forKey: Self.modeOrderKey)
+        pushScanCycle()
     }
 
     /// Moves a mode to a new place in the list.
@@ -619,6 +668,13 @@ final class AppState: ObservableObject {
             }
         }
         customModeProblems = problems
+        // The app was last in one of the user's modes, and that mode has
+        // since been deleted. There is nothing to draw, so start in auto-scan
+        // rather than on a blank screen.
+        if case .custom(let id) = activeMode, customMode(id: id) == nil {
+            NSLog("[CUSTOM] was in \(id), which is gone — starting in auto-scan")
+            setMode(.builtin(.autoScan))
+        }
         pushScanCycle()
     }
 
@@ -995,6 +1051,8 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     // glyphs, the keyboard shortcuts, and Auto Scan's rotation.
     /// Luminous ribbons twisting through floating glass shapes.
     case ribbons
+    /// A cyber tunnel of grid lines rushing past, twisting with the bass.
+    case vortex
     /// Flying forward through satin ribbons and tumbling glass cubes.
     case silk
     /// Abstract sheets of pink and gold light swirling into a vanishing point.
@@ -1024,6 +1082,7 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     var displayName: String {
         switch self {
         case .ribbons: return "RIBBONS"
+        case .vortex: return "VORTEX"
         case .silk: return "SILK FLIGHT"
         case .flux: return "FLUX"
         case .spectrum: return "SPECTRUM"
@@ -1044,14 +1103,6 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }
-    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ; ' \ ,
-    /// then = for Auto Scan. Adding a mode past 17 needs another key here.
-    var shortcutKey: Character {
-        if self == .autoScan { return "=" }
-        if index < 10 { return Character(String((index + 1) % 10)) }
-        let extra: [Character] = ["-", "[", "]", ";", "'", "\\", ","]
-        return extra[min(index - 10, extra.count - 1)]
-    }
 }
 
 enum SingerVoice: String, CaseIterable, Identifiable {

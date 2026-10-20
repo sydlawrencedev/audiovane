@@ -100,6 +100,7 @@ extension VisualizerMode {
     var symbolName: String {
         switch self {
         case .ribbons: return "scribble.variable"
+        case .vortex: return "tornado"
         case .silk: return "wind"
         case .flux: return "rays"
         case .spectrum: return "chart.bar"

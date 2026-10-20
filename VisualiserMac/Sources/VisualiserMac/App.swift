@@ -39,18 +39,17 @@ struct VisualiserApp: App {
                 Button("Reveal Crash Reports…") { CrashReporter.shared.revealReports() }
             }
             CommandMenu("Visualizer") {
-                // The shipped modes, each with its keyboard shortcut. A user's
-                // own modes are listed after them without a shortcut: a
-                // shortcut has to be a single fixed key, and there is no room
-                // left for a mode nobody has written yet.
-                ForEach(VisualizerMode.allCases) { mode in
-                    Button(mode.displayName.capitalized) { app.activeMode = .builtin(mode) }
-                        .keyboardShortcut(KeyEquivalent(mode.shortcutKey), modifiers: [])
-                }
-                if !app.customModes.isEmpty {
-                    Divider()
-                    ForEach(app.customModes) { custom in
-                        Button(custom.name) { app.activeMode = .custom(custom.id) }
+                // The modes in the order the user arranged them, each with
+                // the key that picks it. The keys follow the list, so moving
+                // a mode moves its shortcut with it.
+                ForEach(app.enabledModes) { entry in
+                    let button = Button(entry.title) { app.activeMode = entry.id }
+                    // A mode past the end of the key list has no shortcut at
+                    // all, rather than one that fights with something else.
+                    if let shortcut = entry.shortcut {
+                        button.keyboardShortcut(KeyEquivalent(shortcut), modifiers: [])
+                    } else {
+                        button
                     }
                 }
                 Divider()
@@ -343,15 +342,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     url: "https://minithlabs.com",
                                     shader: CustomModeGuide.starterTemplate,
                                     enabled: true, modified: Date())
-        for (name, view) in [("all-modes", AnyView(AllModesView(scrollable: false, height: 1120))),
-                             ("all-modes-drop", AnyView(AllModesView(scrollable: false, height: 1120, dropTargetIndex: 4))),
+        for (name, view) in [("all-modes", AnyView(AllModesView(scrollable: false, height: 1400))),
+                             ("all-modes-drop", AnyView(AllModesView(scrollable: false, height: 1400, dropTargetIndex: 4))),
                              ("custom-mode", AnyView(CustomModeView())),
                              ("custom-mode-write", AnyView(CustomModeView(initialStep: .write))),
                              ("custom-mode-ai", AnyView(CustomModeView(initialStep: .ai, scrollable: false))),
                              ("custom-mode-edit", AnyView(CustomModeView(editing: sampleMode)))] {
             let renderer = ImageRenderer(content: view
                 .environmentObject(app)
-                .frame(width: 720, height: name.hasPrefix("all-modes") ? 1120 : 560)
+                .frame(width: 720, height: name.hasPrefix("all-modes") ? 1400 : 560)
                 .background(Color(red: 0.05, green: 0.02, blue: 0.09)))
             renderer.scale = 1
             guard let image = renderer.nsImage,

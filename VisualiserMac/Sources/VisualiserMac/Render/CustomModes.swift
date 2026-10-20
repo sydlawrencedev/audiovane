@@ -146,9 +146,11 @@ struct ModeEntry: Identifiable, Hashable {
         }
         return URL(string: "https://" + url)
     }
-    /// The mark in the list: a keyboard shortcut for the shipped modes, a
-    /// star for the user's own.
+    /// The mark in the list: the keyboard shortcut that picks this mode.
     var glyph: String
+    /// The key that picks this mode, if it has one. It follows the mode's
+    /// place in the list, so rearranging the list rearranges the keys.
+    var shortcut: Character?
     /// A short line under the title.
     var subtitle: String?
     var isCustom: Bool
@@ -156,26 +158,27 @@ struct ModeEntry: Identifiable, Hashable {
     /// True for the "make your own" card at the end of the list.
     var isNewModeCard: Bool = false
 
-    init(builtin mode: VisualizerMode) {
+    init(builtin mode: VisualizerMode, shortcut: Character?) {
         self.id = .builtin(mode)
-        self.title = mode.displayName
+        // Names are shown in capitals throughout, but kept as they were
+        // written, so editing a mode doesn't shout at whoever typed it.
+        self.title = mode.displayName.uppercased()
         self.author = ModeMetadata.author
         self.url = ModeMetadata.url
-        // The number here is the keyboard shortcut, not a position: the user
-        // can reorder the list, but the keys stay with the modes they were
-        // given, so a number that moved with the list would be a lie.
-        self.glyph = mode.shortcutKey == "=" ? "=" : String(mode.shortcutKey)
+        self.shortcut = shortcut
+        self.glyph = shortcut.map(String.init) ?? ""
         self.subtitle = nil
         self.isCustom = false
         self.isEnabled = true
     }
 
-    init(custom mode: CustomMode) {
+    init(custom mode: CustomMode, shortcut: Character?) {
         self.id = .custom(mode.id)
-        self.title = mode.name
+        self.title = mode.name.uppercased()
         self.author = mode.author
         self.url = mode.url
-        self.glyph = "★"
+        self.shortcut = shortcut
+        self.glyph = shortcut.map(String.init) ?? ""
         self.subtitle = mode.subtitle
         self.isCustom = true
         self.isEnabled = mode.enabled
@@ -188,9 +191,10 @@ struct ModeEntry: Identifiable, Hashable {
     /// special case for it.
     init(newModeCard: Bool) {
         self.id = .builtin(.tunnel)
-        self.title = "Make your own"
+        self.title = "MAKE YOUR OWN"
         self.author = ""
         self.url = nil
+        self.shortcut = nil
         self.glyph = "+"
         self.subtitle = nil
         self.isCustom = false

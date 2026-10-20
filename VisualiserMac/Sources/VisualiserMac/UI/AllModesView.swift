@@ -97,6 +97,22 @@ struct AllModesView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
+            // Put the list back the way it shipped. Only worth offering
+            // when it's actually been rearranged.
+            if app.hasCustomOrder {
+                Button("Reset Order") { app.resetModeOrder() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color(white: 0.75))
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 5)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .pointingHand()
+                    .help("Put the modes back in their original order")
+            }
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .medium))
