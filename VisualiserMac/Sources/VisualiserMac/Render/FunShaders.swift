@@ -2062,16 +2062,19 @@ extension FunShaders {
             float tn2, tf2; vec3 nn2, nf2;
             gemHit(pIn + d1 * 0.002, d1, faces, h, tn2, tf2, nn2, nf2);
             vec3 pOut = pIn + d1 * (0.002 + tf2);
-            vec3 d2 = refract(d1, -nf2, 1.15);
             vec3 wOut = fromGem(pOut, ang) + c;
-            vec3 behind;
-            if (dot(d2, d2) < 0.5) {
-                // total internal reflection: the face lights up with the room instead
-                behind = skyColour(fromGem(reflect(d1, -nf2), ang)) * 1.3;
-            } else {
-                vec3 wd2 = fromGem(d2, ang);
-                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 0.0, 30.0, false) * 0.7;
-            }
+            // Leaving the glass. Its faces come in parallel pairs, so the light
+            // leaves in the direction it came in, shifted sideways by its path
+            // through the glass. That path is smooth across each face, so the
+            // view through a face is too. (Bending it out by whichever far face
+            // it happened to reach split each face into hard-edged patches, dark
+            // where that face reflected the light back in.)
+            vec3 behind = skyColour(rd) + ribbonsAlong(wOut, rd, 0.002, 0.0, 30.0, false) * 0.7;
+            // Towards the rim more of the light reflects back inside, so the glass
+            // shades down to the dark room there: one smooth roll-off over the
+            // rounded shape, rather than face by face.
+            float rim = 1.0 - abs(dot(ord, normalize(pIn)));
+            behind = mix(behind, skyColour(fromGem(reflect(d1, -nf2), ang)) * 1.3, smoothstep(0.2, 0.75, rim) * 0.9);
             col += behind * vec3(0.8, 1.0, 1.05) * (1.0 - fres) * (1.0 + 0.5 * facet);
             vec2 edgeBack = gemEdge(pOut, faces, h, edgeW * 1.2);
             // A ribbon passing through the glass lights it from inside.
