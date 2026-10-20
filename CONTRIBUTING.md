@@ -49,4 +49,4 @@ Modes that need more than a shader (3D geometry, per-frame state) live in their 
 
 ## Releases
 
-Maintainers release with `VisualiserMac/release.sh` after bumping `VisualiserMac/VERSION`; see the [README](README.md#releasing).
+Maintainers release with `VisualiserMac/release.sh`; the version comes from the build's date, so there's no number to bump. See the [README](README.md#releasing).

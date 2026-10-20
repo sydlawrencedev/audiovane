@@ -75,6 +75,13 @@ final class UpdateChecker {
     }
 
     static func isNewer(_ a: String, than b: String) -> Bool {
+        // Versions are dates, and the patch packs the day and the build
+        // number together — so they're compared as a day and a build rather
+        // than as one number. See AppVersion.
+        if let va = AppVersion(a), let vb = AppVersion(b) {
+            return va.isNewer(than: vb)
+        }
+        // Anything unparseable falls back to a plain numeric comparison.
         let pa = a.split(separator: ".").map { Int($0) ?? 0 }
         let pb = b.split(separator: ".").map { Int($0) ?? 0 }
         for i in 0..<max(pa.count, pb.count) {

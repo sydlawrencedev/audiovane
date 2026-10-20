@@ -39,9 +39,35 @@ struct VisualiserApp: App {
                 Button("Reveal Crash Reports…") { CrashReporter.shared.revealReports() }
             }
             CommandMenu("Visualizer") {
+                // The shipped modes, each with its keyboard shortcut. A user's
+                // own modes are listed after them without a shortcut: a
+                // shortcut has to be a single fixed key, and there is no room
+                // left for a mode nobody has written yet.
                 ForEach(VisualizerMode.allCases) { mode in
-                    Button(mode.displayName.capitalized) { app.activeMode = mode }
+                    Button(mode.displayName.capitalized) { app.activeMode = .builtin(mode) }
                         .keyboardShortcut(KeyEquivalent(mode.shortcutKey), modifiers: [])
+                }
+                if !app.customModes.isEmpty {
+                    Divider()
+                    ForEach(app.customModes) { custom in
+                        Button(custom.name) { app.activeMode = .custom(custom.id) }
+                    }
+                }
+                Divider()
+                // How long each mode holds in Auto Scan, counted in bars of
+                // the song so the change lands on a beat.
+                Menu("Auto Scan Length") {
+                    ForEach(AppState.scanBarChoices, id: \.self) { bars in
+                        Button {
+                            app.scanBars = bars
+                        } label: {
+                            if app.scanBars == bars {
+                                Label("\(bars) \(bars == 1 ? "bar" : "bars")", systemImage: "checkmark")
+                            } else {
+                                Text("\(bars) \(bars == 1 ? "bar" : "bars")")
+                            }
+                        }
+                    }
                 }
                 Divider()
                 // Routed through AppState so the menu, the header pill and the
@@ -54,6 +80,7 @@ struct VisualiserApp: App {
                     SpriteAtlas.ensureFolder()
                     NSWorkspace.shared.open(SpriteAtlas.folder)
                 }
+                Divider()
                 Toggle("Float Above All Windows", isOn: Binding(
                     get: { app.alwaysOnTop },
                     set: { app.setAlwaysOnTop($0) }))
@@ -121,6 +148,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--about") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 AppState.shared?.openAbout()
+            }
+        }
+
+        // `--all-modes` and `--custom-mode` open the two panels straight
+        // away, so they can be looked at without going through the list.
+        if CommandLine.arguments.contains("--all-modes") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                AppState.shared?.showAllModesSheet = true
+            }
+        }
+        if CommandLine.arguments.contains("--custom-mode") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                AppState.shared?.customModeSheet = .new
             }
         }
 
@@ -248,13 +288,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // The intro overlay covers the chrome we're trying to look at, and
         // the genre pill only appears in band mode — so shoot both.
-        let shots: [(String, VisualizerMode, DropdownID?)] = [
-            ("modes", .tunnel, nil),
-            ("band", .band, nil),
-            ("mode-open", .tunnel, .mode),
-            ("genre-open", .band, .genre),
-            ("source-open", .tunnel, .source),
-            ("palette-open", .tunnel, .palette),
+        let shots: [(String, ModeID, DropdownID?)] = [
+            ("modes", .builtin(.tunnel), nil),
+            ("band", .builtin(.band), nil),
+            ("mode-open", .builtin(.tunnel), .mode),
+            ("genre-open", .builtin(.band), .genre),
+            ("source-open", .builtin(.tunnel), .source),
+            ("dance-floor", .builtin(.danceFloor), nil),
+            ("palette-open", .builtin(.tunnel), .palette),
         ]
         // Window widths that trigger each layout tier: wide shows everything,
         // compact drops the footer numbers, narrow drops the pill labels, tiny
@@ -291,6 +332,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("[UI] wrote \(path)")
             }
         }
+
+        // The two panels are sheets, and a sheet is presented by the window
+        // system — `ImageRenderer` can't see one. They're rendered directly
+        // instead, so the panels can be reviewed without a screen recorder.
+        guard let app = AppState.shared else { exit(1) }
+        // A stand-in for a mode the user already has, so the editing view
+        // can be reviewed without one on disk.
+        let sampleMode = CustomMode(id: "shot", name: "My Mode", author: "Minith Labs",
+                                    url: "https://minithlabs.com",
+                                    shader: CustomModeGuide.starterTemplate,
+                                    enabled: true, modified: Date())
+        for (name, view) in [("all-modes", AnyView(AllModesView(scrollable: false, height: 1120))),
+                             ("all-modes-drop", AnyView(AllModesView(scrollable: false, height: 1120, dropTargetIndex: 4))),
+                             ("custom-mode", AnyView(CustomModeView())),
+                             ("custom-mode-write", AnyView(CustomModeView(initialStep: .write))),
+                             ("custom-mode-ai", AnyView(CustomModeView(initialStep: .ai, scrollable: false))),
+                             ("custom-mode-edit", AnyView(CustomModeView(editing: sampleMode)))] {
+            let renderer = ImageRenderer(content: view
+                .environmentObject(app)
+                .frame(width: 720, height: name.hasPrefix("all-modes") ? 1120 : 560)
+                .background(Color(red: 0.05, green: 0.02, blue: 0.09)))
+            renderer.scale = 1
+            guard let image = renderer.nsImage,
+                  let tiff = image.tiffRepresentation,
+                  let rep = NSBitmapImageRep(data: tiff),
+                  let png = rep.representation(using: .png, properties: [:]) else {
+                NSLog("[UI] could not encode \(name)"); continue
+            }
+            let path = "\(outDir)/ui-\(name).png"
+            try? png.write(to: URL(fileURLWithPath: path))
+            NSLog("[UI] wrote \(path)")
+        }
         exit(0)
     }
 
@@ -316,13 +389,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[SNAP] ready")
             app.audio.injectSyntheticTone(seconds: 2.0)
             if genresOnly {
-                app.renderer.setMode(.band)
+                app.renderer.setMode(.builtin(.band))
                 for g in Genre.allCases {
                     app.renderer.genre = g
                     // let a couple of frames go by so the shader settles
                     Thread.sleep(forTimeInterval: 0.3)
                     let path = "\(outDir)/band_\(g.rawValue)_\(g.name.lowercased()).png"
-                    app.renderer.renderToPNG(width: 1280, height: 720, mode: .band,
+                    app.renderer.renderToPNG(width: 1280, height: 720, mode: .builtin(.band),
                                              frames: 60, path: path)
                     NSLog("[SNAP] genre=\(g.name) saved=\(FileManager.default.fileExists(atPath: path))")
                 }
@@ -330,17 +403,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 exit(0)
             }
             for mode in VisualizerMode.allCases {
-                app.renderer.renderToPNG(width: 1280, height: 720, mode: mode,
+                app.renderer.renderToPNG(width: 1280, height: 720, mode: .builtin(mode),
                                          frames: 60,
                                          path: "\(outDir)/viz-\(mode.rawValue).png")
             }
+            // The user's own modes, if they have any, so a snapshot shows
+            // everything the app can draw.
+            for custom in app.customModes {
+                app.renderer.renderToPNG(width: 1280, height: 720, mode: .custom(custom.id),
+                                         frames: 60,
+                                         path: "\(outDir)/viz-custom-\(custom.id).png")
+            }
             app.renderer.singerVoice = .duet
-            app.renderer.renderToPNG(width: 1280, height: 720, mode: .band, frames: 60,
+            app.renderer.renderToPNG(width: 1280, height: 720, mode: .builtin(.band), frames: 60,
                                      path: "\(outDir)/viz-band-duet.png")
             app.renderer.singerVoice = .auto
             for genre in Genre.allCases {
                 app.renderer.genre = genre
-                app.renderer.renderToPNG(width: 1280, height: 720, mode: .band, frames: 60,
+                app.renderer.renderToPNG(width: 1280, height: 720, mode: .builtin(.band), frames: 60,
                                          path: "\(outDir)/viz-band-\(genre.name.lowercased()).png")
             }
             NSLog("[SNAP] saved")

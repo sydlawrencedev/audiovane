@@ -2,28 +2,28 @@
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
-Sixteen modes, plus Auto Scan:
+The modes, plus Auto Scan:
 
-1. **Tunnel**: fly through concentric rings of spectrum-reactive bars.
-2. **Constellation**: 4,000 bass-pumping particles around you.
-3. **Liquid**: Milkdrop-inspired psychedelic fluid that flows to the music.
-4. **Badger Badger**: rows of badgers dancing to the beat; big drops bring out the mushroom (or, every third, the snake).
-5. **Whooping Llama**: dancing llamas in blankets, whooping on every beat.
-6. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/AUDIOVANE/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
-7. **Nyan Cat**: pixel cat on a rainbow trail through the stars.
-8. **Spectrum**: classic segmented LED spectrum bars.
-9. **Kaleidoscope**: mirrored fractal folds that punch in on the bass.
+1. **Ribbons**: glowing hot pink and cyan ribbons of silk strands weaving through clear, cyan-edged glass polyhedra in a dark navy room above a glossy floor, the whole scene sliding right to left with depth parallax. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble. It keeps a slow, dim drift in silence.
+2. **Silk Flight**: flying forward past a wide, glossy hot pink satin ribbon in a few broad folds that sweeps in from the edges and twists away into a teal dust cloud on near-black space, turning violet in the distance, with chunky cyan glass blocks tumbling past. The camera races when the music is loud, the bass widens the ribbon, every beat turns the glass and throws a burst of glitter, and the treble makes the specks and glass edges sparkle. It goes dim and still in silence.
+3. **Flux**: an abstract light sweep. Huge fanned sheets of fine light strands, hot pink and molten gold, sweep in from the edges of the frame and swirl into a drifting vanishing point, like long-exposure light trails seen while flying. Gold flakes, soft bokeh and a few cyan glass shards streak out past the camera. Louder music flies faster, with longer streaks and more light, the beat is a soft swell, and the treble sparkles the glitter. Every motion glides. In silence it goes dim and still.
+4. **Spectrum**: classic segmented LED spectrum bars.
+5. **Tunnel**: fly through concentric rings of spectrum-reactive bars.
+6. **Liquid**: Milkdrop-inspired psychedelic fluid that flows to the music.
+7. **Kaleidoscope**: mirrored fractal folds that punch in on the bass.
+8. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
+9. **Machine**: a port of the MIDEM Music Hack Day piece by [@mrdoob and @plamere](https://github.com/mrdoob/midemhackday), rebuilt from its source: twelve stations of lathe-turned cannons and drums (one per pitch class) and a ring of 40 pads. Each note onset fires balls that arc onto the drum and pad for that pitch and loudness; struck drums recoil and flash white. Smooth meshes, 4x MSAA with a depth buffer, and the original's camera path flown over the length of the track (Music/Spotify report it).
 10. **Warp**: hyperspace star streaks.
-11. **The Band**: colour pixel-art musicians in ten genre sets (classical hall, DJ booth, rock theatre, pop studio, hip-hop street, jazz club, blues bar, country porch, R&B velvet, ambient), each with its own instruments and outfits. Apple's on-device sound classifier (SoundAnalysis), backed up by beat and bass detection, decides who walks on; the singer's voice (female, male or duet) comes from the vocal pitch. Playing follows the beat clock, with spectrum onsets as accents.
-12. **Machine**: a port of the MIDEM Music Hack Day piece by [@mrdoob and @plamere](https://github.com/mrdoob/midemhackday), rebuilt from its source: twelve stations of lathe-turned cannons and drums (one per pitch class) and a ring of 40 pads. Each note onset fires balls that arc onto the drum and pad for that pitch and loudness; struck drums recoil and flash white. Smooth meshes, 4x MSAA with a depth buffer, and the original's camera path flown over the length of the track (Music/Spotify report it).
-13. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
-14. **Ribbons**: glowing hot pink and cyan ribbons of silk strands weaving through clear, cyan-edged glass polyhedra in a dark navy room above a glossy floor, the whole scene sliding right to left with depth parallax. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble. It keeps a slow, dim drift in silence.
-15. **Silk Flight**: flying forward past a wide, glossy hot pink satin ribbon in a few broad folds that sweeps in from the edges and twists away into a teal dust cloud on near-black space, turning violet in the distance, with chunky cyan glass blocks tumbling past. The camera races when the music is loud, the bass widens the ribbon, every beat turns the glass and throws a burst of glitter, and the treble makes the specks and glass edges sparkle. It goes dim and still in silence.
-16. **Flux**: an abstract light sweep. Huge fanned sheets of fine light strands, hot pink and molten gold, sweep in from the edges of the frame and swirl into a drifting vanishing point, like long-exposure light trails seen while flying. Gold flakes, soft bokeh and a few cyan glass shards streak out past the camera. Louder music flies faster, with longer streaks and more light, the beat is a soft swell, and the treble sparkles the glitter. Every motion glides. In silence it goes dim and still.
-
+11. **Constellation**: 4,000 bass-pumping particles around you.
+12. **Nyan Cat**: pixel cat on a rainbow trail through the stars.
+13. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/AUDIOVANE/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
+14. **Badger Badger**: rows of badgers dancing to the beat; big drops bring out the mushroom (or, every third, the snake).
+15. **Whooping Llama**: dancing llamas in blankets, whooping on every beat.
+16. **Dance Floor**: a Rubik's-cube floor in perspective. The camera pans, rolls and travels up and down the floor, all on the beat clock, and the tiles keep re-solving themselves. A fragment shader, themed by the active palette rather than being graded after the fact.
+17. **The Band**: colour pixel-art musicians in ten genre sets (classical hall, DJ booth, rock theatre, pop studio, hip-hop street, jazz club, blues bar, country porch, R&B velvet, ambient), each with its own instruments and outfits. Apple's on-device sound classifier (SoundAnalysis), backed up by beat and bass detection, decides who walks on; the singer's voice (female, male or duet) comes from the vocal pitch. Playing follows the beat clock, with spectrum onsets as accents.
 **Auto Scan** cycles through every other mode, 20 seconds each, and always sits at the bottom of the mode list.
 
-Modes 4–11 and 13–16 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 12 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
+Modes 1–4, 7–8, 10 and 12–17 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Mode 9 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
 
 Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
@@ -120,7 +120,7 @@ is the only way to answer "is it supposed to be on top?" from a bug report.
 ## First launch
 
 A fresh install starts in **Auto Scan**, cycling every twenty seconds — with
-sixteen modes, nobody should have to guess that the good ones are behind a
+so many modes, nobody should have to guess that the good ones are behind a
 menu, and a visualiser that sits on one scene forever looks like it missed
 something. Pick a mode and that's remembered from then on; going back to Auto
 Scan clears the memory, so "no choice" always means Auto Scan.
@@ -241,7 +241,7 @@ open build/AudioVane.app                            # uploads it, deletes it
 
 Everything lives in the top bar so the visualiser gets the whole window:
 
-- **Mode picker** (left of the group) — all sixteen modes in a drop-down. Each
+- **Mode picker** (left of the group) — every mode in a drop-down. Each
   row shows its number-row shortcut, so the keyboard route stays discoverable
   now that the list isn't permanently on screen.
 - **Genre picker** — only in band mode (or when Auto Scan is sitting on the

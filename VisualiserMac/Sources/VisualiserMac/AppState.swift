@@ -3,7 +3,7 @@ import Combine
 import AppKit
 
 final class AppState: ObservableObject {
-    @Published var activeMode: VisualizerMode = .tunnel {
+    @Published var activeMode: ModeID = .builtin(.tunnel) {
         didSet {
             if activeMode != oldValue {
                 NSLog("[DD] mode changed \(oldValue.rawValue) -> \(activeMode.rawValue)")
@@ -87,7 +87,7 @@ final class AppState: ObservableObject {
     @Published private(set) var genreConfidence: Float = 0
     /// While auto-scanning, the mode currently on screen. Mirrors the
     /// renderer's scanner so the header can show what's playing right now.
-    @Published private(set) var scanTarget: VisualizerMode = .tunnel
+    @Published private(set) var scanTarget: ModeID = .builtin(.tunnel)
 
     /// The colour palette applied to every mode. Index into `Palette.all`.
     @Published var paletteIndex: Int = 0 {
@@ -153,26 +153,30 @@ final class AppState: ObservableObject {
         self.audio = audio
         self.renderer = OpenGLRenderer(audio: audio)
         // Whatever mode the user was last in, or auto-scan on a fresh install.
-        // Auto-scan is the right first impression for sixteen modes: nobody
+        // Auto-scan is the right first impression with this many modes: nobody
         // should have to guess that the good ones are behind a menu, and a
         // visualiser that sits on one scene forever looks like it missed
         // something.
-        self.activeMode = Self.savedMode ?? .autoScan
+        self.activeMode = Self.savedMode ?? .builtin(.autoScan)
         self.renderer.setMode(self.activeMode)
         NSLog("[DD] starting in mode \(self.activeMode.rawValue)")
+        // How long each mode holds in Auto Scan, in bars of the song.
+        let bars = UserDefaults.standard.integer(forKey: Self.scanBarsKey)
+        self.scanBars = bars > 0 ? bars : 4
+        self.renderer.barsPerMode = self.scanBars
         // Restore the genre the user last chose so a relaunch doesn't snap
         // back to Rock. Genre *detection* still re-arms per song as usual.
         self.genre = Self.savedGenre
         self.renderer.genre = self.genre
         // `--autoscan` starts straight into the scanner (used for testing).
         if CommandLine.arguments.contains("--autoscan") {
-            self.activeMode = .autoScan
-            self.renderer.setMode(.autoScan)
+            self.activeMode = .builtin(.autoScan)
+            self.renderer.setMode(.builtin(.autoScan))
         }
         // `--mode <name>` jumps straight to a mode (used for testing).
         if let i = CommandLine.arguments.firstIndex(of: "--mode"),
            i + 1 < CommandLine.arguments.count,
-           let m = VisualizerMode(rawValue: CommandLine.arguments[i + 1]) {
+           let m = ModeID(rawValue: CommandLine.arguments[i + 1]) {
             self.activeMode = m
             self.renderer.setMode(m)
         }
@@ -278,7 +282,7 @@ final class AppState: ObservableObject {
 
         let mode = activeMode.rawValue
         let palette = paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?"
-        let autoscan = activeMode == .autoScan
+        let autoscan = activeMode == .builtin(.autoScan)
         let isRelease = !args.contains("--debug")
         let fresh = !UserDefaults.standard.bool(forKey: "analytics.seenBefore")
 
@@ -314,7 +318,7 @@ final class AppState: ObservableObject {
             "source": sourceLabel,
             "source_state": sourceState.rawValue,
         ]
-        if drawing == .band {
+        if drawing == .builtin(.band) {
             let band = renderer.bandEvalState()
             let onStage = (band["on_stage"] as? [String] ?? []).joined(separator: "+")
             snapshot["band_on_stage"] = onStage.isEmpty ? "(empty stage)" : onStage
@@ -349,15 +353,15 @@ final class AppState: ObservableObject {
     /// how "no choice made yet" is distinguished from "chose Tunnel" — the
     /// caller falls back to auto-scan, and the first deliberate switch writes
     /// this.
-    private static var savedMode: VisualizerMode? {
+    private static var savedMode: ModeID? {
         get {
             guard let raw = UserDefaults.standard.object(forKey: modeDefaultsKey) as? String else { return nil }
-            return VisualizerMode(rawValue: raw)
+            return ModeID(rawValue: raw)
         }
         set {
             // Storing auto-scan is pointless: it's the default, and clearing
             // the key instead keeps one source of truth for "nothing chosen".
-            if let newValue, newValue != .autoScan {
+            if let newValue, newValue != .builtin(.autoScan) {
                 UserDefaults.standard.set(newValue.rawValue, forKey: modeDefaultsKey)
             } else {
                 UserDefaults.standard.removeObject(forKey: modeDefaultsKey)
@@ -406,9 +410,352 @@ final class AppState: ObservableObject {
     /// Which layer of chrome fits in the window right now.
     var layout: LayoutTier { LayoutTier.tier(forWidth: windowWidth) }
 
-    func setMode(_ mode: VisualizerMode) {
+    func setMode(_ mode: ModeID) {
         activeMode = mode
     }
+
+    // MARK: - The mode list
+
+    /// The name to show for a mode. A custom mode's name lives with the
+    /// mode, not with the identifier, so it has to be looked up.
+    func displayName(for id: ModeID) -> String {
+        switch id {
+        case .builtin(let v):
+            return v.displayName
+        case .custom(let slug):
+            return customModes.first(where: { $0.id == slug })?.name ?? "Custom Mode"
+        }
+    }
+
+    /// What the Custom Mode sheet is doing: making a new one, or editing
+    /// one the user already has. One sheet, so the two can't both be up.
+    enum CustomModeSheet: Identifiable {
+        case new
+        case editing(CustomMode)
+
+        var id: String {
+            switch self {
+            case .new: return "new"
+            case .editing(let mode): return mode.id
+            }
+        }
+
+        /// The mode being edited, if any.
+        var mode: CustomMode? {
+            if case .editing(let m) = self { return m }
+            return nil
+        }
+    }
+
+    /// The Custom Mode sheet, if it's open.
+    @Published var customModeSheet: CustomModeSheet?
+
+    /// Whether the View All panel is open.
+    @Published var showAllModesSheet = false
+
+    /// The user's mode with this id, if it still exists.
+    func customMode(id: String) -> CustomMode? {
+        customModes.first { $0.id == id }
+    }
+
+    /// Opens the Custom Mode sheet on one of the user's own modes.
+    func editCustomMode(id: String) {
+        guard let mode = customMode(id: id) else { return }
+        customModeSheet = .editing(mode)
+    }
+
+    /// The user's own modes, newest last. Loaded from disk at launch and
+    /// whenever the Custom Mode sheet saves something.
+    @Published private(set) var customModes: [CustomMode] = []
+
+    /// Built-in modes the user has switched off, by raw value.
+    ///
+    /// Stored as a list of names rather than a set of booleans, so a mode
+    /// added in a later version shows up by default rather than being
+    /// silently off because nobody has heard of it yet.
+    private static let hiddenModesKey = "audiovane.hiddenModes"
+    private var hiddenBuiltins: Set<String> {
+        get {
+            let raw = UserDefaults.standard.stringArray(forKey: Self.hiddenModesKey) ?? []
+            return Set(raw)
+        }
+        set {
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.hiddenModesKey)
+        }
+    }
+
+    /// The order the user has arranged the modes in.
+    ///
+    /// Stored separately from the enum, because the enum is fixed at compile
+    /// time and the list is meant to be rearrangeable. Modes that aren't in
+    /// the stored order — a mode added in a later version, or a custom mode
+    /// the user hasn't placed yet — are appended in their natural order, so
+    /// nothing ever goes missing just because the list was written down
+    /// before they existed.
+    private static let modeOrderKey = "audiovane.modeOrder"
+    private var storedModeOrder: [ModeID] {
+        get {
+            let raw = UserDefaults.standard.stringArray(forKey: Self.modeOrderKey) ?? []
+            return raw.compactMap { ModeID(rawValue: $0) }
+        }
+        set {
+            UserDefaults.standard.set(newValue.map { $0.rawValue }, forKey: Self.modeOrderKey)
+        }
+    }
+
+    /// The order the modes ship in.
+    ///
+    /// Kept separate from the enum's declaration order on purpose. The enum
+    /// order decides the keyboard shortcuts — 1, 2, 3 … and then - [ ] ; ' \ —
+    /// and those shouldn't move because someone rearranged the list. This is
+    /// the order a fresh install gets; once the user rearranges it, their
+    /// arrangement is what counts.
+    static let defaultModeOrder: [VisualizerMode] = [
+        .ribbons, .silk, .flux, .spectrum, .tunnel, .liquid, .kaleidoscope,
+        .waveform, .machine, .warp, .particles, .nyan, .hamster, .badger,
+        .llama, .danceFloor, .band,
+    ]
+
+    /// Every mode, in the order the user arranged them.
+    var allModes: [ModeEntry] {
+        let hidden = hiddenBuiltins
+        let builtins = VisualizerMode.allCases
+            .filter { $0 != .autoScan }
+            .map { mode -> ModeEntry in
+                var entry = ModeEntry(builtin: mode)
+                entry.isEnabled = !hidden.contains(mode.rawValue)
+                return entry
+            }
+        let customs = customModes.map { ModeEntry(custom: $0) }
+
+        var entries: [ModeEntry] = []
+        var used = Set<ModeID>()
+        let stored = storedModeOrder
+        let order = stored.isEmpty ? Self.defaultModeOrder.map { ModeID.builtin($0) } : stored
+        for id in order {
+            guard let entry = (builtins.first { $0.id == id } ?? customs.first { $0.id == id }),
+                  !used.contains(id) else { continue }
+            entries.append(entry)
+            used.insert(id)
+        }
+        // Anything the stored order doesn't mention yet goes after it.
+        for entry in builtins + customs where !used.contains(entry.id) {
+            entries.append(entry)
+            used.insert(entry.id)
+        }
+        return entries
+    }
+
+    /// The modes that show in the list and take part in Auto Scan.
+    var enabledModes: [ModeEntry] {
+        allModes.filter { $0.isEnabled }
+    }
+
+    /// The Auto Scan rotation, as the renderer wants it.
+    var scanCycle: [ModeID] {
+        enabledModes.map { $0.id }
+    }
+
+    /// Moves a mode to a new place in the list.
+    ///
+    /// The list is the order of the whole set, switched-on or not, so
+    /// switching a mode off and on again doesn't shuffle it.
+    func moveMode(_ id: ModeID, to destination: Int) {
+        var order = allModes.map { $0.id }
+        guard let from = order.firstIndex(of: id) else { return }
+        let clamped = min(max(0, destination), order.count - 1)
+        guard from != clamped else { return }
+        order.remove(at: from)
+        order.insert(id, at: clamped)
+        // If the arrangement is back to how it ships, forget it rather than
+        // pinning it. That way a later change to the default order reaches
+        // people who hadn't actually rearranged anything.
+        if order.compactMap({ $0.builtin }) == Self.defaultModeOrder {
+            UserDefaults.standard.removeObject(forKey: Self.modeOrderKey)
+        } else {
+            storedModeOrder = order
+        }
+        pushScanCycle()
+    }
+
+    /// Switches a mode on or off. Turning the last one off would leave the
+    /// scanner with nothing to do, so Tunnel is always kept.
+    func setModeEnabled(_ id: ModeID, enabled: Bool) {
+        switch id {
+        case .builtin(let v):
+            var hidden = hiddenBuiltins
+            if enabled {
+                hidden.remove(v.rawValue)
+            } else {
+                // Tunnel is the fallback when everything else is off, and
+                // hiding it would leave the list empty.
+                guard v != .tunnel else { return }
+                hidden.insert(v.rawValue)
+            }
+            hiddenBuiltins = hidden
+        case .custom(let slug):
+            guard let i = customModes.firstIndex(where: { $0.id == slug }) else { return }
+            customModes[i].enabled = enabled
+            try? CustomModeStore.save(customModes[i])
+        }
+        pushScanCycle()
+    }
+
+    /// Re-reads the user's modes from disk and recompiles them.
+    func reloadCustomModes() {
+        customModes = CustomModeStore.loadAll()
+        var problems: [String: ShaderProblem] = [:]
+        for mode in customModes {
+            // A mode that no longer compiles is kept on disk — the user may
+            // want to fix it — but it can't be drawn, so it's switched off
+            // and the reason is kept to show in the View All panel.
+            if case .failure(let problem) = renderer.installCustomShader(id: mode.id, body: mode.shader) {
+                NSLog("[CUSTOM] \(mode.id) failed to compile: \(problem.message)")
+                problems[mode.id] = problem
+                if let i = customModes.firstIndex(where: { $0.id == mode.id }), customModes[i].enabled {
+                    customModes[i].enabled = false
+                    try? CustomModeStore.save(customModes[i])
+                }
+            }
+        }
+        customModeProblems = problems
+        pushScanCycle()
+    }
+
+    /// Loads the user's modes once the graphics context exists.
+    ///
+    /// Compiling a shader needs an OpenGL context, and the context is only
+    /// created when the view is attached to a window — which is after
+    /// `init`. So the first load is triggered from the view, and the
+    /// published changes are pushed a turn later so we're not mutating
+    /// published state from inside a view update.
+    private var didLoadCustomModes = false
+    func loadCustomModesOnce() {
+        guard !didLoadCustomModes else { return }
+        didLoadCustomModes = true
+        Task { @MainActor in
+            self.reloadCustomModes()
+        }
+    }
+
+    /// Why a custom mode isn't working, if it isn't.
+    @Published private(set) var customModeProblems: [String: ShaderProblem] = [:]
+
+    /// A rendered picture of each of the user's modes, for the View All
+    /// panel — so the panel shows what a mode actually looks like rather
+    /// than a made-up cover.
+    @Published private(set) var customModePreviews: [String: NSImage] = [:]
+
+    /// Draws a picture of each of the user's modes.
+    ///
+    /// The picture is drawn with a plausible amount of music going on, so a
+    /// mode isn't a black rectangle when the room is quiet. The analyser is
+    /// given that state for the length of one render; the audio itself is
+    /// never touched, and the next frame of real sound puts the analyser
+    /// back.
+    func refreshCustomModePreviews() {
+        let modes = customModes
+        guard !modes.isEmpty else { return }
+        Task { @MainActor in
+            for mode in modes {
+                audio.analyzer.setSyntheticState()
+                let path = (NSTemporaryDirectory() as NSString)
+                    .appendingPathComponent("audiovane-preview-\(mode.id).png")
+                renderer.renderToPNG(width: 320, height: 180,
+                                     mode: .custom(mode.id), frames: 90, path: path)
+                if let image = NSImage(contentsOfFile: path) {
+                    customModePreviews[mode.id] = image
+                }
+                try? FileManager.default.removeItem(atPath: path)
+            }
+        }
+    }
+
+    /// Adds a user's mode, once it has been shown to compile.
+    func addCustomMode(name: String, author: String, url: String?, shader: String) -> Result<CustomMode, ShaderProblem> {
+        let id = CustomModeStore.uniqueSlug(from: name)
+        switch renderer.installCustomShader(id: id, body: shader) {
+        case .failure(let problem):
+            return .failure(problem)
+        case .success:
+            let mode = CustomMode(id: id, name: name, author: author, url: url,
+                                  shader: shader, enabled: true, modified: Date())
+            do {
+                try CustomModeStore.save(mode)
+            } catch {
+                return .failure(ShaderProblem(
+                    kind: .compileFailed,
+                    message: "Couldn't save the mode to disk: \(error.localizedDescription)"))
+            }
+            customModes.append(mode)
+            pushScanCycle()
+            refreshCustomModePreviews()
+            return .success(mode)
+        }
+    }
+
+    /// Replaces a user's mode with a new version, once it has been shown to
+    /// compile.
+    func updateCustomMode(id: String, name: String, author: String, url: String?, shader: String) -> Result<CustomMode, ShaderProblem> {
+        guard let i = customModes.firstIndex(where: { $0.id == id }) else {
+            return .failure(ShaderProblem(kind: .compileFailed, message: "That mode no longer exists."))
+        }
+        switch renderer.installCustomShader(id: id, body: shader) {
+        case .failure(let problem):
+            return .failure(problem)
+        case .success:
+            customModes[i].name = name
+            customModes[i].author = author
+            customModes[i].url = url
+            customModes[i].shader = shader
+            customModes[i].modified = Date()
+            do {
+                try CustomModeStore.save(customModes[i])
+            } catch {
+                return .failure(ShaderProblem(
+                    kind: .compileFailed,
+                    message: "Couldn't save the mode to disk: \(error.localizedDescription)"))
+            }
+            pushScanCycle()
+            refreshCustomModePreviews()
+            return .success(customModes[i])
+        }
+    }
+
+    /// Removes a user's mode, from the list and from disk.
+    func deleteCustomMode(id: String) {
+        customModes.removeAll { $0.id == id }
+        renderer.removeCustomShader(id: id)
+        CustomModeStore.delete(id: id)
+        // If the deleted mode was on screen, fall back to something real.
+        if activeMode == .custom(id) {
+            let fallback = enabledModes.first?.id ?? .builtin(.tunnel)
+            setMode(fallback)
+        }
+        pushScanCycle()
+    }
+
+    /// Tells the renderer which modes Auto Scan should walk.
+    private func pushScanCycle() {
+        renderer.setScanCycle(scanCycle)
+    }
+
+    /// How many bars of the song each mode gets in Auto Scan.
+    ///
+    /// Counted in bars rather than seconds so the change lands on a beat —
+    /// a mode that swaps halfway through a bar looks like a glitch, and one
+    /// that swaps on the downbeat looks like part of the music.
+    @Published var scanBars: Int = 4 {
+        didSet {
+            UserDefaults.standard.set(scanBars, forKey: Self.scanBarsKey)
+            renderer.barsPerMode = scanBars
+        }
+    }
+
+    private static let scanBarsKey = "audiovane.scanBars"
+
+    /// The choices offered in the menu.
+    static let scanBarChoices = [1, 2, 4, 8, 16]
 
     /// True while the window is in its own full-screen Space.
     @Published private(set) var isFullScreen = false
@@ -644,53 +991,65 @@ final class AppState: ObservableObject {
 }
 
 enum VisualizerMode: String, CaseIterable, Identifiable {
-    case tunnel, particles, liquid
-    case badger, llama, hamster, nyan
-    case spectrum, kaleidoscope, warp
-    case band
-    /// MIDEM Music Hack Day machine — drums, pads and bouncing balls.
-    case machine
-    /// Glowing neon-green waveforms shaped by the spectrum.
-    case waveform
+    // Declaration order is the mode list order: it drives the `01`…`17`
+    // glyphs, the keyboard shortcuts, and Auto Scan's rotation.
     /// Luminous ribbons twisting through floating glass shapes.
     case ribbons
     /// Flying forward through satin ribbons and tumbling glass cubes.
     case silk
     /// Abstract sheets of pink and gold light swirling into a vanishing point.
     case flux
+    case spectrum
+    case tunnel
+    case particles
+    case liquid
+    case kaleidoscope
+    case warp
+    /// Glowing neon-green waveforms shaped by the spectrum.
+    case waveform
+    case nyan
+    case hamster
+    case badger
+    case llama
+    /// A perspective grid of Rubik's-cube tiles that re-solve to the beat.
+    /// Electro, nu-wave, chrome.
+    case danceFloor
+    case band
+    /// MIDEM Music Hack Day machine — drums, pads and bouncing balls.
+    case machine
     /// Cycles through every other mode, 20 seconds each.
     /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
     case autoScan
     var id: String { rawValue }
     var displayName: String {
         switch self {
-        case .tunnel: return "TUNNEL"
-        case .particles: return "CONSTELLATION"
-        case .liquid: return "LIQUID"
-        case .badger: return "BADGER BADGER"
-        case .llama: return "WHOOPING LLAMA"
-        case .hamster: return "HAMSTER DANCE"
-        case .nyan: return "NYAN CAT"
-        case .spectrum: return "SPECTRUM"
-        case .kaleidoscope: return "KALEIDOSCOPE"
-        case .warp: return "WARP"
-        case .band: return "THE BAND"
-        case .autoScan: return "AUTO SCAN"
-        case .machine: return "MACHINE"
-        case .waveform: return "NEON WAVE"
         case .ribbons: return "RIBBONS"
         case .silk: return "SILK FLIGHT"
         case .flux: return "FLUX"
+        case .spectrum: return "SPECTRUM"
+        case .tunnel: return "TUNNEL"
+        case .particles: return "CONSTELLATION"
+        case .liquid: return "LIQUID"
+        case .kaleidoscope: return "KALEIDOSCOPE"
+        case .warp: return "WARP"
+        case .waveform: return "NEON WAVE"
+        case .nyan: return "NYAN CAT"
+        case .hamster: return "HAMSTER DANCE"
+        case .badger: return "BADGER BADGER"
+        case .llama: return "WHOOPING LLAMA"
+        case .danceFloor: return "DANCE FLOOR"
+        case .band: return "THE BAND"
+        case .machine: return "MACHINE"
+        case .autoScan: return "AUTO SCAN"
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }
-    var glyph: String { String(format: "%02d", index + 1) }
-    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ; ' \
-    /// Auto Scan is always =.
+    /// Keyboard shortcut: 1...9 and 0 for the first ten modes, then - [ ] ; ' \ ,
+    /// then = for Auto Scan. Adding a mode past 17 needs another key here.
     var shortcutKey: Character {
         if self == .autoScan { return "=" }
         if index < 10 { return Character(String((index + 1) % 10)) }
-        let extra: [Character] = ["-", "[", "]", ";", "'", "\\"]
+        let extra: [Character] = ["-", "[", "]", ";", "'", "\\", ","]
         return extra[min(index - 10, extra.count - 1)]
     }
 }

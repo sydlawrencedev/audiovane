@@ -10,9 +10,9 @@ struct FooterView: View {
         HStack(spacing: 0) {
             // While auto-scanning, report the mode actually on screen rather
             // than the "AUTO SCAN" that was selected.
-            FooterCell(key: "MODE", value: app.activeMode == .autoScan
-                       ? app.scanTarget.displayName
-                       : app.activeMode.displayName)
+            FooterCell(key: "MODE", value: app.activeMode.isAutoScan
+                       ? app.displayName(for: app.scanTarget)
+                       : app.displayName(for: app.activeMode))
             // The mode is the one value someone watching actually wants. The
             // other five are diagnostics — ours, not theirs — so they're the
             // first thing to go when the window narrows.

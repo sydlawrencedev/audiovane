@@ -115,6 +115,16 @@ struct ContentView: View {
             pointer.window = w
             app.windowDidAppear()
         }
+        // The two panels the mode list opens. They hang off the window rather
+        // than the visualiser so they stay put when the chrome hides.
+        .sheet(isPresented: $app.showAllModesSheet) {
+            AllModesView()
+                .environmentObject(app)
+        }
+        .sheet(item: $app.customModeSheet) { sheet in
+            CustomModeView(editing: sheet.mode)
+                .environmentObject(app)
+        }
     }
 }
 

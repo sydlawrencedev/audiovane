@@ -68,7 +68,7 @@ struct AboutButton: View {
             Divider().overlay(Color.white.opacity(0.1))
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Thank you.")
+                Text("Album Wall")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Someone who has used what we've made took the time to say so, and this is how. Every coffee helps us keep building, and it means a lot that you noticed.")

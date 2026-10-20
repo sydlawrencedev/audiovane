@@ -1,6 +1,6 @@
 # AudioVane
 
-A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals: sixteen modes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
+A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
 
 **Website & install:** https://audiovane.minithlabs.com
 
@@ -37,6 +37,18 @@ cd VisualiserMac
 ./build-app.sh debug      # build/AudioVane.app
 open build/AudioVane.app
 ```
+
+### Version numbers
+
+The build version is the date it was built, so there's no number to bump:
+
+```
+MAJOR.MINOR.PATCH
+```
+
+`MAJOR` counts years since 2026, `MINOR` is the month, and `PATCH` is the day of the month followed by the build number of that day — `0.10.201` is the 20th of October 2026, the first build of that day.
+
+`VisualiserMac/version.sh` computes it, and `build-app.sh` bakes it into the app. `release.sh` records it in `VisualiserMac/VERSION` and the landing page before tagging the release, so the app, the site and the git tag always agree.
 
 ## Landing page analytics
 
@@ -141,7 +153,7 @@ that honest:
 ## SEO
 
 - **Submit the sitemap** once in [Search Console](https://search.google.com/search-console/sitemaps/submit) — `https://audiovane.minithlabs.com/sitemap.xml`. Re-submit after site deploys; it also carries `lastmod`.
-- **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. Bump `softwareVersion` with `VisualiserMac/VERSION` — `scripts/check-modes.sh` fails the release if you forget.
+- **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. The version is the build's date, so there's nothing to bump by hand — `VisualiserMac/version.sh --write` puts it in both `index.html` and `VisualiserMac/VERSION`, and `scripts/check-modes.sh` fails the release if they drift apart.
 - **Turn on "Always Use HTTPS"** in the Cloudflare zone for `minithlabs.com`. As of the last audit, `http://audiovane.minithlabs.com/` served a 200 instead of redirecting; `site/_redirects` covers the same ground but the zone setting is the real fix.
 - **Caching** is Cloudflare's default (`max-age=0, must-revalidate`), and a `Cache-Control` rule in `site/_headers` *appends* to that rather than replacing it, so it can't be changed that way. Repeat visits revalidate with a 304 from the ETag instead of re-downloading 5.9MB, which is the part that matters.
 - Page is a single static file: one H1, 16 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
@@ -158,7 +170,6 @@ scripts/band-eval.py --only jazz
 
 ## Releasing
 
-1. Bump `VisualiserMac/VERSION`.
-2. Add any new mode to `site/index.html` (a card with `data-mode="<case name>"`) and update the JSON-LD `softwareVersion`.
-3. `VisualiserMac/release.sh` runs both site checks, builds, zips `AudioVane.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
-4. `npx wrangler deploy` if the site or worker changed, then re-submit the sitemap. First deploy after cloning needs `npx wrangler secret put DISCORD_WEBHOOK_URL` (see [Download notifications](#download-notifications-discord)).
+1. Add any new mode to `site/index.html` (a card with `data-mode="<case name>"`).
+2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `AudioVane.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
+3. `npx wrangler deploy` if the site or worker changed, then re-submit the sitemap. First deploy after cloning needs `npx wrangler secret put DISCORD_WEBHOOK_URL` (see [Download notifications](#download-notifications-discord)).

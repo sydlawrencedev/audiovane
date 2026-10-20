@@ -17,6 +17,15 @@ struct DropdownEntry<Item: Hashable>: Identifiable {
     /// selection. Used for things like an "Auto" toggle that isn't itself a
     /// member of the selection set.
     var action: (() -> Void)? = nil
+    /// An extra button at the end of the row, for something the row itself
+    /// isn't about — a pencil to edit the thing this row names.
+    ///
+    /// It's drawn as an overlay rather than inside the row's own button, so
+    /// the two don't fight over the click.
+    var editAction: (() -> Void)? = nil
+    /// A thin rule between groups of rows, for separating the modes from
+    /// the buttons that act on them.
+    var isDivider: Bool = false
     var id: String { title + (subtitle ?? "") }
 }
 
@@ -118,51 +127,77 @@ struct DropdownMenu<Item: Hashable>: View {
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(entries) { entry in
-                Button {
-                    if let action = entry.action {
-                        action()
-                    } else {
-                        selection = entry.value
-                    }
-                    withAnimation(.easeOut(duration: 0.14)) { app.openDropdown = nil }
-                } label: {
-                    HStack(spacing: 10) {
-                        if let swatch = entry.swatch {
-                            PaletteSwatch(shadow: swatch.shadow, highlight: swatch.highlight)
-                        } else if let glyph = entry.glyph {
-                            Text(glyph)
-                                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                                .foregroundStyle(isSelected(entry) ? tint : Color(white: 0.45))
-                                .frame(width: 16, alignment: .leading)
+                if entry.isDivider {
+                    Divider()
+                        .overlay(Color.white.opacity(0.08))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                } else {
+                    Button {
+                        if let action = entry.action {
+                            action()
+                        } else {
+                            selection = entry.value
                         }
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(entry.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .tracking(1.4)
-                                .foregroundStyle(isSelected(entry) ? Color.white : Color(white: 0.8))
-                            if let sub = entry.subtitle {
-                                Text(sub)
-                                    .font(.system(size: 9, weight: .regular, design: .monospaced))
-                                    .foregroundStyle(Color(white: 0.4))
+                        withAnimation(.easeOut(duration: 0.14)) { app.openDropdown = nil }
+                    } label: {
+                        HStack(spacing: 10) {
+                            if let swatch = entry.swatch {
+                                PaletteSwatch(shadow: swatch.shadow, highlight: swatch.highlight)
+                            } else if let glyph = entry.glyph {
+                                Text(glyph)
+                                    .font(.system(size: 11, weight: .regular, design: .monospaced))
+                                    .foregroundStyle(isSelected(entry) ? tint : Color(white: 0.45))
+                                    .frame(width: 16, alignment: .leading)
+                            }
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(entry.title)
+                                    .font(.system(size: 11, weight: .medium))
+                                    .tracking(1.4)
+                                    .foregroundStyle(isSelected(entry) ? Color.white : Color(white: 0.8))
+                                if let sub = entry.subtitle {
+                                    Text(sub)
+                                        .font(.system(size: 9, weight: .regular, design: .monospaced))
+                                        .foregroundStyle(Color(white: 0.4))
+                                }
+                            }
+                            Spacer(minLength: 12)
+                            if isSelected(entry) {
+                                Image(systemName: "checkmark")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundStyle(tint)
                             }
                         }
-                        Spacer(minLength: 12)
-                        if isSelected(entry) {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundStyle(tint)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, entry.subtitle == nil ? 5 : 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(isSelected(entry) ? tint.opacity(0.16) : .clear)
+                        )
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    // The extra button sits over the row rather than inside
+                    // it, so clicking it doesn't also select the row.
+                    .overlay(alignment: .trailing) {
+                        if let editAction = entry.editAction {
+                            Button {
+                                editAction()
+                                withAnimation(.easeOut(duration: 0.14)) { app.openDropdown = nil }
+                            } label: {
+                                Image(systemName: "pencil")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundStyle(Color(white: 0.5))
+                            }
+                            .buttonStyle(.plain)
+                            .help("Edit this mode")
+                            // Clear of the tick, which is on the trailing
+                            // edge of a selected row.
+                            .padding(.trailing, isSelected(entry) ? 26 : 10)
                         }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, entry.subtitle == nil ? 5 : 6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(isSelected(entry) ? tint.opacity(0.16) : .clear)
-                    )
-                    .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
             }
         }
         .padding(6)

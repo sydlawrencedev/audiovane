@@ -14,8 +14,10 @@ cd "$SCRIPT_DIR"
 
 APP_NAME="AudioVane"
 BUNDLE_ID="com.minithlabs.visualiser"
-# Release version, shown in the app and compared by the update checker.
-VERSION="$(tr -d '[:space:]' < "$SCRIPT_DIR/VERSION")"
+# Build version, computed from today's date — see version.sh. A release
+# pins the version it decided on with VERSION_OVERRIDE, so the app and the
+# git tag can't drift apart.
+VERSION="${VERSION_OVERRIDE:-$("$SCRIPT_DIR/version.sh")}"
 
 # PostHog project key. Public by design (write-only, like Stripe's publishable
 # key) — it can only add events, never read them. Override in the environment

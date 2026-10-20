@@ -15,8 +15,8 @@ struct GenrePicker: View {
         // Only meaningful when the band is on screen — the genre drives the
         // stage, the lineup and the palette there. During auto-scan that
         // includes the moments the scanner is sitting on the band mode.
-        let bandOnScreen = app.activeMode == .band
-            || (app.activeMode == .autoScan && app.scanTarget == .band)
+        let bandOnScreen = app.activeMode.isBand
+            || (app.activeMode.isAutoScan && app.scanTarget.isBand)
         if bandOnScreen {
             DropdownMenu(
                 id: .genre,

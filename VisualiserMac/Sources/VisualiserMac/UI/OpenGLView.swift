@@ -7,11 +7,15 @@ import os
 /// NSViewRepresentable wrapping a custom NSOpenGLView.
 struct OpenGLVisualizerView: NSViewRepresentable {
     let renderer: OpenGLRenderer
-    let mode: VisualizerMode
+    let mode: ModeID
+    @EnvironmentObject var app: AppState
 
     func makeNSView(context: Context) -> GLVisualizerNSView {
         let view = GLVisualizerNSView(renderer: renderer)
         renderer.setMode(mode)
+        // The OpenGL context now exists, so the user's own modes can be
+        // compiled for the first time.
+        app.loadCustomModesOnce()
         return view
     }
 

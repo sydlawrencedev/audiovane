@@ -23,7 +23,7 @@ struct HUDView: View {
                     // a crash or a mode that looks wrong needs to be able to
                     // read it off the screen. Uppercased by .textCase, like
                     // the rest of the header.
-                    Text("audio visualiser · v\(Self.version)")
+                    Text("v\(Self.version)")
                         .font(.system(size: 10, weight: .regular, design: .monospaced))
                         .tracking(1.6)
                         .foregroundStyle(Color(white: 0.45))

@@ -14,14 +14,9 @@ struct ModePicker: View {
     var body: some View {
         DropdownMenu(
             id: .mode,
-            // Auto Scan always sits at the bottom of the list.
-            entries: (VisualizerMode.allCases.filter { $0 != .autoScan } + [.autoScan]).map { mode in
-                DropdownEntry(
-                    value: mode,
-                    title: mode.displayName,
-                    glyph: mode.glyph
-                )
-            },
+            // Auto Scan always sits at the bottom of the list, after the two
+            // buttons that open the panels.
+            entries: entries,
             selection: Binding(
                 get: { app.activeMode },
                 set: {
@@ -31,10 +26,58 @@ struct ModePicker: View {
                     app.activeMode = $0
                 }
             ),
-            tint: app.activeMode == .band || app.activeMode == .autoScan ? .bandTint : .modeTint,
-            pillExtra: app.activeMode == .autoScan ? AnyView(scanIndicator) : nil,
+            tint: app.activeMode.isBand || app.activeMode.isAutoScan ? .bandTint : .modeTint,
+            pillExtra: app.activeMode.isAutoScan ? AnyView(scanIndicator) : nil,
             showsPillText: app.layout.showsPillText
         )
+    }
+
+    /// The list: every mode the user has switched on, then Auto Scan, then
+    /// the two buttons that open the Custom Mode and View All panels.
+    private var entries: [DropdownEntry<ModeID>] {
+        var items: [DropdownEntry<ModeID>] = app.enabledModes.map { entry in
+            DropdownEntry(
+                value: entry.id,
+                title: entry.title,
+                // A user's own mode gets a pencil to edit it, and nothing
+                // else — how many lines it is isn't the business of a list
+                // of modes.
+                subtitle: entry.isCustom ? nil : entry.subtitle,
+                glyph: entry.glyph,
+                editAction: entry.isCustom ? { app.editCustomMode(id: entry.id.slug) } : nil
+            )
+        }
+        items.append(DropdownEntry(
+            value: .builtin(.autoScan),
+            title: VisualizerMode.autoScan.displayName,
+            // The key that picks Auto Scan, like every other row.
+            glyph: "="
+        ))
+        // A divider, so the buttons don't read as more modes.
+        items.append(DropdownEntry(
+            value: .builtin(.autoScan),
+            title: "",
+            isDivider: true
+        ))
+        items.append(DropdownEntry(
+            value: .builtin(.autoScan),
+            title: "+ CUSTOM MODE",
+            glyph: "+",
+            action: {
+                app.openDropdown = nil
+                app.customModeSheet = .new
+            }
+        ))
+        items.append(DropdownEntry(
+            value: .builtin(.autoScan),
+            title: "VIEW ALL",
+            glyph: "≡",
+            action: {
+                app.openDropdown = nil
+                app.showAllModesSheet = true
+            }
+        ))
+        return items
     }
 
     /// While auto-scanning, the pill says what's on screen right now and
@@ -44,7 +87,7 @@ struct ModePicker: View {
             Text("▸")
                 .font(.system(size: 9, weight: .bold, design: .monospaced))
                 .foregroundStyle(Color.bandTint)
-            Text(app.scanTarget.displayName)
+            Text(app.displayName(for: app.scanTarget))
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .tracking(1.0)
                 .foregroundStyle(Color.bandTint.opacity(0.9))
@@ -56,23 +99,24 @@ extension VisualizerMode {
     /// SF Symbol used in the drop-down menu.
     var symbolName: String {
         switch self {
-        case .tunnel: return "tunnel"
-        case .particles: return "sparkles"
-        case .liquid: return "water.waves"
-        case .badger: return "hare"
-        case .llama: return "loud.speaker"
-        case .hamster: return "hare.fill"
-        case .nyan: return "rainbow"
-        case .spectrum: return "chart.bar"
-        case .kaleidoscope: return "square.grid.3x3"
-        case .warp: return "arrow.left.and.right"
-        case .band: return "music.mic"
-        case .autoScan: return "arrow.trianglehead.2.clockwise.rotate.90"
-        case .machine: return "gearshape.2"
-        case .waveform: return "waveform.path"
         case .ribbons: return "scribble.variable"
         case .silk: return "wind"
         case .flux: return "rays"
+        case .spectrum: return "chart.bar"
+        case .tunnel: return "tunnel"
+        case .particles: return "sparkles"
+        case .liquid: return "water.waves"
+        case .kaleidoscope: return "square.grid.3x3"
+        case .warp: return "arrow.left.and.right"
+        case .waveform: return "waveform.path"
+        case .nyan: return "rainbow"
+        case .hamster: return "hare.fill"
+        case .badger: return "hare"
+        case .llama: return "loud.speaker"
+        case .danceFloor: return "square.grid.3x3.fill"
+        case .band: return "music.mic"
+        case .machine: return "gearshape.2"
+        case .autoScan: return "arrow.trianglehead.2.clockwise.rotate.90"
         }
     }
 }

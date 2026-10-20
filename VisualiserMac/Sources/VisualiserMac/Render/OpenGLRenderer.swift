@@ -86,12 +86,15 @@ final class OpenGLRenderer: NSObject {
     private var uLiquidBands: GLint = -1
 
     /// Full-screen fragment-shader modes (see FunShaders) share one uniform layout.
-    private struct ShaderMode {
+    struct ShaderMode {
         let program: GLuint
         let time, bass, mid, treble, beat, beatStrength, level, resolution, idle, bands: GLint
         let eventKind, eventAge: GLint
         let active, beats, peaks, scroll, clock: GLint
         let levelSmooth, bassSmooth: GLint
+        /// `uPalette[0]` — modes with deliberate colours read the palette
+        /// themselves instead of being duotoned afterwards. -1 when absent.
+        let palette: GLint
     }
     private var shaderModes: [VisualizerMode: ShaderMode] = [:]
 
@@ -583,7 +586,7 @@ final class OpenGLRenderer: NSObject {
     }
 
     // State
-    private var currentMode: VisualizerMode = .tunnel
+    private var currentMode: ModeID = .builtin(.tunnel)
     private var viewWidth: GLfloat = 1.0
     private var viewHeight: GLfloat = 1.0
 
@@ -662,42 +665,64 @@ final class OpenGLRenderer: NSObject {
         return ctx
     }
 
-    func setMode(_ mode: VisualizerMode) {
-        if mode == .autoScan {
+    func setMode(_ mode: ModeID) {
+        if mode == .builtin(.autoScan) {
             // Start the cycle on whatever is already showing, so switching to
             // auto-scan doesn't visibly jump — the mode you're in gets its
             // full 20 seconds before the scanner moves on.
-            if currentMode != .autoScan, Self.scanCycle.contains(currentMode) {
+            if currentMode != .builtin(.autoScan), scanCycle.contains(currentMode) {
                 autoScanTarget = currentMode
-            } else if !Self.scanCycle.contains(autoScanTarget) {
-                autoScanTarget = Self.scanCycle.first ?? .tunnel
+            } else if !scanCycle.contains(autoScanTarget) {
+                autoScanTarget = scanCycle.first ?? .builtin(.tunnel)
             }
             autoScanStart = CACurrentMediaTime()
+            // Re-anchor the bar counter, so the first change lands a whole
+            // number of bars from now rather than firing at once.
+            scanIsMusical = danceActivity > 0.05
+            scanBarIndex = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
         }
-        if mode == .machine, currentMode != .machine {
+        if mode == .builtin(.machine), currentMode != .builtin(.machine) {
             // Start the camera at the beginning of its path.
             machineCameraPhase = 0
         }
         currentMode = mode
     }
 
+    /// Replaces the Auto Scan rotation. AppState calls this whenever the
+    /// enabled set changes — a mode switched off in View All leaves the cycle
+    /// on the next go-round rather than being drawn until the scanner lands on
+    /// it again.
+    func setScanCycle(_ modes: [ModeID]) {
+        scanCycle = modes.filter { $0 != .builtin(.autoScan) }
+        if scanCycle.isEmpty {
+            // Everything is switched off. Rather than spin on nothing, stay
+            // put on whatever is showing.
+            scanCycle = [.builtin(.tunnel)]
+        }
+        if !scanCycle.contains(autoScanTarget) {
+            autoScanTarget = scanCycle.first ?? .builtin(.tunnel)
+        }
+    }
+
     // --- Auto-scan ------------------------------------------------------
     /// True while the auto-scanner is running. The view uses this to keep
     /// rendering even in silence — the scanner has to keep cycling whether
     /// or not music is playing.
-    var isAutoScanning: Bool { currentMode == .autoScan }
+    var isAutoScanning: Bool { currentMode == .builtin(.autoScan) }
 
     /// The mode actually being drawn. In auto-scan this is the mode the
     /// scanner is currently sitting on, not `.autoScan` itself.
-    private(set) var effectiveMode: VisualizerMode = .tunnel
-    /// The modes auto-scan cycles through — everything except itself.
-    private static var scanCycle: [VisualizerMode] {
-        VisualizerMode.allCases.filter { $0 != .autoScan }
-    }
-    /// How long each mode gets before the scanner moves on.
+    private(set) var effectiveMode: ModeID = .builtin(.tunnel)
+    /// What Auto Scan walks. Owned by AppState (it's the thing that knows
+    /// which modes the user has switched on) and pushed in here, rather than
+    /// being derived from `allCases`, so hiding a mode from the list really
+    /// does keep the scanner off it.
+    private var scanCycle: [ModeID] = VisualizerMode.allCases
+        .filter { $0 != .autoScan }
+        .map { ModeID.builtin($0) }
+    /// How long each mode gets before the scanner moves on, when there's no
+    /// music to measure against.
     private static let autoScanDuration: CFTimeInterval = 20.0
-    /// Overridable for testing only — `--scan-seconds 2` makes the cycle
-    /// quick. The shipped default is 20 seconds per mode.
     private var autoScanDuration: CFTimeInterval = {
         if let i = CommandLine.arguments.firstIndex(of: "--scan-seconds"),
            i + 1 < CommandLine.arguments.count,
@@ -706,7 +731,7 @@ final class OpenGLRenderer: NSObject {
         }
         return 20.0
     }()
-    private var autoScanTarget: VisualizerMode = .tunnel
+    private var autoScanTarget: ModeID = .builtin(.tunnel)
     /// Wall-clock time the current mode started. Using a timestamp rather
     /// than accumulated frame deltas means each mode gets exactly 20 real
     /// seconds whether the renderer is running at 30fps or 120fps, and it
@@ -715,25 +740,62 @@ final class OpenGLRenderer: NSObject {
     /// Set when the mode changes so the UI can flash a "now showing" hint.
     private(set) var autoScanJustChanged = false
 
-    /// Advances the auto-scan clock. Uses wall-clock time, not the
-    /// sound-gated clock — the scanner should keep moving even in silence
-    /// so you're not stuck on one mode when the music starts.
+    /// How many bars of the song each mode gets.
+    var barsPerMode: Int = 4 {
+        didSet { barsPerMode = max(1, barsPerMode) }
+    }
+
+    /// Beats in a bar. The app doesn't read the time signature, and 4/4 is
+    /// what nearly everything is in, so four beats to the bar it is.
+    private var beatsPerBar: Double { 4 }
+
+    /// Which bar of the song we're in, for bar-based scanning.
+    private var scanBarIndex: Int = 0
+    /// True while the scanner is counting in bars rather than seconds.
+    private var scanIsMusical = false
+
+    /// Advances the auto-scan clock.
+    ///
+    /// With music playing, the scanner counts bars: `beatClock` runs at the
+    /// detected tempo and is phase-locked to land on whole numbers at each
+    /// detected beat, so crossing a whole number of bars happens on a beat
+    /// — the mode change lands with the music rather than against it.
+    ///
+    /// With no music there's no bar to count, so the scanner falls back to
+    /// the wall clock. Without that, stopping the music would freeze the
+    /// scanner on one scene forever.
     private func advanceAutoScan(now: CFTimeInterval) {
-        guard currentMode == .autoScan else { return }
-        if now - autoScanStart >= autoScanDuration {
-            // Carry the overshoot forward so a late frame doesn't shorten the
-            // next mode's slot.
-            autoScanStart += autoScanDuration
-            let cycle = Self.scanCycle
-            if let i = cycle.firstIndex(of: autoScanTarget) {
-                autoScanTarget = cycle[(i + 1) % cycle.count]
-            } else if let first = cycle.first {
-                autoScanTarget = first
-            }
-            autoScanJustChanged = true
-            NSLog("[SCAN] now showing \(autoScanTarget.rawValue)")
-            CrashReporter.shared.log("auto-scan now showing \(autoScanTarget.rawValue)")
+        guard currentMode == .builtin(.autoScan) else { return }
+
+        let musical = danceActivity > 0.05
+        if musical != scanIsMusical {
+            // Switching between the two clocks: re-anchor, so the change
+            // doesn't fire immediately or sit waiting for a stale mark.
+            scanIsMusical = musical
+            scanBarIndex = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
+            autoScanStart = now
         }
+
+        if musical {
+            let bar = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
+            guard bar != scanBarIndex else { return }
+            scanBarIndex = bar
+        } else {
+            guard now - autoScanStart >= autoScanDuration else { return }
+            // Carry the overshoot forward so a late frame doesn't shorten
+            // the next mode's slot.
+            autoScanStart += autoScanDuration
+        }
+
+        let cycle = scanCycle
+        if let i = cycle.firstIndex(of: autoScanTarget) {
+            autoScanTarget = cycle[(i + 1) % cycle.count]
+        } else if let first = cycle.first {
+            autoScanTarget = first
+        }
+        autoScanJustChanged = true
+        NSLog("[SCAN] now showing \(autoScanTarget.rawValue) at beat \(String(format: "%.3f", beatClock))")
+        CrashReporter.shared.log("auto-scan now showing \(autoScanTarget.rawValue)")
     }
 
     func setSize(width: CGFloat, height: CGFloat) {
@@ -742,7 +804,7 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// One-shot offscreen render to PNG. Used for verification / debug snapshots.
-    func renderToPNG(width: Int, height: Int, mode: VisualizerMode, frames: Int = 60, path: String) {
+    func renderToPNG(width: Int, height: Int, mode: ModeID, frames: Int = 60, path: String) {
         guard let ctx = ensureOffscreenContext() else {
             NSLog("[VIZ] renderToPNG: failed to create offscreen context")
             return
@@ -797,22 +859,20 @@ final class OpenGLRenderer: NSObject {
             easeLevels(snap, dt: 1.0 / 60)
             let t = Float(k) / 60.0
             switch currentMode {
-            case .tunnel: drawTunnel(time: t, snap: snap)
-            case .particles: drawParticles(time: t, snap: snap)
-            case .liquid: drawLiquid(time: t, snap: snap)
-            case .autoScan:
-                // Snapshot the mode the scanner is actually sitting on.
-                let m = autoScanTarget
-                switch m {
+            case .builtin(let v):
+                switch v {
                 case .tunnel: drawTunnel(time: t, snap: snap)
                 case .particles: drawParticles(time: t, snap: snap)
                 case .liquid: drawLiquid(time: t, snap: snap)
-                case .machine: drawMachine(time: t, snap: snap, now: Double(k) / 60.0, cameraT: 0.30)
-                default: drawShaderMode(m, time: t, snap: snap)
+                case .autoScan:
+                    // Snapshot the mode the scanner is actually sitting on.
+                    snapshotMode(autoScanTarget, time: t, snap: snap, k: k)
+                case .machine:
+                    drawMachine(time: t, snap: snap, now: Double(k) / 60.0)
+                default: drawShaderMode(v, time: t, snap: snap)
                 }
-            case .machine:
-                drawMachine(time: t, snap: snap, now: Double(k) / 60.0)
-            default: drawShaderMode(currentMode, time: t, snap: snap)
+            case .custom(let id):
+                drawCustomMode(id, time: t, snap: snap)
             }
         }
 
@@ -913,7 +973,8 @@ final class OpenGLRenderer: NSObject {
         // The instrument classifier is only worth running when the band is
         // on screen — which, during auto-scan, means whenever the scanner
         // is sitting on the band mode.
-        let isBandOnScreen = currentMode == .band || (currentMode == .autoScan && autoScanTarget == .band)
+        let isBandOnScreen = currentMode == .builtin(.band)
+            || (currentMode == .builtin(.autoScan) && autoScanTarget == .builtin(.band))
         audio.instruments.isEnabled = isBandOnScreen
 
         // Every mode runs on the sound-gated clock: it stops (easing out) when
@@ -933,19 +994,24 @@ final class OpenGLRenderer: NSObject {
 
         let snap = audio.snapshot
         advanceAutoScan(now: CACurrentMediaTime())
-        let mode = currentMode == .autoScan ? autoScanTarget : currentMode
+        let mode = currentMode == .builtin(.autoScan) ? autoScanTarget : currentMode
         effectiveMode = mode
         switch mode {
-        case .tunnel:
-            drawTunnel(time: time, snap: snap)
-        case .particles:
-            drawParticles(time: time, snap: snap)
-        case .liquid:
-            drawLiquid(time: time, snap: snap)
-        case .machine:
-            drawMachine(time: time, snap: snap, now: CACurrentMediaTime())
-        default:
-            drawShaderMode(mode, time: time, snap: snap)
+        case .builtin(let v):
+            switch v {
+            case .tunnel:
+                drawTunnel(time: time, snap: snap)
+            case .particles:
+                drawParticles(time: time, snap: snap)
+            case .liquid:
+                drawLiquid(time: time, snap: snap)
+            case .machine:
+                drawMachine(time: time, snap: snap, now: CACurrentMediaTime())
+            default:
+                drawShaderMode(v, time: time, snap: snap)
+            }
+        case .custom(let id):
+            drawCustomMode(id, time: time, snap: snap)
         }
 
         // Grade the finished frame through the active palette and present it.
@@ -956,7 +1022,99 @@ final class OpenGLRenderer: NSObject {
         // Note: flushBuffer is called by the view after this returns.
     }
 
-    // MARK: - Palette grade
+    // MARK: - Custom modes
+
+    /// A user's mode, compiled.
+    private struct CustomShader {
+        var mode: ShaderMode
+        /// The body it was built from, so an edit can be spotted and rebuilt.
+        var body: String
+    }
+
+    /// Compiled user modes, by id.
+    private var customShaders: [String: CustomShader] = [:]
+
+    /// Compiles a user's mode, or explains why it can't be used.
+    ///
+    /// The cheap shape checks run first, so a paste that was never going to
+    /// work — a `main()` instead of a `render()`, a leftover `#version` — gets
+    /// an answer without waiting on a compile. Only then does the driver get
+    /// hold of it, and its log is turned into a sentence rather than shown raw.
+    func compileCustomShader(id: String, body: String) -> Result<ShaderMode, ShaderProblem> {
+        if case .failed(let problem) = ShaderValidator.checkShape(body) {
+            return .failure(problem)
+        }
+        guard let ctx = glContext else {
+            return .failure(ShaderProblem(
+                kind: .compileFailed,
+                message: "The visualiser hasn't started yet. Give it a moment and try again."))
+        }
+        ctx.makeCurrentContext()
+        let source = FunShaders.customSource(body: body)
+        let built = makeProgramReporting(vs: Shaders.liquidVS, fs: source, label: "custom.\(id)")
+        guard built.ok else {
+            return .failure(ShaderValidator.explain(built.log, preludeLines: FunShaders.customPreludeLineCount))
+        }
+        let p = built.program
+        func loc(_ name: String) -> GLint { glGetUniformLocation(p, name) }
+        let m = ShaderMode(
+            program: p, time: loc("uTime"), bass: loc("uBass"), mid: loc("uMid"),
+            treble: loc("uTreble"), beat: loc("uBeat"), beatStrength: loc("uBeatStrength"),
+            level: loc("uLevel"), resolution: loc("uResolution"), idle: loc("uIdle"),
+            bands: loc("uBands[0]"), eventKind: loc("uEventKind"), eventAge: loc("uEventAge"),
+            active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
+            scroll: loc("uScroll"), clock: loc("uClock"),
+            levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
+            palette: loc("uPalette[0]"))
+        return .success(m)
+    }
+
+    /// Registers a mode the user has just added or edited, compiling it now
+    /// so the failure is known before anything is written to disk.
+    @discardableResult
+    func installCustomShader(id: String, body: String) -> Result<Void, ShaderProblem> {
+        switch compileCustomShader(id: id, body: body) {
+        case .failure(let problem):
+            customShaders.removeValue(forKey: id)
+            return .failure(problem)
+        case .success(let m):
+            customShaders[id] = CustomShader(mode: m, body: body)
+            return .success(())
+        }
+    }
+
+    /// Forgets a mode, so a deleted or edited one isn't left compiled.
+    func removeCustomShader(id: String) {
+        customShaders.removeValue(forKey: id)
+    }
+
+    /// Draws a user's mode.
+    ///
+    /// If the mode isn't compiled yet it is compiled now. A user's mode can
+    /// be asked for in places the normal startup path never reaches — the
+    /// offscreen snapshot renderer, for one — and a mode that silently drew
+    /// nothing would look like a bug in their code rather than in ours.
+    private func drawCustomMode(_ id: String, time: Float, snap: AudioSnapshot) {
+        if customShaders[id] == nil { compileCustomShaderOnDemand(id: id) }
+        guard let shader = customShaders[id] else { return }
+        drawShaderProgram(shader.mode, mode: nil, time: time, snap: snap)
+    }
+
+    /// Compiles a user's mode straight from disk, for the case where it
+    /// wasn't loaded at startup.
+    private func compileCustomShaderOnDemand(id: String) {
+        guard let mode = CustomModeStore.loadAll().first(where: { $0.id == id }) else {
+            NSLog("[CUSTOM] \(id) is not on disk")
+            return
+        }
+        switch compileCustomShader(id: id, body: mode.shader) {
+        case .failure(let problem):
+            NSLog("[CUSTOM] \(id) failed to compile: \(problem.message)")
+        case .success(let m):
+            customShaders[id] = CustomShader(mode: m, body: mode.shader)
+        }
+    }
+
 
     /// Creates an FBO + colour texture of the given size. Framebuffer objects
     /// are not part of the OpenGL share list, so the snapshot path (which runs
@@ -995,13 +1153,34 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// Modes drawn in their own fixed colours, which the palette would spoil.
-    private static let ungradedModes: Set<VisualizerMode> = [.badger, .llama, .nyan]
+    private static let ungradedModes: Set<VisualizerMode> = [.badger, .llama, .nyan, .danceFloor]
+
+    /// Hands the active palette to a shader as three colours: shadow,
+    /// highlight, and a mid tone between them. The dance floor picks its own
+    /// colours this way rather than being duotoned afterwards.
+    private func bindPalette(to location: GLint) {
+        let pal = Palette.palette(at: paletteIndex)
+        var colours: [GLfloat] = [pal.shadow.x, pal.shadow.y, pal.shadow.z,
+                                 pal.highlight.x, pal.highlight.y, pal.highlight.z]
+        let mid = (pal.shadow + pal.highlight) * 0.5
+        colours += [mid.x, mid.y, mid.z]
+        colours.withUnsafeBufferPointer { ptr in
+            glUniform3fv(location, 3, ptr.baseAddress)
+        }
+    }
 
     /// Full-screen quad that grades the offscreen scene through the palette
     /// (or passes it straight through for `ungradedModes`).
-    private func drawGrade(sampling texture: GLuint, mode: VisualizerMode) {
+    private func drawGrade(sampling texture: GLuint, mode: ModeID) {
         guard gradeProgram != 0 else { return }
-        let ungraded = Self.ungradedModes.contains(mode)
+        // A user's mode is graded like the other shader modes — ribbons, silk,
+        // flux — so the palette picker in the header colours it too. Only the
+        // modes with fixed pixel-art colours opt out.
+        let ungraded: Bool
+        switch mode {
+        case .builtin(let v): ungraded = Self.ungradedModes.contains(v)
+        case .custom: ungraded = false
+        }
         let pal = Palette.palette(at: paletteIndex)
 
         glUseProgram(gradeProgram)
@@ -1299,6 +1478,17 @@ final class OpenGLRenderer: NSObject {
 
     private func drawShaderMode(_ mode: VisualizerMode, time: Float, snap: AudioSnapshot) {
         guard let m = shaderModes[mode] else { return }
+        drawShaderProgram(m, mode: mode, time: time, snap: snap)
+    }
+
+    /// Draws a full-screen shader mode: binds the program, feeds it the
+    /// audio, and puts the quad on screen.
+    ///
+    /// `mode` is nil for a user's own mode: the extras here — the spectrum
+    /// peak caps, the badger overlay, the hamster sprites, the band's
+    /// instruments — all belong to specific built-ins, and a custom mode has
+    /// no such attachments.
+    private func drawShaderProgram(_ m: ShaderMode, mode: VisualizerMode?, time: Float, snap: AudioSnapshot) {
         glUseProgram(m.program)
         glUniform1f(m.time, time)
         glUniform1f(m.bass, snap.bass)
@@ -1315,6 +1505,7 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.clock, Float(wallClock.truncatingRemainder(dividingBy: 3600)))
         glUniform1f(m.levelSmooth, Float(levelSmooth))
         glUniform1f(m.bassSmooth, Float(bassSmooth))
+        if m.palette >= 0 { bindPalette(to: m.palette) }
         if mode == .spectrum {
             for i in 0..<spectrumPeaks.count {
                 let v = max(snap.bands[i * 2], snap.bands[i * 2 + 1])
@@ -1335,6 +1526,23 @@ final class OpenGLRenderer: NSObject {
         glBindVertexArray(liquidVAO)
         glBlendFunc(GLenum(GL_ONE), GLenum(GL_ZERO)) // opaque
         glDrawArrays(GLenum(GL_TRIANGLE_STRIP), 0, 4)
+    }
+
+    /// Draws one mode for the offscreen snapshot path, where the band mode
+    /// needs a fixed camera position rather than the live one.
+    private func snapshotMode(_ mode: ModeID, time: Float, snap: AudioSnapshot, k: Int) {
+        switch mode {
+        case .builtin(let v):
+            switch v {
+            case .tunnel: drawTunnel(time: time, snap: snap)
+            case .particles: drawParticles(time: time, snap: snap)
+            case .liquid: drawLiquid(time: time, snap: snap)
+            case .machine: drawMachine(time: time, snap: snap, now: Double(k) / 60.0, cameraT: 0.30)
+            default: drawShaderMode(v, time: time, snap: snap)
+            }
+        case .custom(let id):
+            drawCustomMode(id, time: time, snap: snap)
+        }
     }
 
     // MARK: - Setup
@@ -1516,7 +1724,8 @@ final class OpenGLRenderer: NSObject {
                 bands: loc("uBands[0]"), eventKind: loc("uEventKind"), eventAge: loc("uEventAge"),
                 active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
                 scroll: loc("uScroll"), clock: loc("uClock"),
-                levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"))
+                levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
+                palette: loc("uPalette[0]"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")
@@ -1541,6 +1750,59 @@ final class OpenGLRenderer: NSObject {
 
     func makeProgram(vs: String, fs: String, _ label: String) -> GLuint {
         makeGLProgram(vs: vs, fs: fs, label)
+    }
+
+    /// Compiles a program and reports whether it worked, with the driver's
+    /// log when it didn't.
+    ///
+    /// The app's own `makeGLProgram` logs failures and hands back the program
+    /// anyway, which is the right behaviour for the built-ins: one broken
+    /// shader shouldn't stop the app. A user's mode is the opposite — it is
+    /// the whole point of what they asked for, and they need to be told.
+    private func makeProgramReporting(vs: String, fs: String, label: String) -> (program: GLuint, ok: Bool, log: String) {
+        let v = compileGLShaderReporting(type: GLenum(GL_VERTEX_SHADER), source: vs, "\(label).vs")
+        let f = compileGLShaderReporting(type: GLenum(GL_FRAGMENT_SHADER), source: fs, "\(label).fs")
+        guard v.ok, f.ok else {
+            return (0, false, v.log + f.log)
+        }
+        let p = glCreateProgram()
+        glAttachShader(p, v.shader)
+        glAttachShader(p, f.shader)
+        glLinkProgram(p)
+        var status: GLint = 0
+        glGetProgramiv(p, GLenum(GL_LINK_STATUS), &status)
+        if status == 0 {
+            var logLen: GLint = 0
+            glGetProgramiv(p, GLenum(GL_INFO_LOG_LENGTH), &logLen)
+            var log = [GLchar](repeating: 0, count: Int(max(logLen, 1)))
+            glGetProgramInfoLog(p, logLen, nil, &log)
+            let text = String(cString: log)
+            NSLog("Link error (\(label)): \(text)")
+            return (0, false, text)
+        }
+        glDeleteShader(v.shader)
+        glDeleteShader(f.shader)
+        return (p, true, "")
+    }
+
+    private func compileGLShaderReporting(type: GLenum, source: String, _ label: String) -> (shader: GLuint, ok: Bool, log: String) {
+        let s = glCreateShader(type)
+        var src = (source as NSString).utf8String
+        var srcs: [UnsafePointer<GLchar>?] = [src]
+        glShaderSource(s, 1, &srcs, nil)
+        glCompileShader(s)
+        var status: GLint = 0
+        glGetShaderiv(s, GLenum(GL_COMPILE_STATUS), &status)
+        if status == 0 {
+            var logLen: GLint = 0
+            glGetShaderiv(s, GLenum(GL_INFO_LOG_LENGTH), &logLen)
+            var log = [GLchar](repeating: 0, count: Int(max(logLen, 1)))
+            glGetShaderInfoLog(s, logLen, nil, &log)
+            let text = String(cString: log)
+            NSLog("Compile error (\(label)): \(text)")
+            return (s, false, text)
+        }
+        return (s, true, "")
     }
 
     private func compileShader(type: GLenum, source: String, _ label: String) -> GLuint {
