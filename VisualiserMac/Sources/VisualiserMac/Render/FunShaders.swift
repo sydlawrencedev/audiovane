@@ -1957,352 +1957,234 @@ extension FunShaders {
 extension FunShaders {
     // MARK: - Silk Flight
 
-    /// Flying forward through the music: two satin ribbons, pink shading to
-    /// violet, spiral away into a smoky blue nebula while cyan glass cubes
-    /// tumble past and dust streams by. Each ribbon is a chain of depth slices
-    /// (at most 40), projected and hit-tested per pixel with an inverse
-    /// bilinear map, front to back; a pixel stops as soon as it's covered or
-    /// past the ribbons' reach, so most stop after a few slices. The cubes
-    /// are exact ray/box slabs. The
-    /// camera flies on uScroll, so it races when the music is loud. The bass
-    /// widens the spiral and the ribbons, the spectrum shapes the ribbons out
-    /// in the distance, every beat turns the cubes a step and throws a burst
-    /// of sparks, and the treble makes the dust and the glass edges sparkle.
-    /// In silence: dim, and still.
+    /// Flying forward through the music, after the fly-through in the AudioVane
+    /// brand film (0:11 to 0:13): a wide satin ribbon, hot pink with deep
+    /// folds, sweeps in from both frame edges and twists away into a teal dust
+    /// cloud, turning electric violet in the distance, while chunky cyan glass
+    /// blocks tumble past on near-black space. The ribbon is found per pixel by
+    /// a sign change of its side function along the ray (at most 36 depth
+    /// steps for both ends together, stopping once both are found); the glass
+    /// blocks are exact ray/box slabs. The camera flies on uScroll, so it races
+    /// when the music is loud. The bass widens the ribbon, the spectrum lights
+    /// its far reaches, the mids thicken the dust, every beat turns the glass a
+    /// step and throws a burst of glitter, and the treble makes the specks and
+    /// the glass edges sparkle. In silence: dim, and still.
     static let silk = """
-    // Silk Flight: flying forward through the music. Two satin ribbons spiral
-    // away into a smoky nebula, glass cubes tumble past, and dust streams by.
+    // Silk Flight: flying forward through the music. A wide satin ribbon, hot
+    // pink with deep folds, sweeps in from both frame edges and twists away
+    // into a teal dust cloud, turning electric violet in the distance, while
+    // chunky cyan glass blocks tumble past on near-black space.
+    const int kSilkSteps = 36;       // depth samples per ribbon branch
+    const int kSilkGlass = 6;        // glass blocks
 
-    const int kSilkSlices = 40;      // depth slices per ribbon
-    const int kSilkCubes = 10;
-    const int kSilkDust = 5;
-    const float kSilkStep = 0.42;    // world depth between ribbon slices
-    const float kSilkNear = 0.22;
-    const float kSilkCubeGap = 1.35; // world depth between glass cubes
+    const vec3 silkPink   = vec3(1.00, 0.36, 0.62);
+    const vec3 silkPinkHi = vec3(1.00, 0.66, 0.84);
+    const vec3 silkFold   = vec3(0.72, 0.14, 0.46);
+    const vec3 silkLilac  = vec3(0.90, 0.49, 0.99);
+    const vec3 silkViolet = vec3(0.31, 0.22, 0.86);
+    const vec3 silkCyan   = vec3(0.00, 1.00, 0.89);
+    const vec3 silkDust   = vec3(0.20, 0.43, 0.47);
 
-    const vec3 silkPink = vec3(1.0, 0.30, 0.70);
-    const vec3 silkViolet = vec3(0.46, 0.20, 0.95);
-    const vec3 silkCyan = vec3(0.30, 0.95, 1.0);
-    const vec3 silkHaze = vec3(0.42, 0.55, 0.78);
-
-    // How far the camera has flown. Forward-only, faster when louder.
-    float silkTravel() { return uScroll * 2.6; }
-    // One step per beat, eased in, so beat-driven changes never run backwards.
+    float silkTravel() { return uScroll * 3.0; }
     float silkTurn() { return floor(uBeats) + smoothstep(0.0, 0.5, fract(uBeats)); }
 
-    float silkSpec(float x01) {
-        float f = clamp(x01, 0.0, 1.0) * 95.0;
-        int i = int(floor(f));
-        float t = fract(f);
-        return mix(uBands[i], uBands[min(i + 1, 95)], t * t * (3.0 - 2.0 * t));
+    // Ribbon centre (xy) and twist (z) at world depth s, for branch b (0 or 1).
+    // Near the camera each branch is pushed out to its own side, so it sweeps
+    // in from the frame edge and never closes over the lens.
+    vec3 silkPath(float s, float z, float b) {
+        float side = b < 0.5 ? -1.0 : 1.0;
+        float push = 1.8 * exp(-0.5 * z);
+        float cross = side * (0.75 + push - 1.5 * smoothstep(1.5, 7.0, z));
+        return vec3(cross + 1.1 * sin(s * 0.7 + b * 2.4) + 0.4 * exp(-0.12 * z) * sin(s * 1.13 + b * 5.1),
+                    side * (-0.25 - 0.55 * push) + 0.05 + 0.45 * sin(s * 0.47 + b * 1.7 + 2.0),
+                    0.5 + 0.75 * exp(-0.06 * z) * sin(s * 0.41 + b * 3.0 + 1.0));
+    }
+
+    // Signed offset of the ray point from the ribbon's plane line at depth z,
+    // and the across-ribbon coordinate.
+    vec2 silkSide(vec2 rd, float z, float s, float b, float w) {
+        vec3 c = silkPath(s, z, b);
+        vec2 q = rd * z - c.xy;
+        vec2 t = vec2(cos(c.z), sin(c.z));
+        return vec2(dot(q, vec2(-t.y, t.x)), dot(q, t) / w);
+    }
+
+    vec3 silkShade(vec2 rd, float z, float s, float u, float b, float w) {
+        vec3 c = silkPath(s, z, b);
+        vec3 c2 = silkPath(s + 0.15, z + 0.15, b);
+        vec3 T = vec3(cos(c.z), sin(c.z), 0.0);
+        vec3 D = vec3((c2.xy - c.xy) / 0.15, 1.0);
+        vec3 N = normalize(cross(D, T));
+        vec3 V = normalize(vec3(rd, 1.0));
+        float side = dot(N, V) < 0.0 ? 1.0 : -1.0;     // which face we see
+        N *= side;
+        // Lengthwise pleats tilt the normal across the ribbon.
+        float ph = u * 5.5 + 1.4 * sin(s * 0.35 + u * 2.0 + b * 3.0);
+        float pleat = sin(ph);
+        vec3 Np = normalize(N + T * 1.1 * cos(ph) + normalize(D) * 0.45 * sin(s * 1.1 + u * 1.5 + b * 2.0));
+        vec3 L = normalize(vec3(0.35, 0.75, -0.55));
+        float dif = max(dot(Np, L), 0.0);
+        vec3 H = normalize(L - V);
+        float spec = pow(max(dot(Np, H), 0.0), 22.0) * 1.3 + 0.25 * pow(max(dot(Np, H), 0.0), 4.0);
+        float sheen = pow(1.0 - abs(dot(Np, V)), 2.0);
+        // Satin: a ramp from deep magenta folds through hot pink to a pale pink
+        // sheen, cooling to lilac on the underside and at grazing angles.
+        float k = clamp(0.15 + 0.5 * dif + 0.4 * smoothstep(0.3, 1.0, pleat) - 0.45 * smoothstep(0.1, 0.9, -pleat), 0.0, 1.0);
+        vec3 col = k < 0.5 ? mix(silkFold * 0.75, silkPink, k * 2.0) : mix(silkPink, silkPinkHi, k * 2.0 - 1.0);
+        col = mix(col, mix(silkViolet, silkLilac, k) * (0.6 + 0.6 * k), step(N.y, 0.0) * 0.4);
+        col = mix(col, silkPinkHi, sheen * 0.15);
+        col += vec3(1.0, 0.82, 0.95) * spec * (1.2 + 0.6 * uBeatStrength);
+        col *= 1.0 - 0.45 * smoothstep(0.75, 1.0, abs(u));   // rolled edges
+        // Far away the ribbon cools to electric violet-blue and sinks into the dust.
+        float far = smoothstep(1.8, 7.0, z);
+        float band = 0.8 + 0.7 * bandAt(clamp(z / 18.0, 0.0, 1.0));     // the spectrum lights the far ribbon
+        col = mix(col, (mix(silkViolet, silkLilac, 0.35 * dif + spec) * (0.75 + 0.55 * dif) + spec * 0.4) * band, far * 0.9);
+        col = mix(col, silkDust * 0.6, smoothstep(12.0, 30.0, z));
+        return col;
+    }
+
+    // Glass block: exact ray/box slabs in the block's own frame.
+    void silkGlass(inout vec3 col, vec3 rd, float zMax, int i, float travel) {
+        float n = float(i);
+        float span = 10.0;
+        float z = 0.9 + mod((n + 0.6 * hash11(n * 3.7 + 0.31)) / float(kSilkGlass) * span - travel * (0.9 + 0.2 * hash11(n * 1.9)), span);
+        float fade = smoothstep(span, span - 5.0, z) * smoothstep(1.5, 2.5, z);
+        if (fade <= 0.0) return;
+        float a = n * 2.39996 + 0.7 * hash11(n * 7.13 + 0.17);
+        float rr = (0.6 + 0.8 * hash11(n * 2.3 + 0.53)) * (0.35 + 0.28 * z);
+        vec3 c = vec3(cos(a) * rr * 1.3, sin(a) * rr * 0.8, z);
+        vec3 hs = vec3(0.28 + 0.24 * hash11(n * 5.3 + 0.7), 0.24 + 0.2 * hash11(n * 6.7 + 0.3), 0.28 + 0.26 * hash11(n * 8.9 + 0.9));
+        vec2 ang = vec2(uTime * (0.15 + 0.2 * hash11(n * 9.1)) + silkTurn() * 0.35 + n,
+                        uTime * (0.12 + 0.15 * hash11(n * 1.3)) + n * 2.0);
+        mat2 r1 = rot(ang.x), r2 = rot(ang.y);
+        vec3 ro = -c;
+        ro.xz = r1 * ro.xz; ro.xy = r2 * ro.xy;
+        vec3 d = rd;
+        d.xz = r1 * d.xz; d.xy = r2 * d.xy;
+        vec3 m = 1.0 / d;
+        vec3 k = abs(m) * hs;
+        vec3 t1 = -m * ro - k, t2 = -m * ro + k;
+        float tN = max(max(t1.x, t1.y), t1.z);
+        float tF = min(min(t2.x, t2.y), t2.z);
+        if (tN > tF || tF < 0.0 || tN > zMax) return;
+        // Front and back hit points in box space, scaled to -1..1.
+        vec3 pf = (ro + d * tN) / hs, pb = (ro + d * tF) / hs;
+        vec3 af = abs(pf), ab = abs(pb);
+        // Edge lines: a face point near two face boundaries.
+        float px = 1.5 * tN / uResolution.y * 1.6 / min(min(hs.x, hs.y), hs.z);
+        vec3 ef = 1.0 - af, eb = 1.0 - ab;
+        float edgeF = min(min(max(ef.x, ef.y), max(ef.y, ef.z)), max(ef.x, ef.z));
+        float edgeB = min(min(max(eb.x, eb.y), max(eb.y, eb.z)), max(eb.x, eb.z));
+        float lineF = 1.0 - smoothstep(0.0, 0.045 + px, edgeF);
+        float lineB = 1.0 - smoothstep(0.0, 0.03 + px, edgeB);
+        // Face normal of the front hit, and an inner diagonal on the back face.
+        vec3 nf = step(vec3(max(max(af.x, af.y), af.z)), af) * sign(pf);
+        vec3 bq = ab;
+        float diag = abs(abs(bq.x * nf.y + bq.y * nf.z + bq.z * nf.x) - abs(bq.y * nf.y + bq.z * nf.z + bq.x * nf.x));
+        float lineD = (1.0 - smoothstep(0.0, 0.035 + px, diag)) * 0.7;
+        vec3 L = normalize(vec3(0.4, 0.8, -0.4));
+        L.xz = r1 * L.xz; L.xy = r2 * L.xy;
+        float lit = max(dot(nf, L), 0.0);
+        vec3 nb = step(vec3(max(max(ab.x, ab.y), ab.z)), ab) * sign(pb);
+        float litB = max(dot(-nb, L), 0.0);
+        float refl = smoothstep(0.6, 1.0, sin(dot(pf, vec3(3.1, 2.3, 3.7)) + n * 1.7)) + 0.5 * smoothstep(0.7, 1.0, sin(dot(pb, vec3(-2.7, 3.3, 1.9)) + n));
+        float tone = hash11(dot(nf, vec3(1.0, 2.0, 3.0)) + n * 1.3 + 0.5);   // each face its own shade
+        float fres = pow(1.0 - abs(dot(nf, normalize(d))), 3.0);
+        float thick = clamp((tF - tN) / (2.0 * hs.z), 0.0, 1.5);
+        vec3 g = col * mix(0.5, 0.2, min(thick, 1.0)) + vec3(0.0, 0.035, 0.04) * min(thick, 1.0);            // tinted glass body
+        g += silkCyan * (0.03 + 1.0 * smoothstep(0.35, 0.95, lit) + 0.8 * smoothstep(0.45, 0.85, tone) + 0.15 * fres + 0.45 * refl + 0.25 * litB) * (0.7 + 0.5 * uTreble);
+        g += vec3(0.15, 1.0, 0.92) * (lineF * 1.3 + lineB * 0.6 + lineD * 0.8) * (0.85 + 0.5 * uTreble + 0.5 * uBeatStrength);
+        col = mix(col, g, fade);
     }
 
     float silkNoise(vec2 p) {
         vec2 i = floor(p), f = fract(p);
         f = f * f * (3.0 - 2.0 * f);
-        float a = hash21(i), b = hash21(i + vec2(1.0, 0.0));
-        float c = hash21(i + vec2(0.0, 1.0)), d = hash21(i + vec2(1.0, 1.0));
-        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+        return mix(mix(hash21(i), hash21(i + vec2(1.0, 0.0)), f.x),
+                   mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x), f.y);
     }
-    float silkFbm(vec2 p) {
-        float s = 0.0, a = 0.5;
-        for (int i = 0; i < 4; i++) {
-            s += a * silkNoise(p);
-            p = rot(0.6) * p * 2.03 + 11.7;
-            a *= 0.5;
-        }
-        return s;
-    }
-
-    // Centre of ribbon b at world depth z (relative depth zr picks the spectrum
-    // band: near is bass, far is treble), and the direction its width lies along.
-    vec2 silkPath(float z, float zr, float b, out vec2 across) {
-        float turn = silkTurn();
-        float ang = z * 0.30 + b * PI + 0.7 * sin(z * 0.11 + b * 1.7);
-        float spec = silkSpec(0.05 + 0.6 * clamp(zr / 12.0, 0.0, 1.0) + b * 0.12);
-        // the music reshapes the ribbon out in the distance, not right in your face
-        float react = smoothstep(0.4, 3.0, zr);
-        float rad = (0.52 + 0.22 * sin(z * 0.19 + b * 2.0 + turn * 0.35) + 0.30 * spec * uActive * react) * (1.0 + 0.25 * uBass * react);
-        float phi = ang + 1.57 + 0.95 * sin(z * 0.23 + b * 1.3 + turn * 0.45);
-        across = vec2(cos(phi), sin(phi));
-        return rad * vec2(cos(ang) * 1.35, sin(ang) * 0.85);
-    }
-
-    // Where world point (xy, depth zr in front of the camera) lands on screen.
-    vec2 silkProject(vec2 xy, float zr, vec2 cam, float focal) { return (xy - cam) * focal / zr; }
-
-    float silkCross(vec2 a, vec2 b) { return a.x * b.y - a.y * b.x; }
-
-    // Inverse bilinear map: where p sits inside quad a b c d, as (across, along)
-    // in 0..1, or negative when it's outside.
-    vec2 silkInvQuad(vec2 p, vec2 a, vec2 b, vec2 c, vec2 d) {
-        vec2 e = b - a, f = d - a, g = a - b + c - d, h = p - a;
-        float k2 = silkCross(g, f);
-        float k1 = silkCross(e, f) + silkCross(h, g);
-        float k0 = silkCross(h, e);
-        if (abs(k2) < 1e-6) {
-            float v = -k0 / k1;
-            vec2 den = e + g * v;
-            float u = abs(den.x) > abs(den.y) ? (h.x - f.x * v) / den.x : (h.y - f.y * v) / den.y;
-            return vec2(u, v);
-        }
-        float w = k1 * k1 - 4.0 * k0 * k2;
-        if (w < 0.0) return vec2(-1.0);
-        w = sqrt(w);
-        float ik2 = 0.5 / k2;
-        float v = (-k1 - w) * ik2;
-        vec2 den = e + g * v;
-        float u = abs(den.x) > abs(den.y) ? (h.x - f.x * v) / den.x : (h.y - f.y * v) / den.y;
-        if (u < 0.0 || u > 1.0 || v < 0.0 || v > 1.0) {
-            v = (-k1 + w) * ik2;
-            den = e + g * v;
-            u = abs(den.x) > abs(den.y) ? (h.x - f.x * v) / den.x : (h.y - f.y * v) / den.y;
-        }
-        return vec2(u, v);
-    }
-
-    // Satin: a soft body colour, a glossy streak that runs along the ribbon where
-    // it turns to the light, and a bright sheen at grazing angles.
-    vec3 silkShade(vec3 n, vec3 v, float s, float z, float b) {
-        bool back = dot(n, v) < 0.0;
-        if (back) n = -n;
-        vec3 l1 = normalize(vec3(-0.5, 0.8, -0.35));
-        vec3 l2 = normalize(vec3(0.75, -0.3, -0.45));
-        float hue = 0.5 + 0.5 * sin(z * 0.17 + b * 2.4);
-        float lit = max(dot(n, l1), 0.0);
-        // shadowed satin goes deep violet, lit satin hot pink
-        vec3 shadowC = mix(vec3(0.16, 0.04, 0.34), vec3(0.30, 0.06, 0.40), hue);
-        vec3 litC = mix(silkPink, mix(silkPink, silkViolet, 0.55), clamp(0.6 * s * s + 0.4 * hue * b, 0.0, 1.0));
-        vec3 col = mix(shadowC, litC, smoothstep(0.0, 0.9, lit));
-        if (back) col *= vec3(0.75, 0.7, 1.0);
-        col *= 0.55 + 0.25 * max(dot(n, l2), 0.0);
-        float spec = pow(max(dot(n, normalize(l1 + v)), 0.0), 22.0);
-        float spec2 = pow(max(dot(n, normalize(l2 + v)), 0.0), 18.0);
-        float graze = pow(1.0 - abs(dot(n, v)), 3.0);
-        col += vec3(1.0, 0.86, 0.97) * spec * (2.0 + 1.0 * uBeatStrength);
-        col += mix(silkPink, silkCyan, 0.3) * spec2 * 0.4;
-        col += mix(silkViolet, silkPink, 0.6) * graze * 0.45;
-        // the long glossy streak satin always has, wandering across the ribbon
-        float sheen = exp(-pow((s - 0.45 * sin(z * 0.8 + b * 2.0)) * 3.5, 2.0));
-        col += mix(silkPink, vec3(1.0, 0.9, 1.0), 0.5) * sheen * (0.35 + 0.4 * lit) * (1.0 + 0.6 * uBeatStrength);
-        return col;
-    }
-
-    // Nebula, dust and the beat sparks behind everything.
-    vec3 silkBackground(vec2 p, float travel) {
-        vec2 c = p - vec2(0.03, 0.02);
-        float r = length(c);
-        vec3 col = mix(vec3(0.004, 0.006, 0.016), vec3(0.012, 0.016, 0.034), exp(-r * 2.0));
-        // Smoke we keep flying into: two layers that grow out of the centre and
-        // cross-fade, so the zoom never ends.
-        float smoke = 0.0;
-        for (int i = 0; i < 2; i++) {
-            float ph = fract(travel * 0.035 + float(i) * 0.5);
-            vec2 q = rot(uTime * 0.015 + float(i) * 2.0) * c * (3.2 * exp2(-ph * 1.6));
-            smoke += silkFbm(q + float(i) * 7.3) * sin(ph * PI);
-        }
-        smoke = smoothstep(0.30, 1.0, smoke);
-        float core = exp(-r * 3.0);
-        col += silkHaze * smoke * core * (0.85 + 0.45 * uMid) * (0.45 + 0.55 * uActive);
-        col += vec3(0.24, 0.16, 0.40) * smoke * exp(-r * 1.8) * 0.18;
-        col += vec3(0.22, 0.30, 0.48) * core * core * 0.30;
-        // Dust streaming past in a few depth layers.
-        float a = atan(c.y, c.x);
-        for (int i = 0; i < kSilkDust; i++) {
-            float fi = float(i);
-            float zl = fract(fi / float(kSilkDust) - travel * 0.06);
-            vec2 sp = c * mix(26.0, 2.5, zl) + vec2(fi * 13.1, fi * 7.7);
-            vec2 cell = floor(sp);
-            float h = hash21(cell);
-            vec2 off = vec2(hash21(cell + 3.1), hash21(cell + 8.3)) - 0.5;
-            float d = length(fract(sp) - 0.5 - off * 0.7);
-            float size = 0.035 + 0.05 * zl;
-            float star = smoothstep(size, 0.0, d) * step(0.88, h);
-            float fade = smoothstep(0.0, 0.25, zl) * smoothstep(1.0, 0.75, zl);
-            vec3 sc = mix(vec3(1.0, 0.55, 0.85), vec3(0.75, 0.9, 1.0), hash21(cell + 1.7));
-            col += sc * star * fade * (0.5 + 1.2 * uTreble + 0.8 * uBeatStrength) * (0.35 + 0.65 * uActive);
-        }
-        // A burst of sparks on every beat, flying out from the middle.
-        float ph = fract(uBeats);
-        float cellA = floor(a / (2.0 * PI) * 48.0);
-        float hs = hash11(cellA + floor(uBeats) * 1.37);
-        float sr = (0.06 + 0.7 * hs) * (1.0 - pow(1.0 - ph, 3.0));
-        float aMid = (cellA + 0.5) / 48.0 * 2.0 * PI;
-        vec2 sparkP = vec2(cos(aMid), sin(aMid)) * sr;
-        float spark = smoothstep(0.006, 0.0, length(c - sparkP) - 0.002) * step(0.55, hs);
-        col += mix(silkPink, silkCyan, hash11(cellA * 1.3)) * spark * uBeatStrength * (1.0 - ph) * 2.5 * uActive;
-        return col;
-    }
-
-    // Glass cube j: centre (relative to the camera), half size and turn.
-    void silkCube(int j, float travel, out vec3 c, out float h, out vec2 ang) {
-        float n = floor(travel / kSilkCubeGap) + float(j);
-        float hz = hash11(n * 1.91 + 0.3);
-        float ha = hash11(n * 7.13 + 1.1);
-        float hr = hash11(n * 3.77 + 2.9);
-        float a = ha * 2.0 * PI;
-        float rad = 0.55 + 1.5 * hr;
-        c = vec3(cos(a) * rad * 1.3, sin(a) * rad * 0.8, n * kSilkCubeGap + hz * kSilkCubeGap - travel);
-        h = (0.06 + 0.12 * hash11(n * 5.31)) * (1.0 + 0.10 * uBeatStrength);
-        ang = vec2(uTime * (0.25 + 0.3 * hz) + ha * 6.0 + silkTurn() * 0.4, uTime * (0.2 + 0.25 * hr) + hr * 6.0);
-    }
-
-    vec3 silkToCube(vec3 v, vec2 ang) { v.xz = rot(ang.x) * v.xz; v.xy = rot(ang.y) * v.xy; return v; }
-    vec3 silkFromCube(vec3 v, vec2 ang) { v.xy = rot(-ang.y) * v.xy; v.xz = rot(-ang.x) * v.xz; return v; }
 
     void main() {
         vec2 p = screenP();
+        p = rot(0.06 * sin(uTime * 0.05)) * p;
         float travel = silkTravel();
-        // Camera: a slow roll and sway on the sound-gated clock.
-        p = rot(0.12 * sin(uTime * 0.05)) * p;
-        vec2 cam = vec2(0.10 * sin(uTime * 0.11), 0.07 * sin(uTime * 0.083 + 1.0));
-        float focal = 1.2 - 0.06 * uBass;
-        float px = 1.0 / uResolution.y;
+        vec2 rd = p * 1.25 + vec2(0.04 * sin(uTime * 0.11), 0.03 * sin(uTime * 0.083 + 1.0));
 
-        vec3 col = silkBackground(p, travel);
+        // Space: near-black teal with a drifting cloud of dust in the middle.
+        vec3 col = vec3(0.0, 0.05, 0.025) + vec3(0.0, 0.05, 0.07) * smoothstep(0.7, 0.0, length(p * vec2(0.7, 1.4)));
+        vec2 dq = p * 2.2 + vec2(travel * 0.02, 0.0);
+        float dn = silkNoise(dq * 1.6) * 0.45 + silkNoise(dq * 3.4 + 7.0) * 0.27 + silkNoise(dq * 7.5 - 3.0) * 0.17 + silkNoise(dq * 16.0 + 1.0) * 0.11;
+        vec2 pc = (p - vec2(0.05, 0.03)) * vec2(1.8, 3.2);
+        float core = exp(-dot(pc, pc));
+        float dust = smoothstep(0.25, 0.85, dn) * core * 1.5;
+        col += silkDust * dust * 1.25 * (1.0 + 0.4 * uMid) * (0.6 + 0.4 * uActive);
+        // Fine specks streaming outward as we fly.
+        for (int l = 0; l < 3; l++) {
+            float fl = float(l);
+            float ph = fract(travel * 0.08 + fl / 3.0);
+            vec2 sp = p * mix(14.0, 2.5, ph) * 30.0 + fl * 37.0;
+            vec2 cell = floor(sp);
+            float h = hash21(cell);
+            float sd = length(fract(sp) - 0.5 - 0.3 * (vec2(hash21(cell + 3.1), hash21(cell + 5.7)) - 0.5));
+            float star = step(0.93, h) * (1.0 - smoothstep(0.05, 0.25, sd)) * smoothstep(0.0, 0.3, ph) * smoothstep(1.0, 0.8, ph);
+            col += mix(vec3(0.75, 0.35, 0.9), vec3(0.8, 0.9, 1.0), hash21(cell + 9.0)) * star * (0.35 + 0.6 * uTreble + 0.4 * uBeatStrength) * (0.4 + 0.6 * dust + 0.3 * uActive);
+        }
 
-        // --- Ribbons: front to back through depth slices.
-        vec3 ribC = vec3(0.0);
-        float ribA = 0.0;
-        float ribZ = 1e5;
-        float zFar = kSilkNear + float(kSilkSlices) * kSilkStep;
-        // Nothing on a ribbon reaches further from the axis than this, so once a
-        // slice at this depth would project inside the pixel's radius, every
-        // slice beyond it does too and the pixel can stop looking.
-        float reach = (2.25 + length(cam)) * focal;
-        float pr = length(p);
-        for (int b = 0; b < 2; b++) {
-            float fb = float(b);
-            vec3 accC = vec3(0.0);
-            float accA = 0.0;
-            float firstZ = 1e5;
-            float width = (0.17 + 0.07 * uBass + 0.05 * uBeatStrength) * (1.0 - 0.35 * fb);
-            // first slice sits exactly on the near plane
-            float zA = travel + kSilkNear;
-            vec2 acrossA;
-            vec2 cA = silkPath(zA, kSilkNear, fb, acrossA);
-            vec2 pa = silkProject(cA - acrossA * width, kSilkNear, cam, focal);
-            vec2 pb = silkProject(cA + acrossA * width, kSilkNear, cam, focal);
-            float z0 = (floor(zA / kSilkStep) + 1.0) * kSilkStep;
-            for (int k = 0; k < kSilkSlices; k++) {
-                if (pr * (zA - travel) > reach) break;
-                float zB = z0 + float(k) * kSilkStep;
-                float zrB = zB - travel;
-                vec2 acrossB;
-                vec2 cB = silkPath(zB, zrB, fb, acrossB);
-                vec2 pc = silkProject(cB + acrossB * width, zrB, cam, focal);
-                vec2 pd = silkProject(cB - acrossB * width, zrB, cam, focal);
-                // cheap reject: is p anywhere near this quad?
-                vec2 lo = min(min(pa, pb), min(pc, pd)) - 2.0 * px;
-                vec2 hi = max(max(pa, pb), max(pc, pd)) + 2.0 * px;
-                if (all(greaterThan(p, lo)) && all(lessThan(p, hi))) {
-                    vec2 uv = silkInvQuad(p, pa, pb, pc, pd);
-                    if (uv.x >= 0.0 && uv.x <= 1.0 && uv.y >= 0.0 && uv.y <= 1.0) {
-                        float zrA = zA - travel;
-                        float zr = mix(zrA, zrB, uv.y);
-                        float s = uv.x * 2.0 - 1.0;
-                        // surface frame at this point
-                        vec2 across = normalize(mix(acrossA, acrossB, uv.y));
-                        vec3 tang = normalize(vec3(cB - cA, zB - zA));
-                        vec3 wdir = vec3(across, 0.0);
-                        vec3 n = normalize(cross(tang, wdir));
-                        float zw = zA + (zB - zA) * uv.y;
-                        n = normalize(n + wdir * s * 1.3 - tang * 0.55 + tang * 0.3 * sin(zw * 1.7 + s * 1.2 + fb) * (1.0 - smoothstep(2.0, 8.0, zr)));   // rounded across, with soft folds, like satin
-                        vec2 wxy = mix(cA, cB, uv.y) + across * width * s;
-                        vec3 v = normalize(-vec3(wxy - cam, zr));
-                        vec3 sc = silkShade(n, v, s, zA + (zB - zA) * uv.y, fb);
-                        // soft edges, a pixel wide on screen
-                        float wpx = length(mix(pb - pa, pc - pd, uv.y)) / px;
-                        float edge = clamp((1.0 - abs(s)) * 0.5 * wpx, 0.0, 1.0);
-                        float fog = smoothstep(zFar * 0.35, zFar, zr);
-                        sc = mix(sc, silkHaze * 0.25, fog);
-                        float alpha = edge * 0.96 * (1.0 - fog * fog);
-                        accC += (1.0 - accA) * sc * alpha;
-                        if (accA < 0.5 && accA + (1.0 - accA) * alpha >= 0.5) firstZ = zr;
-                        accA += (1.0 - accA) * alpha;
-                    }
+        // The ribbon: two branches, each found by a sign change of its side
+        // function along the ray (exponential depth steps, front to back).
+        float w = 0.62 * (1.0 + 0.15 * uBass);
+        vec4 hitA = vec4(1e5, 0.0, 0.0, 0.0), hitB = vec4(1e5, 0.0, 0.0, 0.0);   // z, u, s, alpha
+        vec2 prevA = vec2(0.0), prevB = vec2(0.0);
+        float zPrev = 0.0;
+        for (int i = 0; i < kSilkSteps; i++) {
+            float z = 0.45 * pow(1.13, float(i));
+            float s = travel + z;
+            vec2 fa = silkSide(rd, z, s, 0.0, w);
+            vec2 fb = silkSide(rd, z, s, 1.0, w);
+            if (i > 0) {
+                if (hitA.x > 1e4 && fa.x * prevA.x <= 0.0) {
+                    float k = prevA.x / (prevA.x - fa.x);
+                    float u = mix(prevA.y, fa.y, k);
+                    if (abs(u) < 1.05) { float zz = mix(zPrev, z, k); hitA = vec4(zz, u, travel + zz, 1.0); }
                 }
-                if (accA > 0.985) break;
-                zA = zB; cA = cB; acrossA = acrossB; pa = pd; pb = pc;
+                if (hitB.x > 1e4 && fb.x * prevB.x <= 0.0) {
+                    float k = prevB.x / (prevB.x - fb.x);
+                    float u = mix(prevB.y, fb.y, k);
+                    if (abs(u) < 1.05) { float zz = mix(zPrev, z, k); hitB = vec4(zz, u, travel + zz, 1.0); }
+                }
+                if (hitA.x < 1e4 && hitB.x < 1e4) break;
             }
-            // keep whichever ribbon is in front on top
-            if (firstZ < ribZ) {
-                ribC = accC + (1.0 - accA) * ribC;
-                ribA = accA + (1.0 - accA) * ribA;
-                ribZ = firstZ;
-            } else {
-                ribC = ribC + (1.0 - ribA) * accC;
-                ribA = ribA + (1.0 - ribA) * accA;
-            }
+            prevA = fa; prevB = fb; zPrev = z;
         }
-        float glowR = (0.95 + 0.5 * uLevel + 0.5 * uBeatStrength);
-        ribC *= glowR;
-
-        // --- Glass cubes tumbling past.
-        vec3 ro = vec3(cam, 0.0);
-        vec3 rd = normalize(vec3(p, focal));
-        float tHit = 1e5;
-        vec3 cubeC = vec3(0.0);
-        float cubeA = 0.0;
-        vec3 halo = vec3(0.0);
-        for (int j = 0; j < kSilkCubes; j++) {
-            vec3 c; float h; vec2 ang;
-            silkCube(j, travel, c, h, ang);
-            if (c.z < 0.05) continue;
-            vec3 oc = ro - c;
-            float tc = max(dot(-oc, rd), 0.0);
-            float dl = length(oc + rd * tc);
-            halo += silkCyan * exp(-max(dl - h * 1.2, 0.0) * 18.0) * 0.06 / (1.0 + c.z * 0.25);
-            if (dl > h * 1.75) continue;
-            vec3 o = silkToCube(oc, ang), d = silkToCube(rd, ang);
-            vec3 inv = 1.0 / d;
-            vec3 t1 = (-h - o) * inv, t2 = (h - o) * inv;
-            vec3 tmin = min(t1, t2), tmax = max(t1, t2);
-            float tn = max(max(tmin.x, tmin.y), tmin.z);
-            float tf = min(min(tmax.x, tmax.y), tmax.z);
-            if (tn < tf && tn > 0.0 && tn < tHit) {
-                tHit = tn;
-                vec3 q = o + d * tn;
-                vec3 nl = step(tmin.yzx, tmin) * step(tmin.zxy, tmin) * -sign(d);
-                vec3 nW = silkFromCube(nl, ang);
-                vec3 aq = abs(q) / h;
-                // second-largest coordinate: near 1 along an edge
-                float m1 = max(max(aq.x, aq.y), aq.z);
-                float m2 = aq.x + aq.y + aq.z - m1 - min(min(aq.x, aq.y), aq.z);
-                float ew = 0.05 + px * tn * 2.5 / h;
-                float edge = smoothstep(1.0 - ew, 1.0, m2);
-                vec3 qb = o + d * tf;
-                vec3 ab = abs(qb) / h;
-                float b1 = max(max(ab.x, ab.y), ab.z);
-                float b2 = ab.x + ab.y + ab.z - b1 - min(min(ab.x, ab.y), ab.z);
-                float edgeBack = smoothstep(1.0 - ew, 1.0, b2);
-                float fres = 0.1 + 0.9 * pow(1.0 - abs(dot(rd, nW)), 4.0);
-                vec3 rr = reflect(rd, nW);
-                vec3 env = silkHaze * 0.25 + silkPink * 0.8 * pow(max(dot(rr, normalize(vec3(0.6, 0.4, -0.7))), 0.0), 8.0)
-                         + vec3(0.8, 0.95, 1.0) * pow(max(dot(rr, normalize(vec3(-0.3, 0.9, -0.3))), 0.0), 16.0);
-                float streak = smoothstep(0.12, 0.0, abs(fract((q.x + q.y) / h * 0.7 + 0.3) - 0.5) - 0.18);
-                vec3 face = vec3(0.0, 0.50, 0.60) * (0.55 + 0.45 * hash11(dot(nl, vec3(3.0, 5.0, 7.0)) + float(j)));
-                cubeC = face + env * fres * 1.4 + silkCyan * streak * 0.18;
-                cubeC += mix(silkCyan, vec3(0.85, 1.0, 1.0), 0.3) * (edge * 2.0 + edgeBack * 0.6) * (0.8 + 0.6 * uTreble + 0.8 * uBeatStrength);
-                float fogC = smoothstep(9.0, kSilkCubeGap * float(kSilkCubes), c.z);
-                cubeC = mix(cubeC, silkHaze * 0.2, fogC);
-                cubeA = (0.45 + 0.5 * max(edge, fres)) * (1.0 - fogC);
-            }
+        float zr = min(hitA.x, hitB.x);
+        // Composite far branch first, then near.
+        for (int j = 0; j < 2; j++) {
+            vec4 h = (j == 0) == (hitA.x > hitB.x) ? hitA : hitB;
+            float b = (j == 0) == (hitA.x > hitB.x) ? 0.0 : 1.0;
+            if (h.x > 1e4) continue;
+            float aa = 2.0 * h.x / (uResolution.y * 1.25 * w);
+            float alpha = (1.0 - smoothstep(1.0 - aa, 1.0, abs(h.y))) * smoothstep(17.0, 9.0, h.x);
+            col = mix(col, silkShade(rd, h.x, h.z, h.y, b, w), alpha);
         }
-        float cubeZ = tHit * rd.z;
 
-        // --- Put it together, nearest on top.
-        if (cubeZ < ribZ) {
-            col = ribC + (1.0 - ribA) * col;
-            col = mix(col, cubeC, cubeA);
-        } else {
-            col = mix(col, cubeC, cubeA);
-            col = ribC + (1.0 - ribA) * col;
+        // Glass blocks in front of the ribbon.
+        for (int i = 0; i < kSilkGlass; i++) silkGlass(col, vec3(rd, 1.0), zr, i, travel);
+
+        // Beat sparks: a burst of pink and cyan glitter thrown outward.
+        float ph = fract(uBeats);
+        float ang = atan(p.y, p.x) * 7.0;
+        for (int j = 0; j < 2; j++) {
+            float fj = float(j);
+            float cellA = floor(ang + fj * 0.5) + fj * 50.0;
+            float hs = hash11(cellA + floor(uBeats) * 1.37);
+            float a2 = (floor(ang + fj * 0.5) + 0.5 - fj * 0.5 + 0.6 * (hash11(cellA * 2.1) - 0.5)) / 7.0;
+            float rr = 0.06 + ph * (0.25 + 0.6 * hs);
+            vec2 sp = vec2(cos(a2), sin(a2)) * rr;
+            float spark = (1.0 - smoothstep(0.002, 0.006 + 0.004 * hs, length(p - sp))) * step(0.5, hs);
+            col += mix(silkPink, silkCyan, hash11(cellA * 1.3)) * spark * uBeatStrength * (1.0 - ph) * 3.0 * uActive;
         }
-        col += halo * (0.5 + 0.5 * uActive + 0.6 * uBeatStrength);
 
-        col = 1.0 - exp(-col * 1.7);                    // soft highlight roll-off
-        col *= 1.0 - 0.45 * dot(p, p);                   // vignette
+        col *= 1.0 - 0.25 * dot(p, p);                  // vignette
         col = mix(col * 0.45, col, uActive);             // dims and settles in silence
         fragColor = vec4(col, 1.0);
     }
