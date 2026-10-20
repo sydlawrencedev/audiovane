@@ -519,15 +519,6 @@ struct CustomVibscapeView: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                Text("Vibresia is here")
-                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                    .tracking(1.0)
-                    .foregroundStyle(Color(white: 0.5))
-                CopyableRow(text: MCPSetup.appPath, monospaced: true,
-                           help: "Copy the app's location")
-            }
-
-            VStack(alignment: .leading, spacing: 5) {
                 Text("Give your agent this")
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .tracking(1.0)
