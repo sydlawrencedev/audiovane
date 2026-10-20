@@ -6,7 +6,7 @@ import Foundation
 /// the README); the app itself can't do this job, because an app that isn't
 /// running has no way to hear about anything.
 ///
-/// It is a separate, tiny, invisible process rather than a second mode of the
+/// It is a separate, tiny, invisible process rather than a second vibscape of the
 /// main app for two reasons: the main app is a windowed OpenGL surface that
 /// would be expensive to keep resident, and a watcher that lives in the app
 /// can't catch the launch that would start the app.
@@ -59,7 +59,7 @@ func openVibresia(fallback: String?) {
     }
 }
 
-// --- Modes -----------------------------------------------------------------
+// --- Vibscapes -----------------------------------------------------------------
 
 let arguments = Array(CommandLine.arguments.dropFirst())
 

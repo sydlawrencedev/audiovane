@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// The Custom Mode sheet: the way a person adds a mode of their own.
+/// The Custom Vibscape sheet: the way a person adds a vibscape of their own.
 ///
 /// It opens on a choice of three routes, because "write some code" is a
 /// dead end for most people and the app shouldn't pretend otherwise:
@@ -9,7 +9,7 @@ import AppKit
 /// a file somebody sent them. Whichever route they take, they end in the
 /// same place — a box of code, a name, and a Test button that tells them
 /// honestly whether it works.
-struct CustomModeView: View {
+struct CustomVibscapeView: View {
     /// Where in the flow they are.
     enum Step {
         case choose
@@ -29,7 +29,7 @@ struct CustomModeView: View {
     @State private var name: String = ""
     @State private var author: String = ""
     @State private var url: String = ""
-    @State private var code: String = CustomModeGuide.starterTemplate
+    @State private var code: String = CustomVibscapeGuide.starterTemplate
     @State private var problem: ShaderProblem?
     @State private var preview: NSImage?
     @State private var testing = false
@@ -37,19 +37,19 @@ struct CustomModeView: View {
     @State private var isEditing = false
     @State private var editingID: String?
 
-    /// A mode already on disk, being edited rather than created.
+    /// A vibscape already on disk, being edited rather than created.
     ///
     /// `initialStep` exists for the headless UI shots, which render each
     /// step of the flow to check it reads well.
-    init(editing mode: CustomMode? = nil, initialStep: Step = .choose, scrollable: Bool = true) {
+    init(editing mode: CustomVibscape? = nil, initialStep: Step = .choose, scrollable: Bool = true) {
         _name = State(initialValue: mode?.name ?? "")
         _author = State(initialValue: mode?.author ?? "")
         _url = State(initialValue: mode?.url ?? "")
-        _code = State(initialValue: mode?.shader ?? CustomModeGuide.starterTemplate)
+        _code = State(initialValue: mode?.shader ?? CustomVibscapeGuide.starterTemplate)
         _isEditing = State(initialValue: mode != nil)
         _editingID = State(initialValue: mode?.id)
-        // Editing an existing mode goes straight to the code — there's
-        // nothing to choose, the mode is already there.
+        // Editing an existing vibscape goes straight to the code — there's
+        // nothing to choose, the vibscape is already there.
         _step = State(initialValue: mode != nil ? .write : initialStep)
         self.scrollable = scrollable
     }
@@ -71,10 +71,10 @@ struct CustomModeView: View {
     private var chooseStep: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Make your own mode")
+                Text("Make your own vibscape")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("A mode is a small piece of code that draws to the music. Pick whichever way suits you.")
+                Text("A vibscape is a small piece of code that draws to the music. Pick whichever way suits you.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(white: 0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -94,14 +94,14 @@ struct CustomModeView: View {
                 RouteButton(
                     glyph: "curlybraces",
                     title: "Paste code you already have",
-                    detail: "For when you've written a mode, or had one written for you."
+                    detail: "For when you've written a vibscape, or had one written for you."
                 ) {
                     step = .write
                 }
                 RouteButton(
                     glyph: "folder",
                     title: "Open a file",
-                    detail: "For a mode file somebody sent you, or one you saved earlier."
+                    detail: "For a vibscape file somebody sent you, or one you saved earlier."
                 ) {
                     openFile()
                 }
@@ -116,7 +116,7 @@ struct CustomModeView: View {
                     .foregroundStyle(Color(white: 0.8))
                 Text("""
                 Vibresia has a local server that agents can talk to. Give it this command and the \
-                agent can write a mode, check it compiles, look at the result and try again — all \
+                agent can write a vibscape, check it compiles, look at the result and try again — all \
                 without you copying a thing.
                 """)
                 .font(.system(size: 10.5))
@@ -154,7 +154,7 @@ struct CustomModeView: View {
 
             Divider().overlay(Color.white.opacity(0.08))
             HStack {
-                Text("Your modes are saved on this Mac, in your Application Support folder. Nothing is uploaded.")
+                Text("Your vibscapes are saved on this Mac, in your Application Support folder. Nothing is uploaded.")
                     .font(.system(size: 10))
                     .foregroundStyle(Color(white: 0.4))
                     .fixedSize(horizontal: false, vertical: true)
@@ -204,7 +204,7 @@ struct CustomModeView: View {
     private var bar: some View {
         HStack {
             Button {
-                // Editing an existing mode has no chooser to go back to, and
+                // Editing an existing vibscape has no chooser to go back to, and
                 // the write step has no cancel button, so the arrow closes
                 // the sheet instead.
                 if isEditing {
@@ -220,7 +220,7 @@ struct CustomModeView: View {
             .buttonStyle(.plain)
             .help(isEditing ? "Close" : "Back to the options")
 
-            Text(isEditing ? "Edit your mode" : step == .ai ? "Ask an AI to write it" : "Paste your mode")
+            Text(isEditing ? "Edit your vibscape" : step == .ai ? "Ask an AI to write it" : "Paste your vibscape")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
@@ -235,7 +235,7 @@ struct CustomModeView: View {
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(Color(white: 0.45))
-            TextField("My Mode", text: $name)
+            TextField("My Vibscape", text: $name)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(.white)
@@ -253,8 +253,8 @@ struct CustomModeView: View {
         .padding(.bottom, 10)
     }
 
-    /// Who made it, and where to find more. Both optional — a mode someone
-    /// wrote for themselves doesn't need credit, and most modes have no
+    /// Who made it, and where to find more. Both optional — a vibscape someone
+    /// wrote for themselves doesn't need credit, and most vibscapes have no
     /// home page.
     private var creditFields: some View {
         HStack(spacing: 10) {
@@ -353,7 +353,7 @@ struct CustomModeView: View {
     private var resultPanel: some View {
         if showHelp {
             ScrollView {
-                Text(CustomModeGuide.reference)
+                Text(CustomVibscapeGuide.reference)
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(Color(white: 0.72))
                     .textSelection(.enabled)
@@ -454,7 +454,7 @@ struct CustomModeView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             Button("Reset to example") {
-                code = CustomModeGuide.starterTemplate
+                code = CustomVibscapeGuide.starterTemplate
                 problem = nil
                 preview = nil
             }
@@ -477,7 +477,7 @@ struct CustomModeView: View {
                 )
                 .disabled(testing)
 
-            Button(isEditing ? "Save" : "Add mode") { save() }
+            Button(isEditing ? "Save" : "Add vibscape") { save() }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.black)
@@ -489,13 +489,13 @@ struct CustomModeView: View {
                 )
                 .disabled(!canSave)
                 .opacity(canSave ? 1 : 0.4)
-                .help(canSave ? "" : "Test it first — a mode is only added once it works.")
+                .help(canSave ? "" : "Test it first — a vibscape is only added once it works.")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
     }
 
-    /// A mode can only be added once it has been shown to work, and it needs
+    /// A vibscape can only be added once it has been shown to work, and it needs
     /// a name to go by.
     private var canSave: Bool {
         preview != nil && !name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -591,7 +591,7 @@ struct CustomModeView: View {
                     Spacer()
                     Button {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(CustomModeGuide.agentPrompt, forType: .string)
+                        NSPasteboard.general.setString(CustomVibscapeGuide.agentPrompt, forType: .string)
                     } label: {
                         Label("Copy", systemImage: "doc.on.doc")
                             .font(.system(size: 10, weight: .medium))
@@ -599,7 +599,7 @@ struct CustomModeView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text(CustomModeGuide.agentPrompt)
+                Text(CustomVibscapeGuide.agentPrompt)
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(Color(white: 0.75))
                     .textSelection(.enabled)
@@ -658,7 +658,7 @@ struct CustomModeView: View {
         }
     }
 
-    /// Draws the mode offscreen and returns the picture.
+    /// Draws the vibscape offscreen and returns the picture.
     private func renderPreview(id: String) -> NSImage? {
         let path = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("audiovane-preview-\(id).png")
@@ -674,12 +674,12 @@ struct CustomModeView: View {
         // doesn't end up as a broken link on the card.
         let trimmedURL = url.trimmingCharacters(in: .whitespaces)
         let finalURL = trimmedURL.isEmpty ? nil : trimmedURL
-        let result: Result<CustomMode, ShaderProblem>
+        let result: Result<CustomVibscape, ShaderProblem>
         if let id = editingID {
-            result = app.updateCustomMode(id: id, name: finalName, author: finalAuthor,
+            result = app.updateCustomVibscape(id: id, name: finalName, author: finalAuthor,
                                           url: finalURL, shader: code)
         } else {
-            result = app.addCustomMode(name: finalName, author: finalAuthor,
+            result = app.addCustomVibscape(name: finalName, author: finalAuthor,
                                        url: finalURL, shader: code)
         }
         switch result {
@@ -696,7 +696,7 @@ struct CustomModeView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Choose a mode file — one that contains a render() function."
+        panel.message = "Choose a vibscape file — one that contains a render() function."
         panel.prompt = "Open"
         if panel.runModal() == .OK, let url = panel.url {
             if let text = try? String(contentsOf: url, encoding: .utf8) {
@@ -708,7 +708,7 @@ struct CustomModeView: View {
             } else {
                 problem = ShaderProblem(
                     kind: .compileFailed,
-                    message: "That file couldn't be read. Mode files are plain text — .glsl, .frag or .txt all work.")
+                    message: "That file couldn't be read. Vibscape files are plain text — .glsl, .frag or .txt all work.")
             }
         }
     }

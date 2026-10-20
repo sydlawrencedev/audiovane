@@ -1,11 +1,11 @@
 import Foundation
 
-/// Full-screen fragment shaders for the extra visualizer modes. Each body is
+/// Full-screen fragment shaders for the extra visualizer vibscapes. Each body is
 /// appended to `prelude` and drawn on the shared full-screen quad with
 /// `Shaders.liquidVS`. Everything is drawn procedurally with 2D signed
 /// distance fields: no textures or sprite assets.
 enum FunShaders {
-    static let modes: [(VisualizerMode, String)] = [
+    static let modes: [(Vibscape, String)] = [
         (.badger, badger),
         (.llama, llama),
         (.hamster, hamster),
@@ -86,21 +86,21 @@ enum FunShaders {
 
     """
 
-    // MARK: - Custom modes
+    // MARK: - Custom vibscapes
 
-    /// Wraps a user-written mode so the author only has to supply
+    /// Wraps a user-written vibscape so the author only has to supply
     /// `vec3 render(vec2 p, float t)` and return a colour.
     ///
-    /// Every mode in this file writes `main()` and assigns `fragColor`
+    /// Every vibscape in this file writes `main()` and assigns `fragColor`
     /// directly, because they're ours and terseness costs them nothing. A
-    /// person pasting in a mode they've never seen shouldn't have to learn
+    /// person pasting in a vibscape they've never seen shouldn't have to learn
     /// that: `fragColor` is an output slot with no meaning to someone who
     /// just wants a colour back. Returning a `vec3` is the one concept that
     /// transfers from every other drawing API.
     ///
     /// `uPalette` is declared here rather than in the prelude because the
-    /// built-in modes each declare it themselves and the prelude predates
-    /// it. Declaring it for custom modes means "themed by the current
+    /// built-in vibscapes each declare it themselves and the prelude predates
+    /// it. Declaring it for custom vibscapes means "themed by the current
     /// palette" works the same way it does for Dance Floor — and if the
     /// author never mentions it, the location lookup returns -1 and the
     /// palette bind is skipped, so an unused uniform costs nothing.
@@ -114,7 +114,7 @@ enum FunShaders {
     }
     """
 
-    /// A complete shader for a user's mode: the same prelude the built-ins
+    /// A complete shader for a user's vibscape: the same prelude the built-ins
     /// get, plus their code, plus the friendly wrapper.
     ///
     /// The order matters. GLSL has no forward declarations, so the function
@@ -1718,7 +1718,7 @@ extension FunShaders {
 
     /// A cyber tunnel of grid lines rushing past, twisting with the bass.
     ///
-    /// Written by Alisan and shipped as a mode of its own.
+    /// Written by Alisan and shipped as a vibscape of its own.
     static let vortex = """
     void vortexAt(inout vec3 col, vec2 p, float t) {
         float r = length(p);

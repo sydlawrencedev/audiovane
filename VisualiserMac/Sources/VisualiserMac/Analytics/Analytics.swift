@@ -21,7 +21,7 @@ actor Analytics {
     /// about how the app is used.
     ///
     /// Read from the command line rather than set by a flag, because the
-    /// app changes its mode on the way up — before anything had a chance to
+    /// app changes its vibscape on the way up — before anything had a chance to
     /// switch the analytics off.
     static var suppressed: Bool { CommandLine.arguments.contains("--mcp") }
 
@@ -40,7 +40,7 @@ actor Analytics {
     private var queue: [[String: Any]] = []
     private var flushTask: Task<Void, Never>?
 
-    /// Rolled up per session so a mode-flicker doesn't cost 40 API calls.
+    /// Rolled up per session so a vibscape-flicker doesn't cost 40 API calls.
     private var session: [String: Int] = [:]
     private var sessionStarted = Date()
 

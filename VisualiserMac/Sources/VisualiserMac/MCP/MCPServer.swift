@@ -1,6 +1,6 @@
 import Foundation
 
-/// A local MCP server, so an AI agent can write modes for Vibresia.
+/// A local MCP server, so an AI agent can write vibscapes for Vibresia.
 ///
 /// The server speaks JSON-RPC 2.0 over stdin and stdout, one message per
 /// line, which is how MCP clients launch a stdio server. It is the same
@@ -9,7 +9,7 @@ import Foundation
 /// Two things it deliberately doesn't do: it doesn't listen on a port, and
 /// it doesn't need the app to be running. A stdio server has no socket to
 /// secure, and it reads and writes the same files the app does — so an agent
-/// can create a mode whether or not Vibresia is open.
+/// can create a vibscape whether or not Vibresia is open.
 final class MCPServer {
     private let output: FileHandle
     private let input: FileHandle
@@ -24,7 +24,7 @@ final class MCPServer {
 
     /// Reads messages until stdin closes.
     func run() {
-        // The app's own stdout is a log; in MCP mode stdout is the protocol
+        // The app's own stdout is a log; in MCP vibscape stdout is the protocol
         // channel, so nothing else may write to it.
         setvbuf(stdout, nil, _IONBF, 0)
         NSLog("[MCP] listening on stdio")
@@ -100,21 +100,21 @@ final class MCPServer {
 
     /// What the client is told about this server the first time it connects.
     /// Clients show this to the user, so it says the useful thing: what this
-    /// is for, and that a mode is a shader.
+    /// is for, and that a vibscape is a shader.
     private static let instructions = """
-    This server writes modes for Vibresia, a macOS music visualiser. A mode is a \
-    fragment shader: a single function
+    This server writes vibscapes for Vibresia, a macOS music visualiser. A \
+    vibscape is a fragment shader: a single function
 
         vec3 render(vec2 p, float t)
 
     that returns a colour. `p` is the position on screen, centred on 0,0 and \
     about -0.5 to 0.5 vertically; `t` is time in seconds.
 
-    Call `mode_reference` first for the uniforms and helpers that are \
+    Call `vibscape_reference` first for the uniforms and helpers that are \
     available — uBass, uBands, uBeats and the rest — rather than guessing at \
-    them. Call `test_mode` to check a shader and see what it looks like \
-    before saving it. `create_mode` and `update_mode` compile what they are \
-    given and refuse to save code that doesn't work, so a mode on disk always \
-    runs.
+    them. Call `test_vibscape` to check a shader and see what it looks like \
+    before saving it. `create_vibscape` and `update_vibscape` compile what they \
+    are given and refuse to save code that doesn't work, so a vibscape on disk \
+    always runs.
     """
 }

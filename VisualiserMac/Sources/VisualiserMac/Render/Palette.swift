@@ -6,7 +6,7 @@ import simd
 /// The grade is a duotone-plus-saturation pass: the scene's luminance ramp is
 /// mapped between a shadow colour and a highlight colour, then the result is
 /// pushed back toward (or away from) greyscale. Applying it as a post-process
-/// means it themes *every* mode at once — the tunnel, the band, the machine —
+/// means it themes *every* vibscape at once — the tunnel, the band, the machine —
 /// without each shader needing to know about palettes.
 struct Palette {
     let name: String

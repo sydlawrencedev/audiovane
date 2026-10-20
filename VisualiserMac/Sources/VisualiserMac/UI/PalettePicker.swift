@@ -32,7 +32,7 @@ extension Color {
 /// Colour palette picker — a drop-down in the header.
 ///
 /// The palette is applied as a post-process over the finished frame, so it
-/// themes every mode at once rather than being one more thing each shader
+/// themes every vibscape at once rather than being one more thing each shader
 /// has to know about.
 struct PalettePicker: View {
     @EnvironmentObject var app: AppState

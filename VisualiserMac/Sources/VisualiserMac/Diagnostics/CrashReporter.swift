@@ -19,7 +19,7 @@ import Foundation
 ///      has anonymous usage switched on. Reports stay on disk either way, so
 ///      "Report a Problem…" can attach one by hand.
 ///
-/// Band mode is where this earns its keep: it is a stage full of state
+/// Band vibscape is where this earns its keep: it is a stage full of state
 /// machines (genre cross-fade, per-musician hold timers, a sound classifier
 /// feeding it) and a crash there is unreadable without knowing what that
 /// state was at the time.
@@ -93,7 +93,7 @@ final class CrashReporter {
 
     /// Deliberate crash, so the whole report-and-upload path can be exercised
     /// from the command line (`--simulate-crash`) instead of waiting for a real
-    /// band-mode fault to happen to somebody.
+    /// band-vibscape fault to happen to somebody.
     func simulateCrash() {
         NSLog("[crash] simulating a crash on purpose")
         raise(SIGSEGV)

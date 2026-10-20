@@ -17,7 +17,7 @@ final class OpenGLRenderer: NSObject {
     private var tunnelProgram: GLuint = 0
     private var particleProgram: GLuint = 0
     private var liquidProgram: GLuint = 0
-    /// MACHINE mode: instanced drums / pads / bouncing balls.
+    /// MACHINE vibscape: instanced drums / pads / bouncing balls.
     private let machine = MachineRenderer()
     /// Where the machine camera is in its 48-second loop.
     private var machineCameraPhase: Float = 0
@@ -25,7 +25,7 @@ final class OpenGLRenderer: NSObject {
     // --- Palette post-process -------------------------------------------
     // The scene is rendered into an offscreen texture, then a full-screen
     // grade pass maps it through the active palette and writes to the
-    // drawable. One shader themes every mode at once.
+    // drawable. One shader themes every vibscape at once.
     private var gradeProgram: GLuint = 0
     private var gradeVAO: GLuint = 0
     private var gradeVBO: GLuint = 0
@@ -85,20 +85,20 @@ final class OpenGLRenderer: NSObject {
     private var uLiquidIdle: GLint = -1
     private var uLiquidBands: GLint = -1
 
-    /// Full-screen fragment-shader modes (see FunShaders) share one uniform layout.
+    /// Full-screen fragment-shader vibscapes (see FunShaders) share one uniform layout.
     struct ShaderMode {
         let program: GLuint
         let time, bass, mid, treble, beat, beatStrength, level, resolution, idle, bands: GLint
         let eventKind, eventAge: GLint
         let active, beats, peaks, scroll, clock: GLint
         let levelSmooth, bassSmooth, presence: GLint
-        /// `uPalette[0]` — modes with deliberate colours read the palette
+        /// `uPalette[0]` — vibscapes with deliberate colours read the palette
         /// themselves instead of being duotoned afterwards. -1 when absent.
         let palette: GLint
     }
-    private var shaderModes: [VisualizerMode: ShaderMode] = [:]
+    private var shaderVibscapes: [Vibscape: ShaderMode] = [:]
 
-    /// Badger mode overlays: a big beat (well above the recent beat average)
+    /// Badger vibscape overlays: a big beat (well above the recent beat average)
     /// pops up the mushroom; every third one brings the snake instead.
     private var bigBeatAverage: Float = 0.3
     private var overlayKind: Float = 0          // 0 none, 1 mushroom, 2 snake
@@ -176,7 +176,7 @@ final class OpenGLRenderer: NSObject {
         glUniform1fv(uSpriteDelay, GLsizei(SpriteAtlas.maxSprites), delay)
     }
 
-    // MARK: Band mode cues
+    // MARK: Band vibscape cues
 
     /// Who is playing comes from the sound classifier (slow, ~0.75s updates);
     /// the playing motion itself is driven by the beat clock in the shader.
@@ -440,7 +440,7 @@ final class OpenGLRenderer: NSObject {
             } else {
                 NSLog("[BAND] genre \(genre.name): lineup \(visual.lineup.map(\.rawValue).sorted())")
             }
-            // The lineup is what a band-mode crash report needs: a stage with
+            // The lineup is what a band-vibscape crash report needs: a stage with
             // two drummers on it is a different bug from an empty one.
             CrashReporter.shared.log("band lineup for \(genre.name): \(genreVisual.noMusicians ? "(none)" : visual.lineup.map(\.shortName).sorted().joined(separator: "+"))")
         }
@@ -586,7 +586,7 @@ final class OpenGLRenderer: NSObject {
     }
 
     // State
-    private var currentMode: ModeID = .builtin(.tunnel)
+    private var currentVibscape: VibscapeID = .builtin(.tunnel)
     private var viewWidth: GLfloat = 1.0
     private var viewHeight: GLfloat = 1.0
 
@@ -665,13 +665,13 @@ final class OpenGLRenderer: NSObject {
         return ctx
     }
 
-    func setMode(_ mode: ModeID) {
+    func setVibscape(_ mode: VibscapeID) {
         if mode == .builtin(.autoScan) {
             // Start the cycle on whatever is already showing, so switching to
-            // auto-scan doesn't visibly jump — the mode you're in gets its
+            // auto-scan doesn't visibly jump — the vibscape you're in gets its
             // full 20 seconds before the scanner moves on.
-            if currentMode != .builtin(.autoScan), scanCycle.contains(currentMode) {
-                autoScanTarget = currentMode
+            if currentVibscape != .builtin(.autoScan), scanCycle.contains(currentVibscape) {
+                autoScanTarget = currentVibscape
             } else if !scanCycle.contains(autoScanTarget) {
                 autoScanTarget = scanCycle.first ?? .builtin(.tunnel)
             }
@@ -679,20 +679,20 @@ final class OpenGLRenderer: NSObject {
             // Re-anchor the bar counter, so the first change lands a whole
             // number of bars from now rather than firing at once.
             scanIsMusical = danceActivity > 0.05
-            scanBarIndex = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
+            scanBarIndex = Int(beatClock / (Double(barsPerVibscape) * beatsPerBar))
         }
-        if mode == .builtin(.machine), currentMode != .builtin(.machine) {
+        if mode == .builtin(.machine), currentVibscape != .builtin(.machine) {
             // Start the camera at the beginning of its path.
             machineCameraPhase = 0
         }
-        currentMode = mode
+        currentVibscape = mode
     }
 
     /// Replaces the Auto Scan rotation. AppState calls this whenever the
-    /// enabled set changes — a mode switched off in View All leaves the cycle
+    /// enabled set changes — a vibscape switched off in View All leaves the cycle
     /// on the next go-round rather than being drawn until the scanner lands on
     /// it again.
-    func setScanCycle(_ modes: [ModeID]) {
+    func setScanCycle(_ modes: [VibscapeID]) {
         scanCycle = modes.filter { $0 != .builtin(.autoScan) }
         if scanCycle.isEmpty {
             // Everything is switched off. Rather than spin on nothing, stay
@@ -708,19 +708,19 @@ final class OpenGLRenderer: NSObject {
     /// True while the auto-scanner is running. The view uses this to keep
     /// rendering even in silence — the scanner has to keep cycling whether
     /// or not music is playing.
-    var isAutoScanning: Bool { currentMode == .builtin(.autoScan) }
+    var isAutoScanning: Bool { currentVibscape == .builtin(.autoScan) }
 
-    /// The mode actually being drawn. In auto-scan this is the mode the
+    /// The vibscape actually being drawn. In auto-scan this is the vibscape the
     /// scanner is currently sitting on, not `.autoScan` itself.
-    private(set) var effectiveMode: ModeID = .builtin(.tunnel)
+    private(set) var effectiveVibscape: VibscapeID = .builtin(.tunnel)
     /// What Auto Scan walks. Owned by AppState (it's the thing that knows
-    /// which modes the user has switched on) and pushed in here, rather than
-    /// being derived from `allCases`, so hiding a mode from the list really
+    /// which vibscapes the user has switched on) and pushed in here, rather than
+    /// being derived from `allCases`, so hiding a vibscape from the list really
     /// does keep the scanner off it.
-    private var scanCycle: [ModeID] = VisualizerMode.allCases
+    private var scanCycle: [VibscapeID] = Vibscape.allCases
         .filter { $0 != .autoScan }
-        .map { ModeID.builtin($0) }
-    /// How long each mode gets before the scanner moves on, when there's no
+        .map { VibscapeID.builtin($0) }
+    /// How long each vibscape gets before the scanner moves on, when there's no
     /// music to measure against.
     private static let autoScanDuration: CFTimeInterval = 20.0
     private var autoScanDuration: CFTimeInterval = {
@@ -731,18 +731,18 @@ final class OpenGLRenderer: NSObject {
         }
         return 20.0
     }()
-    private var autoScanTarget: ModeID = .builtin(.tunnel)
-    /// Wall-clock time the current mode started. Using a timestamp rather
-    /// than accumulated frame deltas means each mode gets exactly 20 real
+    private var autoScanTarget: VibscapeID = .builtin(.tunnel)
+    /// Wall-clock time the current vibscape started. Using a timestamp rather
+    /// than accumulated frame deltas means each vibscape gets exactly 20 real
     /// seconds whether the renderer is running at 30fps or 120fps, and it
     /// doesn't drift or stall if frames are dropped.
     private var autoScanStart: CFTimeInterval = 0
-    /// Set when the mode changes so the UI can flash a "now showing" hint.
+    /// Set when the vibscape changes so the UI can flash a "now showing" hint.
     private(set) var autoScanJustChanged = false
 
-    /// How many bars of the song each mode gets.
-    var barsPerMode: Int = 4 {
-        didSet { barsPerMode = max(1, barsPerMode) }
+    /// How many bars of the song each vibscape gets.
+    var barsPerVibscape: Int = 4 {
+        didSet { barsPerVibscape = max(1, barsPerVibscape) }
     }
 
     /// Beats in a bar. The app doesn't read the time signature, and 4/4 is
@@ -759,31 +759,31 @@ final class OpenGLRenderer: NSObject {
     /// With music playing, the scanner counts bars: `beatClock` runs at the
     /// detected tempo and is phase-locked to land on whole numbers at each
     /// detected beat, so crossing a whole number of bars happens on a beat
-    /// — the mode change lands with the music rather than against it.
+    /// — the vibscape change lands with the music rather than against it.
     ///
     /// With no music there's no bar to count, so the scanner falls back to
     /// the wall clock. Without that, stopping the music would freeze the
     /// scanner on one scene forever.
     private func advanceAutoScan(now: CFTimeInterval) {
-        guard currentMode == .builtin(.autoScan) else { return }
+        guard currentVibscape == .builtin(.autoScan) else { return }
 
         let musical = danceActivity > 0.05
         if musical != scanIsMusical {
             // Switching between the two clocks: re-anchor, so the change
             // doesn't fire immediately or sit waiting for a stale mark.
             scanIsMusical = musical
-            scanBarIndex = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
+            scanBarIndex = Int(beatClock / (Double(barsPerVibscape) * beatsPerBar))
             autoScanStart = now
         }
 
         if musical {
-            let bar = Int(beatClock / (Double(barsPerMode) * beatsPerBar))
+            let bar = Int(beatClock / (Double(barsPerVibscape) * beatsPerBar))
             guard bar != scanBarIndex else { return }
             scanBarIndex = bar
         } else {
             guard now - autoScanStart >= autoScanDuration else { return }
             // Carry the overshoot forward so a late frame doesn't shorten
-            // the next mode's slot.
+            // the next vibscape's slot.
             autoScanStart += autoScanDuration
         }
 
@@ -804,15 +804,15 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// One-shot offscreen render to PNG. Used for verification / debug snapshots.
-    func renderToPNG(width: Int, height: Int, mode: ModeID, frames: Int = 60, path: String) {
+    func renderToPNG(width: Int, height: Int, mode: VibscapeID, frames: Int = 60, path: String) {
         guard let ctx = ensureOffscreenContext() else {
             NSLog("[VIZ] renderToPNG: failed to create offscreen context")
             return
         }
         ctx.makeCurrentContext()
 
-        let saveMode = currentMode
-        currentMode = mode
+        let saveVibscape = currentVibscape
+        currentVibscape = mode
         viewWidth = GLfloat(width)
         viewHeight = GLfloat(height)
 
@@ -835,7 +835,7 @@ final class OpenGLRenderer: NSObject {
 
         glViewport(0, 0, GLsizei(width), GLsizei(height))
 
-        // Run frames. Snapshot mode pre-set the analyzer state, so we just need
+        // Run frames. Snapshot vibscape pre-set the analyzer state, so we just need
         // to copy the snapshot for the renderer to consume it.
         // Snapshots have no live audio: render as if music is playing at 120bpm.
         let savedActivity = danceActivity
@@ -858,21 +858,21 @@ final class OpenGLRenderer: NSObject {
             if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass); presence = 1; presenceVelocity = 0 }
             easeLevels(snap, dt: 1.0 / 60)
             let t = Float(k) / 60.0
-            switch currentMode {
+            switch currentVibscape {
             case .builtin(let v):
                 switch v {
                 case .tunnel: drawTunnel(time: t, snap: snap)
                 case .particles: drawParticles(time: t, snap: snap)
                 case .liquid: drawLiquid(time: t, snap: snap)
                 case .autoScan:
-                    // Snapshot the mode the scanner is actually sitting on.
-                    snapshotMode(autoScanTarget, time: t, snap: snap, k: k)
+                    // Snapshot the vibscape the scanner is actually sitting on.
+                    snapshotVibscape(autoScanTarget, time: t, snap: snap, k: k)
                 case .machine:
                     drawMachine(time: t, snap: snap, now: Double(k) / 60.0)
-                default: drawShaderMode(v, time: t, snap: snap)
+                default: drawFullScreenShader(v, time: t, snap: snap)
                 }
             case .custom(let id):
-                drawCustomMode(id, time: t, snap: snap)
+                drawCustomVibscape(id, time: t, snap: snap)
             }
         }
 
@@ -880,7 +880,7 @@ final class OpenGLRenderer: NSObject {
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo)
         glViewport(0, 0, GLsizei(width), GLsizei(height))
         glDisable(GLbitfield(GL_BLEND))
-        drawGrade(sampling: snapTarget.tex, mode: currentMode)
+        drawGrade(sampling: snapTarget.tex, mode: currentVibscape)
 
         // read pixels
         let rowBytes = width * 4
@@ -918,7 +918,7 @@ final class OpenGLRenderer: NSObject {
         CGImageDestinationFinalize(dest)
 
         // restore
-        currentMode = saveMode
+        currentVibscape = saveVibscape
         NSLog("[VIZ] saved \(path)")
     }
 
@@ -972,12 +972,12 @@ final class OpenGLRenderer: NSObject {
         audio.tick()
         // The instrument classifier is only worth running when the band is
         // on screen — which, during auto-scan, means whenever the scanner
-        // is sitting on the band mode.
-        let isBandOnScreen = currentMode == .builtin(.band)
-            || (currentMode == .builtin(.autoScan) && autoScanTarget == .builtin(.band))
+        // is sitting on the band vibscape.
+        let isBandOnScreen = currentVibscape == .builtin(.band)
+            || (currentVibscape == .builtin(.autoScan) && autoScanTarget == .builtin(.band))
         audio.instruments.isEnabled = isBandOnScreen
 
-        // Every mode runs on the sound-gated clock: it stops (easing out) when
+        // Every vibscape runs on the sound-gated clock: it stops (easing out) when
         // there's no source or the music goes quiet, so nothing moves in silence.
         advanceDanceClock(audio.snapshot)
         let time = Float(danceClock.truncatingRemainder(dividingBy: 3600))
@@ -994,8 +994,8 @@ final class OpenGLRenderer: NSObject {
 
         let snap = audio.snapshot
         advanceAutoScan(now: CACurrentMediaTime())
-        let mode = currentMode == .builtin(.autoScan) ? autoScanTarget : currentMode
-        effectiveMode = mode
+        let mode = currentVibscape == .builtin(.autoScan) ? autoScanTarget : currentVibscape
+        effectiveVibscape = mode
         switch mode {
         case .builtin(let v):
             switch v {
@@ -1008,10 +1008,10 @@ final class OpenGLRenderer: NSObject {
             case .machine:
                 drawMachine(time: time, snap: snap, now: CACurrentMediaTime())
             default:
-                drawShaderMode(v, time: time, snap: snap)
+                drawFullScreenShader(v, time: time, snap: snap)
             }
         case .custom(let id):
-            drawCustomMode(id, time: time, snap: snap)
+            drawCustomVibscape(id, time: time, snap: snap)
         }
 
         // Grade the finished frame through the active palette and present it.
@@ -1022,19 +1022,19 @@ final class OpenGLRenderer: NSObject {
         // Note: flushBuffer is called by the view after this returns.
     }
 
-    // MARK: - Custom modes
+    // MARK: - Custom vibscapes
 
-    /// A user's mode, compiled.
+    /// A user's vibscape, compiled.
     private struct CustomShader {
         var mode: ShaderMode
         /// The body it was built from, so an edit can be spotted and rebuilt.
         var body: String
     }
 
-    /// Compiled user modes, by id.
+    /// Compiled user vibscapes, by id.
     private var customShaders: [String: CustomShader] = [:]
 
-    /// Compiles a user's mode, or explains why it can't be used.
+    /// Compiles a user's vibscape, or explains why it can't be used.
     ///
     /// The cheap shape checks run first, so a paste that was never going to
     /// work — a `main()` instead of a `render()`, a leftover `#version` — gets
@@ -1045,7 +1045,7 @@ final class OpenGLRenderer: NSObject {
             return .failure(problem)
         }
         guard let ctx = glContext else {
-            // Not the mode's fault: the window hasn't made its context yet.
+            // Not the vibscape's fault: the window hasn't made its context yet.
             return .failure(ShaderProblem(
                 kind: .notReady,
                 message: "The visualiser hasn't started yet. Give it a moment and try again."))
@@ -1070,7 +1070,7 @@ final class OpenGLRenderer: NSObject {
         return .success(m)
     }
 
-    /// Registers a mode the user has just added or edited, compiling it now
+    /// Registers a vibscape the user has just added or edited, compiling it now
     /// so the failure is known before anything is written to disk.
     @discardableResult
     func installCustomShader(id: String, body: String) -> Result<Void, ShaderProblem> {
@@ -1084,27 +1084,27 @@ final class OpenGLRenderer: NSObject {
         }
     }
 
-    /// Forgets a mode, so a deleted or edited one isn't left compiled.
+    /// Forgets a vibscape, so a deleted or edited one isn't left compiled.
     func removeCustomShader(id: String) {
         customShaders.removeValue(forKey: id)
     }
 
-    /// Draws a user's mode.
+    /// Draws a user's vibscape.
     ///
-    /// If the mode isn't compiled yet it is compiled now. A user's mode can
+    /// If the vibscape isn't compiled yet it is compiled now. A user's vibscape can
     /// be asked for in places the normal startup path never reaches — the
-    /// offscreen snapshot renderer, for one — and a mode that silently drew
+    /// offscreen snapshot renderer, for one — and a vibscape that silently drew
     /// nothing would look like a bug in their code rather than in ours.
-    private func drawCustomMode(_ id: String, time: Float, snap: AudioSnapshot) {
+    private func drawCustomVibscape(_ id: String, time: Float, snap: AudioSnapshot) {
         if customShaders[id] == nil { compileCustomShaderOnDemand(id: id) }
         guard let shader = customShaders[id] else { return }
         drawShaderProgram(shader.mode, mode: nil, time: time, snap: snap)
     }
 
-    /// Compiles a user's mode straight from disk, for the case where it
+    /// Compiles a user's vibscape straight from disk, for the case where it
     /// wasn't loaded at startup.
     private func compileCustomShaderOnDemand(id: String) {
-        guard let mode = CustomModeStore.loadAll().first(where: { $0.id == id }) else {
+        guard let mode = CustomVibscapeStore.loadAll().first(where: { $0.id == id }) else {
             NSLog("[CUSTOM] \(id) is not on disk")
             return
         }
@@ -1153,8 +1153,8 @@ final class OpenGLRenderer: NSObject {
         sceneTex = pair.tex
     }
 
-    /// Modes drawn in their own fixed colours, which the palette would spoil.
-    private static let ungradedModes: Set<VisualizerMode> = [.badger, .llama, .nyan, .danceFloor]
+    /// Vibscapes drawn in their own fixed colours, which the palette would spoil.
+    private static let ungradedVibscapes: Set<Vibscape> = [.badger, .llama, .nyan, .danceFloor]
 
     /// Hands the active palette to a shader as three colours: shadow,
     /// highlight, and a mid tone between them. The dance floor picks its own
@@ -1171,15 +1171,15 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// Full-screen quad that grades the offscreen scene through the palette
-    /// (or passes it straight through for `ungradedModes`).
-    private func drawGrade(sampling texture: GLuint, mode: ModeID) {
+    /// (or passes it straight through for `ungradedVibscapes`).
+    private func drawGrade(sampling texture: GLuint, mode: VibscapeID) {
         guard gradeProgram != 0 else { return }
-        // A user's mode is graded like the other shader modes — ribbons, silk,
+        // A user's vibscape is graded like the other shader vibscapes — ribbons, silk,
         // flux — so the palette picker in the header colours it too. Only the
-        // modes with fixed pixel-art colours opt out.
+        // vibscapes with fixed pixel-art colours opt out.
         let ungraded: Bool
         switch mode {
-        case .builtin(let v): ungraded = Self.ungradedModes.contains(v)
+        case .builtin(let v): ungraded = Self.ungradedVibscapes.contains(v)
         case .custom: ungraded = false
         }
         let pal = Palette.palette(at: paletteIndex)
@@ -1306,18 +1306,18 @@ final class OpenGLRenderer: NSObject {
 
     // MARK: - Liquid
 
-    /// MACHINE mode — a port of the MIDEM Music Hack Day piece. Drums in a
+    /// MACHINE vibscape — a port of the MIDEM Music Hack Day piece. Drums in a
     /// corridor plus a ring of pads; note events launch bouncing balls that
     /// arc over the drums, which recoil and flash.
     ///
     /// `now` is the clock note ages are measured against — wall-clock in live
-    /// playback, a synthetic clock in snapshot mode.
-    /// MACHINE mode — a port of the MIDEM Music Hack Day piece. Drums in a
+    /// playback, a synthetic clock in snapshot vibscape.
+    /// MACHINE vibscape — a port of the MIDEM Music Hack Day piece. Drums in a
     /// corridor plus a ring of pads; note events launch bouncing balls that
     /// arc over the drums, which recoil and flash.
     ///
     /// `now` is the clock note ages are measured against — wall-clock in live
-    /// playback, a synthetic clock in snapshot mode.
+    /// playback, a synthetic clock in snapshot vibscape.
     private func drawMachine(time: Float, snap: AudioSnapshot, now: CFTimeInterval, cameraT: Float? = nil) {
         let dt = Float(lastFrameDT)
         machine.update(bands: snap.bands, rms: snap.rms, now: now)
@@ -1381,9 +1381,9 @@ final class OpenGLRenderer: NSObject {
         glDrawArrays(GLenum(GL_TRIANGLE_STRIP), 0, 4)
     }
 
-    // MARK: - Shader modes
+    // MARK: - Shader vibscapes
 
-    /// Animation clock for all modes: only advances while there's sound, so
+    /// Animation clock for all vibscapes: only advances while there's sound, so
     /// everything freezes in place when the music stops (and eases in/out of it).
     private var danceClock: Double = 0
     private var danceActivity: Double = 0
@@ -1401,14 +1401,14 @@ final class OpenGLRenderer: NSObject {
     /// a tempo change (or the first detection) doesn't change speed in one frame.
     private var beatClockBPM: Double = 120
     /// Slow, time-filtered loudness for uLevelSmooth / uBassSmooth: rises over
-    /// ~0.3 s, falls over ~1.5 s, so a mode can swell with the music without
+    /// ~0.3 s, falls over ~1.5 s, so a vibscape can swell with the music without
     /// the frame-to-frame flicker of uLevel / uBass.
     private var levelSmooth: Double = 0
     private var bassSmooth: Double = 0
     /// Slow music presence for uPresence, 0 in silence and 1 with music: a
     /// critically damped spring toward a smoothstep of the eased loudness,
     /// so it eases in and out (~2.3 s either way) with no overshoot and no
-    /// chatter at quiet passages. For modes that morph between an idle state
+    /// chatter at quiet passages. For vibscapes that morph between an idle state
     /// and their playing look.
     private var presence: Double = 0
     private var presenceVelocity: Double = 0
@@ -1418,7 +1418,7 @@ final class OpenGLRenderer: NSObject {
     /// Distance travelled, for things that should move faster when louder.
     /// Accumulated (never time × speed) so a drop in speed can't run it backwards.
     private var scrollClock: Double = 0
-    /// Plain wall-clock seconds that keep running in silence. Only for modes
+    /// Plain wall-clock seconds that keep running in silence. Only for vibscapes
     /// that should never stop completely (Ribbons keeps a slow, dim drift);
     /// everything else should stay on the sound-gated clocks above.
     private var wallClock: Double = 0
@@ -1490,19 +1490,19 @@ final class OpenGLRenderer: NSObject {
         presence = min(1, max(0, presence + presenceVelocity * h))
     }
 
-    private func drawShaderMode(_ mode: VisualizerMode, time: Float, snap: AudioSnapshot) {
-        guard let m = shaderModes[mode] else { return }
+    private func drawFullScreenShader(_ mode: Vibscape, time: Float, snap: AudioSnapshot) {
+        guard let m = shaderVibscapes[mode] else { return }
         drawShaderProgram(m, mode: mode, time: time, snap: snap)
     }
 
-    /// Draws a full-screen shader mode: binds the program, feeds it the
+    /// Draws a full-screen shader vibscape: binds the program, feeds it the
     /// audio, and puts the quad on screen.
     ///
-    /// `mode` is nil for a user's own mode: the extras here — the spectrum
+    /// `vibscape` is nil for a user's own vibscape: the extras here — the spectrum
     /// peak caps, the badger overlay, the hamster sprites, the band's
-    /// instruments — all belong to specific built-ins, and a custom mode has
+    /// instruments — all belong to specific built-ins, and a custom vibscape has
     /// no such attachments.
-    private func drawShaderProgram(_ m: ShaderMode, mode: VisualizerMode?, time: Float, snap: AudioSnapshot) {
+    private func drawShaderProgram(_ m: ShaderMode, mode: Vibscape?, time: Float, snap: AudioSnapshot) {
         glUseProgram(m.program)
         glUniform1f(m.time, time)
         glUniform1f(m.bass, snap.bass)
@@ -1543,9 +1543,9 @@ final class OpenGLRenderer: NSObject {
         glDrawArrays(GLenum(GL_TRIANGLE_STRIP), 0, 4)
     }
 
-    /// Draws one mode for the offscreen snapshot path, where the band mode
+    /// Draws one vibscape for the offscreen snapshot path, where the band vibscape
     /// needs a fixed camera position rather than the live one.
-    private func snapshotMode(_ mode: ModeID, time: Float, snap: AudioSnapshot, k: Int) {
+    private func snapshotVibscape(_ mode: VibscapeID, time: Float, snap: AudioSnapshot, k: Int) {
         switch mode {
         case .builtin(let v):
             switch v {
@@ -1553,10 +1553,10 @@ final class OpenGLRenderer: NSObject {
             case .particles: drawParticles(time: time, snap: snap)
             case .liquid: drawLiquid(time: time, snap: snap)
             case .machine: drawMachine(time: time, snap: snap, now: Double(k) / 60.0, cameraT: 0.30)
-            default: drawShaderMode(v, time: time, snap: snap)
+            default: drawFullScreenShader(v, time: time, snap: snap)
             }
         case .custom(let id):
-            drawCustomMode(id, time: time, snap: snap)
+            drawCustomVibscape(id, time: time, snap: snap)
         }
     }
 
@@ -1723,7 +1723,7 @@ final class OpenGLRenderer: NSObject {
         uLiquidActive = glGetUniformLocation(liquidProgram, "uActive")
         uLiquidBands = glGetUniformLocation(liquidProgram, "uBands[0]")
 
-        // MACHINE mode
+        // MACHINE vibscape
         machine.buildProgram()
 
         // Palette grade pass
@@ -1732,7 +1732,7 @@ final class OpenGLRenderer: NSObject {
         for (mode, body) in FunShaders.modes {
             let p = makeProgram(vs: Shaders.liquidVS, fs: FunShaders.prelude + body, mode.rawValue)
             func loc(_ name: String) -> GLint { glGetUniformLocation(p, name) }
-            shaderModes[mode] = ShaderMode(
+            shaderVibscapes[mode] = ShaderMode(
                 program: p, time: loc("uTime"), bass: loc("uBass"), mid: loc("uMid"),
                 treble: loc("uTreble"), beat: loc("uBeat"), beatStrength: loc("uBeatStrength"),
                 level: loc("uLevel"), resolution: loc("uResolution"), idle: loc("uIdle"),
@@ -1772,7 +1772,7 @@ final class OpenGLRenderer: NSObject {
     ///
     /// The app's own `makeGLProgram` logs failures and hands back the program
     /// anyway, which is the right behaviour for the built-ins: one broken
-    /// shader shouldn't stop the app. A user's mode is the opposite — it is
+    /// shader shouldn't stop the app. A user's vibscape is the opposite — it is
     /// the whole point of what they asked for, and they need to be told.
     private func makeProgramReporting(vs: String, fs: String, label: String) -> (program: GLuint, ok: Bool, log: String) {
         let v = compileGLShaderReporting(type: GLenum(GL_VERTEX_SHADER), source: vs, "\(label).vs")
@@ -1900,7 +1900,7 @@ private func mix(_ a: SIMD3<Float>, _ b: SIMD3<Float>, _ t: Float) -> SIMD3<Floa
 }
 
 /// Compiles and links a shader program. Shared by the renderer and the
-/// machine mode.
+/// machine vibscape.
 func makeGLProgram(vs: String, fs: String, _ label: String) -> GLuint {
     let v = compileGLShader(type: GLenum(GL_VERTEX_SHADER), source: vs, "\(label).vs")
     let f = compileGLShader(type: GLenum(GL_FRAGMENT_SHADER), source: fs, "\(label).fs")

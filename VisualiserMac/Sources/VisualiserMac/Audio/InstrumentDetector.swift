@@ -51,7 +51,7 @@ final class InstrumentDetector: NSObject, SNResultsObserving {
     private var chunkTime: Double = 0      // audio time of the latest chunk (under lock)
     private var hpState: Float = 0, hpPrev: Float = 0
 
-    /// Only analyse while the band mode is on screen. Set from the render
+    /// Only analyse while the band vibscape is on screen. Set from the render
     /// thread, read from the audio thread; a stale read just costs one chunk.
     var isEnabled = false
 

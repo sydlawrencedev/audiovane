@@ -20,7 +20,7 @@ struct HUDView: View {
                         .tracking(3.5)
                         .foregroundStyle(Color.white)
                     // The real version, not a standing "v1": someone reporting
-                    // a crash or a mode that looks wrong needs to be able to
+                    // a crash or a vibscape that looks wrong needs to be able to
                     // read it off the screen. Uppercased by .textCase, like
                     // the rest of the header.
                     Text("v\(Self.version)")
@@ -37,10 +37,10 @@ struct HUDView: View {
             // scene is the point, and the same choices are still one keystroke
             // away (1–0, -, [, ], ; and =) or in the Visualizer menu.
             if app.layout.showsPills {
-                // mode picker (header drop-down)
-                ModePicker()
+                // vibscape picker (header drop-down)
+                VibscapePicker()
 
-                // genre picker (band mode only)
+                // genre picker (band vibscape only)
                 GenrePicker()
 
                 // colour palette picker
@@ -83,7 +83,7 @@ struct HUDView: View {
 /// This used to be a status display — you could see "system audio" but the only
 /// way to change it was the intro screen or the Visualizer menu, which meant
 /// quitting what you were doing to switch inputs. Same list, same click-away,
-/// same visual language as the mode and palette pickers; the dot still says
+/// same visual language as the vibscape and palette pickers; the dot still says
 /// whether anything is actually flowing.
 struct SourcePicker: View {
     @EnvironmentObject var app: AppState

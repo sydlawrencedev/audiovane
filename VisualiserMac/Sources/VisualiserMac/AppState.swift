@@ -3,27 +3,27 @@ import Combine
 import AppKit
 
 final class AppState: ObservableObject {
-    @Published var activeMode: ModeID = .builtin(.tunnel) {
+    @Published var activeVibscape: VibscapeID = .builtin(.tunnel) {
         didSet {
-            if activeMode != oldValue {
-                NSLog("[DD] mode changed \(oldValue.rawValue) -> \(activeMode.rawValue)")
+            if activeVibscape != oldValue {
+                NSLog("[DD] mode changed \(oldValue.rawValue) -> \(activeVibscape.rawValue)")
                 // Remembered, so the next launch opens where they left off
                 // rather than snapping back to auto-scan.
-                Self.savedMode = activeMode
+                Self.savedVibscape = activeVibscape
                 // The breadcrumb half of a crash report: "it crashed in band
-                // mode" is only half a bug report, "…after switching jazz to
+                // vibscape" is only half a bug report, "…after switching jazz to
                 // country, mid cross-fade" is the other half.
-                CrashReporter.shared.log("mode \(oldValue.rawValue) -> \(activeMode.rawValue)")
+                CrashReporter.shared.log("mode \(oldValue.rawValue) -> \(activeVibscape.rawValue)")
                 // Tallied rather than sent individually: a user cycling
-                // through modes generates 40 events in a minute and PostHog
+                // through vibscapes generates 40 events in a minute and PostHog
                 // only wants the histogram.
                 Task { await Analytics.shared.countInSession("mode_switches") }
                 Task {
-                    await Analytics.shared.countInSession("mode:\(activeMode.rawValue)")
+                    await Analytics.shared.countInSession("mode:\(activeVibscape.rawValue)")
                 }
                 Task {
                     await Analytics.shared.track("mode_changed", [
-                        "mode": activeMode.rawValue,
+                        "mode": activeVibscape.rawValue,
                         "from_mode": oldValue.rawValue,
                         "via": viaPicker ? "picker" : (viaAutoScan ? "auto_scan" : "system"),
                     ])
@@ -33,7 +33,7 @@ final class AppState: ObservableObject {
             }
         }
     }
-    /// Set by the mode picker so the event can distinguish a deliberate click
+    /// Set by the vibscape picker so the event can distinguish a deliberate click
     /// from the auto-scan cycling the stage underneath you.
     @Published var viaPicker: Bool = false
     @Published var viaAutoScan: Bool = false
@@ -50,7 +50,7 @@ final class AppState: ObservableObject {
         didSet { renderer.singerVoice = singerVoice }
     }
 
-    /// Which genre the band mode is showing. By default Rock, because the
+    /// Which genre the band vibscape is showing. By default Rock, because the
     /// existing theatre stage looks like a rock venue. Auto-detect writes
     /// into this when `genreIsAuto` is true; the user clicking a genre in
     /// the picker locks the value for the rest of the current song.
@@ -85,11 +85,11 @@ final class AppState: ObservableObject {
     /// Detector's confidence in its last decision (0..1). Drives the AUTO pill
     /// glow in the picker so the user can see when the detector is confident.
     @Published private(set) var genreConfidence: Float = 0
-    /// While auto-scanning, the mode currently on screen. Mirrors the
+    /// While auto-scanning, the vibscape currently on screen. Mirrors the
     /// renderer's scanner so the header can show what's playing right now.
-    @Published private(set) var scanTarget: ModeID = .builtin(.tunnel)
+    @Published private(set) var scanTarget: VibscapeID = .builtin(.tunnel)
 
-    /// The colour palette applied to every mode. Index into `Palette.all`.
+    /// The colour palette applied to every vibscape. Index into `Palette.all`.
     @Published var paletteIndex: Int = 0 {
         didSet {
             renderer.paletteIndex = paletteIndex
@@ -152,38 +152,38 @@ final class AppState: ObservableObject {
         // when the app was called AudioVane.
         SupportFolder.migrateIfNeeded()
         // Start the watch from here, so the first tick isn't a change.
-        lastCustomModesStamp = Self.customModesStamp
+        lastCustomVibscapesStamp = Self.customVibscapesStamp
         Self.primeDefaults()
         let audio = AudioEngine()
         self.audio = audio
         self.renderer = OpenGLRenderer(audio: audio)
-        // Whatever mode the user was last in, or auto-scan on a fresh install.
-        // Auto-scan is the right first impression with this many modes: nobody
+        // Whatever vibscape the user was last in, or auto-scan on a fresh install.
+        // Auto-scan is the right first impression with this many vibscapes: nobody
         // should have to guess that the good ones are behind a menu, and a
         // visualiser that sits on one scene forever looks like it missed
         // something.
-        self.activeMode = Self.savedMode ?? .builtin(.autoScan)
-        self.renderer.setMode(self.activeMode)
-        NSLog("[DD] starting in mode \(self.activeMode.rawValue)")
-        // How long each mode holds in Auto Scan, in bars of the song.
+        self.activeVibscape = Self.savedVibscape ?? .builtin(.autoScan)
+        self.renderer.setVibscape(self.activeVibscape)
+        NSLog("[DD] starting in mode \(self.activeVibscape.rawValue)")
+        // How long each vibscape holds in Auto Scan, in bars of the song.
         let bars = UserDefaults.standard.integer(forKey: Self.scanBarsKey)
         self.scanBars = bars > 0 ? bars : 4
-        self.renderer.barsPerMode = self.scanBars
+        self.renderer.barsPerVibscape = self.scanBars
         // Restore the genre the user last chose so a relaunch doesn't snap
         // back to Rock. Genre *detection* still re-arms per song as usual.
         self.genre = Self.savedGenre
         self.renderer.genre = self.genre
         // `--autoscan` starts straight into the scanner (used for testing).
         if CommandLine.arguments.contains("--autoscan") {
-            self.activeMode = .builtin(.autoScan)
-            self.renderer.setMode(.builtin(.autoScan))
+            self.activeVibscape = .builtin(.autoScan)
+            self.renderer.setVibscape(.builtin(.autoScan))
         }
-        // `--mode <name>` jumps straight to a mode (used for testing).
-        if let i = CommandLine.arguments.firstIndex(of: "--mode"),
+        // `--vibscape <name>` jumps straight to a vibscape (used for testing).
+        if let i = CommandLine.arguments.firstIndex(of: "--vibscape"),
            i + 1 < CommandLine.arguments.count,
-           let m = ModeID(rawValue: CommandLine.arguments[i + 1]) {
-            self.activeMode = m
-            self.renderer.setMode(m)
+           let m = VibscapeID(rawValue: CommandLine.arguments[i + 1]) {
+            self.activeVibscape = m
+            self.renderer.setVibscape(m)
         }
         // `--genre <name>` pins The Band's genre for this run (used for testing
         // and the demo reel); it isn't remembered.
@@ -233,7 +233,7 @@ final class AppState: ObservableObject {
             .sink { [weak self] in self?.lastBeat = Double($0) }
             .store(in: &cancellables)
 
-        // Snapshot mode is driven from outside (AppDelegate) — leave a hook here
+        // Snapshot vibscape is driven from outside (AppDelegate) — leave a hook here
         // so the snapshot can grab the renderer after the GL context is ready.
         AppState.shared = self
 
@@ -249,7 +249,7 @@ final class AppState: ObservableObject {
             self?.syncScanTarget()
             self?.writeEvalLine()
             self?.refreshCrashState()
-            self?.reloadCustomModesIfChanged()
+            self?.reloadCustomVibscapesIfChanged()
         }
         // `--genre-auto` forces auto-detect on (ignoring a remembered lock) and
         // `--system-audio` starts listening straight away: both used by the
@@ -266,7 +266,7 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Snapshot and record modes have no window and no audio; starting capture
+    /// Snapshot and record vibscapes have no window and no audio; starting capture
     /// there would fight them for the same device.
     private var isHeadlessRun: Bool {
         let args = CommandLine.arguments
@@ -280,7 +280,7 @@ final class AppState: ObservableObject {
     /// properties would come back empty.
     private func emitLaunchEvent() {
         let args = CommandLine.arguments
-        // Skip the headless verification modes so the dev loop doesn't show
+        // Skip the headless verification vibscapes so the dev loop doesn't show
         // up in PostHog as a room full of phantom users.
         let isHeadless = args.contains("--snapshot")
             || args.contains("--record")
@@ -288,9 +288,9 @@ final class AppState: ObservableObject {
             || args.contains("--mcp")
         guard !isHeadless else { return }
 
-        let mode = activeMode.rawValue
+        let mode = activeVibscape.rawValue
         let palette = paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?"
-        let autoscan = activeMode == .builtin(.autoScan)
+        let autoscan = activeVibscape == .builtin(.autoScan)
         let isRelease = !args.contains("--debug")
         let fresh = !UserDefaults.standard.bool(forKey: "analytics.seenBefore")
 
@@ -310,13 +310,13 @@ final class AppState: ObservableObject {
     /// Keeps the app-state half of the crash report current. Once a second,
     /// alongside the genre bookkeeping that already runs on this timer.
     ///
-    /// Band mode is the reason this exists: a stage with a cross-fade mid-way,
+    /// Band vibscape is the reason this exists: a stage with a cross-fade mid-way,
     /// three musicians held on and two more waiting to be re-confirmed is a
     /// crash nobody can reason about from a stack trace alone.
     private func refreshCrashState() {
-        let drawing = renderer.effectiveMode
+        let drawing = renderer.effectiveVibscape
         var snapshot: [String: String] = [
-            "mode": activeMode.rawValue,
+            "mode": activeVibscape.rawValue,
             "drawing": drawing.rawValue,
             "palette": paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?",
             "genre": genre.name,
@@ -344,10 +344,10 @@ final class AppState: ObservableObject {
     }
 
     /// Mirror the renderer's auto-scan position into the UI. The renderer
-    /// owns the scanner (it's the thing that knows which mode is being
+    /// owns the scanner (it's the thing that knows which vibscape is being
     /// drawn); this just republishes it so SwiftUI can show it.
     private func syncScanTarget() {
-        let e = renderer.effectiveMode
+        let e = renderer.effectiveVibscape
         if scanTarget != e { scanTarget = e }
     }
 
@@ -360,14 +360,14 @@ final class AppState: ObservableObject {
     private static let genreAutoDefaultsKey = "audiovane.genreAuto"
     private static let modeDefaultsKey = "audiovane.mode"
 
-    /// The mode they were last looking at. Nil on a fresh install, which is
+    /// The vibscape they were last looking at. Nil on a fresh install, which is
     /// how "no choice made yet" is distinguished from "chose Tunnel" — the
     /// caller falls back to auto-scan, and the first deliberate switch writes
     /// this.
-    private static var savedMode: ModeID? {
+    private static var savedVibscape: VibscapeID? {
         get {
             guard let raw = UserDefaults.standard.object(forKey: modeDefaultsKey) as? String else { return nil }
-            return ModeID(rawValue: raw)
+            return VibscapeID(rawValue: raw)
         }
         set {
             // Storing auto-scan is pointless: it's the default, and clearing
@@ -421,30 +421,30 @@ final class AppState: ObservableObject {
     /// Which layer of chrome fits in the window right now.
     var layout: LayoutTier { LayoutTier.tier(forWidth: windowWidth) }
 
-    func setMode(_ mode: ModeID) {
-        activeMode = mode
+    func setVibscape(_ mode: VibscapeID) {
+        activeVibscape = mode
     }
 
-    // MARK: - The mode list
+    // MARK: - The vibscape list
 
-    /// The name to show for a mode. A custom mode's name lives with the
-    /// mode, not with the identifier, so it has to be looked up.
+    /// The name to show for a vibscape. A custom vibscape's name lives with the
+    /// vibscape, not with the identifier, so it has to be looked up.
     ///
-    /// Shown in capitals, like every other mode name in the app.
-    func displayName(for id: ModeID) -> String {
+    /// Shown in capitals, like every other vibscape name in the app.
+    func displayName(for id: VibscapeID) -> String {
         switch id {
         case .builtin(let v):
             return v.displayName
         case .custom(let slug):
-            return (customModes.first(where: { $0.id == slug })?.name ?? "Custom Mode").uppercased()
+            return (customVibscapes.first(where: { $0.id == slug })?.name ?? "Custom Vibscape").uppercased()
         }
     }
 
-    /// What the Custom Mode sheet is doing: making a new one, or editing
+    /// What the Custom Vibscape sheet is doing: making a new one, or editing
     /// one the user already has. One sheet, so the two can't both be up.
-    enum CustomModeSheet: Identifiable {
+    enum CustomVibscapeSheet: Identifiable {
         case new
-        case editing(CustomMode)
+        case editing(CustomVibscape)
 
         var id: String {
             switch self {
@@ -453,98 +453,98 @@ final class AppState: ObservableObject {
             }
         }
 
-        /// The mode being edited, if any.
-        var mode: CustomMode? {
+        /// The vibscape being edited, if any.
+        var mode: CustomVibscape? {
             if case .editing(let m) = self { return m }
             return nil
         }
     }
 
-    /// The Custom Mode sheet, if it's open.
-    @Published var customModeSheet: CustomModeSheet?
+    /// The Custom Vibscape sheet, if it's open.
+    @Published var customVibscapeSheet: CustomVibscapeSheet?
 
     /// Whether the View All panel is open.
-    @Published var showAllModesSheet = false
+    @Published var showVibscapesSheet = false
 
-    /// The user's mode with this id, if it still exists.
-    func customMode(id: String) -> CustomMode? {
-        customModes.first { $0.id == id }
+    /// The user's vibscape with this id, if it still exists.
+    func customVibscape(id: String) -> CustomVibscape? {
+        customVibscapes.first { $0.id == id }
     }
 
-    /// Opens the Custom Mode sheet on one of the user's own modes.
-    func editCustomMode(id: String) {
-        guard let mode = customMode(id: id) else { return }
-        customModeSheet = .editing(mode)
+    /// Opens the Custom Vibscape sheet on one of the user's own vibscapes.
+    func editCustomVibscape(id: String) {
+        guard let mode = customVibscape(id: id) else { return }
+        customVibscapeSheet = .editing(mode)
     }
 
-    /// The user's own modes, newest last. Loaded from disk at launch and
-    /// whenever the Custom Mode sheet saves something.
-    @Published private(set) var customModes: [CustomMode] = []
+    /// The user's own vibscapes, newest last. Loaded from disk at launch and
+    /// whenever the Custom Vibscape sheet saves something.
+    @Published private(set) var customVibscapes: [CustomVibscape] = []
 
-    /// Built-in modes the user has switched off, by raw value.
+    /// Built-in vibscapes the user has switched off, by raw value.
     ///
-    /// Stored as a list of names rather than a set of booleans, so a mode
+    /// Stored as a list of names rather than a set of booleans, so a vibscape
     /// added in a later version shows up by default rather than being
     /// silently off because nobody has heard of it yet.
-    private static let hiddenModesKey = "audiovane.hiddenModes"
+    private static let hiddenVibscapesKey = "audiovane.hiddenVibscapes"
     private var hiddenBuiltins: Set<String> {
         get {
-            let raw = UserDefaults.standard.stringArray(forKey: Self.hiddenModesKey) ?? []
+            let raw = UserDefaults.standard.stringArray(forKey: Self.hiddenVibscapesKey) ?? []
             return Set(raw)
         }
         set {
-            UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.hiddenModesKey)
+            UserDefaults.standard.set(Array(newValue).sorted(), forKey: Self.hiddenVibscapesKey)
         }
     }
 
-    /// The order the user has arranged the modes in.
+    /// The order the user has arranged the vibscapes in.
     ///
     /// Stored separately from the enum, because the enum is fixed at compile
-    /// time and the list is meant to be rearrangeable. Modes that aren't in
-    /// the stored order — a mode added in a later version, or a custom mode
+    /// time and the list is meant to be rearrangeable. Vibscapes that aren't in
+    /// the stored order — a vibscape added in a later version, or a custom vibscape
     /// the user hasn't placed yet — are appended in their natural order, so
     /// nothing ever goes missing just because the list was written down
     /// before they existed.
     private static let modeOrderKey = "audiovane.modeOrder"
-    private var storedModeOrder: [ModeID] {
+    private var storedVibscapeOrder: [VibscapeID] {
         get {
             let raw = UserDefaults.standard.stringArray(forKey: Self.modeOrderKey) ?? []
-            return raw.compactMap { ModeID(rawValue: $0) }
+            return raw.compactMap { VibscapeID(rawValue: $0) }
         }
         set {
             UserDefaults.standard.set(newValue.map { $0.rawValue }, forKey: Self.modeOrderKey)
         }
     }
 
-    /// The order the modes ship in.
+    /// The order the vibscapes ship in.
     ///
     /// Kept separate from the enum's declaration order on purpose. The enum
     /// order decides the keyboard shortcuts — 1, 2, 3 … and then - [ ] ; ' \ —
     /// and those shouldn't move because someone rearranged the list. This is
     /// the order a fresh install gets; once the user rearranges it, their
     /// arrangement is what counts.
-    static let defaultModeOrder: [VisualizerMode] = [
+    static let defaultVibscapeOrder: [Vibscape] = [
         .ribbons, .vortex, .silk, .flux, .spectrum, .tunnel, .liquid,
         .kaleidoscope, .waveform, .machine, .warp, .particles, .nyan,
         .hamster, .badger, .llama, .danceFloor, .band,
     ]
 
-    /// Every mode, in the order the user arranged them.
-    var allModes: [ModeEntry] {
+    /// Every vibscape, in the order the user arranged them.
+    var allVibscapes: [VibscapeEntry] {
         let hidden = hiddenBuiltins
-        let builtins = VisualizerMode.allCases
+        let builtins = Vibscape.allCases
             .filter { $0 != .autoScan }
-            .map { mode -> ModeEntry in
-                var entry = ModeEntry(builtin: mode, shortcut: nil)
+            .map { mode -> VibscapeEntry in
+                var entry = VibscapeEntry(builtin: mode, shortcut: nil)
                 entry.isEnabled = !hidden.contains(mode.rawValue)
                 return entry
             }
-        let customs = customModes.map { ModeEntry(custom: $0, shortcut: nil) }
+        let customs = customVibscapes.map { VibscapeEntry(custom: $0, shortcut: nil) }
 
-        var entries: [ModeEntry] = []
-        var used = Set<ModeID>()
-        let stored = storedModeOrder
-        let order = stored.isEmpty ? Self.defaultModeOrder.map { ModeID.builtin($0) } : stored
+        var entries: [VibscapeEntry] = []
+        var used = Set<VibscapeID>()
+        let stored = storedVibscapeOrder
+        let order = stored.isEmpty ? Self.defaultVibscapeOrder.map { VibscapeID.builtin($0) } : stored
         for id in order {
             guard let entry = (builtins.first { $0.id == id } ?? customs.first { $0.id == id }),
                   !used.contains(id) else { continue }
@@ -559,10 +559,10 @@ final class AppState: ObservableObject {
 
         // The shortcuts follow the list, so the keys always match what's on
         // screen: the first thing in the list is `1`, the second is `2`, and
-        // so on. They're handed out to the modes that are actually switched
+        // so on. They're handed out to the vibscapes that are actually switched
         // on, because those are the ones in the list.
         let visible = entries.filter { $0.isEnabled }
-        var keys: [ModeID: Character] = [:]
+        var keys: [VibscapeID: Character] = [:]
         for (index, entry) in visible.enumerated() where index < Self.shortcutKeys.count {
             keys[entry.id] = Self.shortcutKeys[index]
         }
@@ -578,50 +578,50 @@ final class AppState: ObservableObject {
         return entries
     }
 
-    /// The keys the mode shortcuts are handed out in.
+    /// The keys the vibscape shortcuts are handed out in.
     ///
     /// The first ten are the number row. Then the punctuation nothing else
     /// in the app uses. Then the shifted punctuation, which needs a shift
-    /// held — a last resort for a long list, so that adding modes doesn't
-    /// quietly take shortcuts away. A mode past the end of this list simply
+    /// held — a last resort for a long list, so that adding vibscapes doesn't
+    /// quietly take shortcuts away. A vibscape past the end of this list simply
     /// has no shortcut, and is still picked from the list.
     static let shortcutKeys: [Character] = Array("1234567890")
         + ["-", "[", "]", ";", "'", "\\", ",", ".", "/", "`"]
         + Array("!@#$%^&*()")
 
-    /// The keyboard shortcut for a mode, or nil if it has none.
-    func shortcutKey(for id: ModeID) -> Character? {
-        enabledModes.first { $0.id == id }?.shortcut
+    /// The keyboard shortcut for a vibscape, or nil if it has none.
+    func shortcutKey(for id: VibscapeID) -> Character? {
+        enabledVibscapes.first { $0.id == id }?.shortcut
     }
 
-    /// The modes that show in the list and take part in Auto Scan.
-    var enabledModes: [ModeEntry] {
-        allModes.filter { $0.isEnabled }
+    /// The vibscapes that show in the list and take part in Auto Scan.
+    var enabledVibscapes: [VibscapeEntry] {
+        allVibscapes.filter { $0.isEnabled }
     }
 
     /// The Auto Scan rotation, as the renderer wants it.
-    var scanCycle: [ModeID] {
-        enabledModes.map { $0.id }
+    var scanCycle: [VibscapeID] {
+        enabledVibscapes.map { $0.id }
     }
 
     /// True when the list has been rearranged from the order it shipped in.
     var hasCustomOrder: Bool {
-        !storedModeOrder.isEmpty && storedModeOrder != Self.defaultModeOrder.map { ModeID.builtin($0) }
+        !storedVibscapeOrder.isEmpty && storedVibscapeOrder != Self.defaultVibscapeOrder.map { VibscapeID.builtin($0) }
     }
 
     /// Puts the list back the way it shipped, forgetting the arrangement
     /// the user made.
-    func resetModeOrder() {
+    func resetVibscapeOrder() {
         UserDefaults.standard.removeObject(forKey: Self.modeOrderKey)
         pushScanCycle()
     }
 
-    /// Moves a mode to a new place in the list.
+    /// Moves a vibscape to a new place in the list.
     ///
     /// The list is the order of the whole set, switched-on or not, so
-    /// switching a mode off and on again doesn't shuffle it.
-    func moveMode(_ id: ModeID, to destination: Int) {
-        var order = allModes.map { $0.id }
+    /// switching a vibscape off and on again doesn't shuffle it.
+    func moveVibscape(_ id: VibscapeID, to destination: Int) {
+        var order = allVibscapes.map { $0.id }
         guard let from = order.firstIndex(of: id) else { return }
         let clamped = min(max(0, destination), order.count - 1)
         guard from != clamped else { return }
@@ -630,17 +630,17 @@ final class AppState: ObservableObject {
         // If the arrangement is back to how it ships, forget it rather than
         // pinning it. That way a later change to the default order reaches
         // people who hadn't actually rearranged anything.
-        if order.compactMap({ $0.builtin }) == Self.defaultModeOrder {
+        if order.compactMap({ $0.builtin }) == Self.defaultVibscapeOrder {
             UserDefaults.standard.removeObject(forKey: Self.modeOrderKey)
         } else {
-            storedModeOrder = order
+            storedVibscapeOrder = order
         }
         pushScanCycle()
     }
 
-    /// Switches a mode on or off. Turning the last one off would leave the
+    /// Switches a vibscape on or off. Turning the last one off would leave the
     /// scanner with nothing to do, so Tunnel is always kept.
-    func setModeEnabled(_ id: ModeID, enabled: Bool) {
+    func setVibscapeEnabled(_ id: VibscapeID, enabled: Bool) {
         switch id {
         case .builtin(let v):
             var hidden = hiddenBuiltins
@@ -654,31 +654,31 @@ final class AppState: ObservableObject {
             }
             hiddenBuiltins = hidden
         case .custom(let slug):
-            guard let i = customModes.firstIndex(where: { $0.id == slug }) else { return }
-            customModes[i].enabled = enabled
-            try? CustomModeStore.save(customModes[i])
+            guard let i = customVibscapes.firstIndex(where: { $0.id == slug }) else { return }
+            customVibscapes[i].enabled = enabled
+            try? CustomVibscapeStore.save(customVibscapes[i])
         }
         pushScanCycle()
     }
 
-    /// Picks up modes that appeared on disk since the last look.
+    /// Picks up vibscapes that appeared on disk since the last look.
     ///
     /// The MCP server writes the same files this reads, and so does anyone
-    /// who edits them by hand. Watching the folder means a mode an agent
+    /// who edits them by hand. Watching the folder means a vibscape an agent
     /// writes turns up in the list within a second, rather than waiting for
     /// the next launch.
-    private func reloadCustomModesIfChanged() {
-        let stamp = Self.customModesStamp
-        guard stamp != lastCustomModesStamp else { return }
-        lastCustomModesStamp = stamp
+    private func reloadCustomVibscapesIfChanged() {
+        let stamp = Self.customVibscapesStamp
+        guard stamp != lastCustomVibscapesStamp else { return }
+        lastCustomVibscapesStamp = stamp
         NSLog("[CUSTOM] the folder changed — reloading")
-        reloadCustomModes()
+        reloadCustomVibscapes()
     }
 
-    /// When the modes folder last changed. Cheap to ask for; the folder is
+    /// When the vibscapes folder last changed. Cheap to ask for; the folder is
     /// small and the file system is good at this.
-    private static var customModesStamp: Date {
-        let folder = CustomModeStore.folder
+    private static var customVibscapesStamp: Date {
+        let folder = CustomVibscapeStore.folder
         let contents = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
         let newest = contents.compactMap { url -> Date? in
@@ -688,75 +688,75 @@ final class AppState: ObservableObject {
         return newest
     }
 
-    private var lastCustomModesStamp: Date = .distantPast
+    private var lastCustomVibscapesStamp: Date = .distantPast
 
-    /// Re-reads the user's modes from disk and recompiles them.
-    func reloadCustomModes() {
-        customModes = CustomModeStore.loadAll()
+    /// Re-reads the user's vibscapes from disk and recompiles them.
+    func reloadCustomVibscapes() {
+        customVibscapes = CustomVibscapeStore.loadAll()
         var problems: [String: ShaderProblem] = [:]
-        for mode in customModes {
-            // A mode that no longer compiles is kept on disk — the user may
+        for mode in customVibscapes {
+            // A vibscape that no longer compiles is kept on disk — the user may
             // want to fix it — but it can't be drawn, so it's switched off
             // and the reason is kept to show in the View All panel.
             if case .failure(let problem) = renderer.installCustomShader(id: mode.id, body: mode.shader) {
                 if problem.kind == .notReady {
                     // The window hasn't made its context yet. Try again
-                    // later rather than turning the mode off for it.
+                    // later rather than turning the vibscape off for it.
                     continue
                 }
                 NSLog("[CUSTOM] \(mode.id) failed to compile: \(problem.message)")
                 problems[mode.id] = problem
-                if let i = customModes.firstIndex(where: { $0.id == mode.id }), customModes[i].enabled {
-                    customModes[i].enabled = false
-                    try? CustomModeStore.save(customModes[i])
+                if let i = customVibscapes.firstIndex(where: { $0.id == mode.id }), customVibscapes[i].enabled {
+                    customVibscapes[i].enabled = false
+                    try? CustomVibscapeStore.save(customVibscapes[i])
                 }
             }
         }
-        customModeProblems = problems
-        lastCustomModesStamp = Self.customModesStamp
-        // The app was last in one of the user's modes, and that mode has
+        customVibscapeProblems = problems
+        lastCustomVibscapesStamp = Self.customVibscapesStamp
+        // The app was last in one of the user's vibscapes, and that vibscape has
         // since been deleted. There is nothing to draw, so start in auto-scan
         // rather than on a blank screen.
-        if case .custom(let id) = activeMode, customMode(id: id) == nil {
+        if case .custom(let id) = activeVibscape, customVibscape(id: id) == nil {
             NSLog("[CUSTOM] was in \(id), which is gone — starting in auto-scan")
-            setMode(.builtin(.autoScan))
+            setVibscape(.builtin(.autoScan))
         }
         pushScanCycle()
     }
 
-    /// Loads the user's modes once the graphics context exists.
+    /// Loads the user's vibscapes once the graphics context exists.
     ///
     /// Compiling a shader needs an OpenGL context, and the context is only
     /// created when the view is attached to a window — which is after
     /// `init`. So the first load is triggered from the view, and the
     /// published changes are pushed a turn later so we're not mutating
     /// published state from inside a view update.
-    private var didLoadCustomModes = false
-    func loadCustomModesOnce() {
-        guard !didLoadCustomModes else { return }
-        didLoadCustomModes = true
+    private var didLoadCustomVibscapes = false
+    func loadCustomVibscapesOnce() {
+        guard !didLoadCustomVibscapes else { return }
+        didLoadCustomVibscapes = true
         Task { @MainActor in
-            self.reloadCustomModes()
+            self.reloadCustomVibscapes()
         }
     }
 
-    /// Why a custom mode isn't working, if it isn't.
-    @Published private(set) var customModeProblems: [String: ShaderProblem] = [:]
+    /// Why a custom vibscape isn't working, if it isn't.
+    @Published private(set) var customVibscapeProblems: [String: ShaderProblem] = [:]
 
-    /// A rendered picture of each of the user's modes, for the View All
-    /// panel — so the panel shows what a mode actually looks like rather
+    /// A rendered picture of each of the user's vibscapes, for the View All
+    /// panel — so the panel shows what a vibscape actually looks like rather
     /// than a made-up cover.
-    @Published private(set) var customModePreviews: [String: NSImage] = [:]
+    @Published private(set) var customVibscapePreviews: [String: NSImage] = [:]
 
-    /// Draws a picture of each of the user's modes.
+    /// Draws a picture of each of the user's vibscapes.
     ///
     /// The picture is drawn with a plausible amount of music going on, so a
-    /// mode isn't a black rectangle when the room is quiet. The analyser is
+    /// vibscape isn't a black rectangle when the room is quiet. The analyser is
     /// given that state for the length of one render; the audio itself is
     /// never touched, and the next frame of real sound puts the analyser
     /// back.
-    func refreshCustomModePreviews() {
-        let modes = customModes
+    func refreshCustomVibscapePreviews() {
+        let modes = customVibscapes
         guard !modes.isEmpty else { return }
         Task { @MainActor in
             for mode in modes {
@@ -766,91 +766,91 @@ final class AppState: ObservableObject {
                 renderer.renderToPNG(width: 320, height: 180,
                                      mode: .custom(mode.id), frames: 90, path: path)
                 if let image = NSImage(contentsOfFile: path) {
-                    customModePreviews[mode.id] = image
+                    customVibscapePreviews[mode.id] = image
                 }
                 try? FileManager.default.removeItem(atPath: path)
             }
         }
     }
 
-    /// Adds a user's mode, once it has been shown to compile.
-    func addCustomMode(name: String, author: String, url: String?, shader: String) -> Result<CustomMode, ShaderProblem> {
-        let id = CustomModeStore.uniqueSlug(from: name)
+    /// Adds a user's vibscape, once it has been shown to compile.
+    func addCustomVibscape(name: String, author: String, url: String?, shader: String) -> Result<CustomVibscape, ShaderProblem> {
+        let id = CustomVibscapeStore.uniqueSlug(from: name)
         switch renderer.installCustomShader(id: id, body: shader) {
         case .failure(let problem):
             return .failure(problem)
         case .success:
-            let mode = CustomMode(id: id, name: name, author: author, url: url,
+            let mode = CustomVibscape(id: id, name: name, author: author, url: url,
                                   shader: shader, enabled: true, modified: Date())
             do {
-                try CustomModeStore.save(mode)
+                try CustomVibscapeStore.save(mode)
             } catch {
                 return .failure(ShaderProblem(
                     kind: .compileFailed,
-                    message: "Couldn't save the mode to disk: \(error.localizedDescription)"))
+                    message: "Couldn't save the vibscape to disk: \(error.localizedDescription)"))
             }
-            customModes.append(mode)
+            customVibscapes.append(mode)
             pushScanCycle()
-            refreshCustomModePreviews()
+            refreshCustomVibscapePreviews()
             return .success(mode)
         }
     }
 
-    /// Replaces a user's mode with a new version, once it has been shown to
+    /// Replaces a user's vibscape with a new version, once it has been shown to
     /// compile.
-    func updateCustomMode(id: String, name: String, author: String, url: String?, shader: String) -> Result<CustomMode, ShaderProblem> {
-        guard let i = customModes.firstIndex(where: { $0.id == id }) else {
-            return .failure(ShaderProblem(kind: .compileFailed, message: "That mode no longer exists."))
+    func updateCustomVibscape(id: String, name: String, author: String, url: String?, shader: String) -> Result<CustomVibscape, ShaderProblem> {
+        guard let i = customVibscapes.firstIndex(where: { $0.id == id }) else {
+            return .failure(ShaderProblem(kind: .compileFailed, message: "That vibscape no longer exists."))
         }
         switch renderer.installCustomShader(id: id, body: shader) {
         case .failure(let problem):
             return .failure(problem)
         case .success:
-            customModes[i].name = name
-            customModes[i].author = author
-            customModes[i].url = url
-            customModes[i].shader = shader
-            customModes[i].modified = Date()
+            customVibscapes[i].name = name
+            customVibscapes[i].author = author
+            customVibscapes[i].url = url
+            customVibscapes[i].shader = shader
+            customVibscapes[i].modified = Date()
             do {
-                try CustomModeStore.save(customModes[i])
+                try CustomVibscapeStore.save(customVibscapes[i])
             } catch {
                 return .failure(ShaderProblem(
                     kind: .compileFailed,
-                    message: "Couldn't save the mode to disk: \(error.localizedDescription)"))
+                    message: "Couldn't save the vibscape to disk: \(error.localizedDescription)"))
             }
             pushScanCycle()
-            refreshCustomModePreviews()
-            return .success(customModes[i])
+            refreshCustomVibscapePreviews()
+            return .success(customVibscapes[i])
         }
     }
 
-    /// Removes a user's mode, from the list and from disk.
-    func deleteCustomMode(id: String) {
-        customModes.removeAll { $0.id == id }
+    /// Removes a user's vibscape, from the list and from disk.
+    func deleteCustomVibscape(id: String) {
+        customVibscapes.removeAll { $0.id == id }
         renderer.removeCustomShader(id: id)
-        CustomModeStore.delete(id: id)
-        // If the deleted mode was on screen, fall back to something real.
-        if activeMode == .custom(id) {
-            let fallback = enabledModes.first?.id ?? .builtin(.tunnel)
-            setMode(fallback)
+        CustomVibscapeStore.delete(id: id)
+        // If the deleted vibscape was on screen, fall back to something real.
+        if activeVibscape == .custom(id) {
+            let fallback = enabledVibscapes.first?.id ?? .builtin(.tunnel)
+            setVibscape(fallback)
         }
         pushScanCycle()
     }
 
-    /// Tells the renderer which modes Auto Scan should walk.
+    /// Tells the renderer which vibscapes Auto Scan should walk.
     private func pushScanCycle() {
         renderer.setScanCycle(scanCycle)
     }
 
-    /// How many bars of the song each mode gets in Auto Scan.
+    /// How many bars of the song each vibscape gets in Auto Scan.
     ///
     /// Counted in bars rather than seconds so the change lands on a beat —
-    /// a mode that swaps halfway through a bar looks like a glitch, and one
+    /// a vibscape that swaps halfway through a bar looks like a glitch, and one
     /// that swaps on the downbeat looks like part of the music.
     @Published var scanBars: Int = 4 {
         didSet {
             UserDefaults.standard.set(scanBars, forKey: Self.scanBarsKey)
-            renderer.barsPerMode = scanBars
+            renderer.barsPerVibscape = scanBars
         }
     }
 
@@ -1092,8 +1092,8 @@ final class AppState: ObservableObject {
     }
 }
 
-enum VisualizerMode: String, CaseIterable, Identifiable {
-    // Declaration order is the mode list order: it drives the `01`…`17`
+enum Vibscape: String, CaseIterable, Identifiable {
+    // Declaration order is the vibscape list order: it drives the `01`…`17`
     // glyphs, the keyboard shortcuts, and Auto Scan's rotation.
     /// Luminous ribbons twisting through floating glass shapes.
     case ribbons
@@ -1121,8 +1121,8 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     case band
     /// MIDEM Music Hack Day machine — drums, pads and bouncing balls.
     case machine
-    /// Cycles through every other mode, 20 seconds each.
-    /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
+    /// Cycles through every other vibscape, 20 seconds each.
+    /// Keep this the LAST case: the vibscape list shows Auto Scan at the bottom.
     case autoScan
     var id: String { rawValue }
     var displayName: String {

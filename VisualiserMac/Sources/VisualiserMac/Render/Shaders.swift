@@ -5,7 +5,7 @@ enum Shaders {
 
     /// Full-screen palette grade. Samples the finished scene and maps its
     /// luminance ramp between a shadow and a highlight colour, then applies
-    /// saturation and a black lift. Runs after every mode, so one palette
+    /// saturation and a black lift. Runs after every vibscape, so one palette
     /// themes the whole app.
     static let gradeVS = """
     #version 330 core

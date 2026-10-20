@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-/// "MACHINE" mode — a port of the MIDEM Music Hack Day piece by @mrdoob and
+/// "MACHINE" vibscape — a port of the MIDEM Music Hack Day piece by @mrdoob and
 /// @plamere (github.com/mrdoob/midemhackday), rebuilt from its source.
 ///
 /// Two machines share the stage, as in the original:

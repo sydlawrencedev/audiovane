@@ -1,6 +1,6 @@
 import Foundation
 
-/// What went wrong with a custom mode, in words a person can act on.
+/// What went wrong with a custom vibscape, in words a person can act on.
 ///
 /// The OpenGL compiler's messages are precise and close to unreadable: they
 /// name internal symbols and point at lines in a program the user has never
@@ -16,7 +16,7 @@ struct ShaderProblem: Error {
         case empty
         /// A real compile or link failure.
         case compileFailed
-        /// The graphics system wasn't ready yet. Not the mode's fault, and
+        /// The graphics system wasn't ready yet. Not the vibscape's fault, and
         /// not worth telling anybody about — it'll be tried again.
         case notReady
     }
@@ -32,7 +32,7 @@ struct ShaderProblem: Error {
 
     var title: String {
         switch kind {
-        case .missingRenderFunction: return "There's no mode in there yet"
+        case .missingRenderFunction: return "There's no vibscape in there yet"
         case .wroteMainInstead: return "This is written the wrong way round"
         case .hasVersionDirective: return "Remove the #version line"
         case .empty: return "There's nothing to try"
@@ -42,10 +42,10 @@ struct ShaderProblem: Error {
     }
 }
 
-/// Checks a candidate mode before it's saved, and explains the failure.
+/// Checks a candidate vibscape before it's saved, and explains the failure.
 enum ShaderValidator {
 
-    /// The function every mode must define. Matched loosely enough to allow
+    /// The function every vibscape must define. Matched loosely enough to allow
     /// a line break or a space between the return type and the name.
     private static let renderSignature = ##"vec3\s+render\s*\(\s*vec2\s+\w+\s*,\s*float\s+\w+\s*\)"##
 
@@ -61,10 +61,10 @@ enum ShaderValidator {
         guard !trimmed.isEmpty else {
             return .failed(ShaderProblem(
                 kind: .empty,
-                message: "There's nothing in the box yet. Paste in a mode, or start from the example."))
+                message: "There's nothing in the box yet. Paste in a vibscape, or start from the example."))
         }
 
-        // The user pasted a whole standalone shader rather than a mode body.
+        // The user pasted a whole standalone shader rather than a vibscape body.
         // The prelude already supplies the version line, the uniforms and
         // main(), so all of it has to come out.
         if trimmed.contains("#version") {
@@ -75,7 +75,7 @@ enum ShaderValidator {
         if trimmed.contains("#include") {
             return .failed(ShaderProblem(
                 kind: .hasVersionDirective,
-                message: "Delete any line starting with #include. Vibresia already provides everything a mode needs."))
+                message: "Delete any line starting with #include. Vibresia already provides everything a vibscape needs."))
         }
         // main() is the standard entry point, so a first attempt very often
         // writes one. It's the single most likely mistake, so it's worth its
@@ -83,7 +83,7 @@ enum ShaderValidator {
         if trimmed.range(of: ##"void\s+main\s*\("##, options: .regularExpression) != nil {
             return .failed(ShaderProblem(
                 kind: .wroteMainInstead,
-                message: "Modes use a function called render, not main. Change \"void main()\" to \"vec3 render(vec2 p, float t)\", and at the end return your colour instead of assigning to fragColor."))
+                message: "Vibscapes use a function called render, not main. Change \"void main()\" to \"vec3 render(vec2 p, float t)\", and at the end return your colour instead of assigning to fragColor."))
         }
 
         let withoutComments = stripComments(trimmed)
@@ -97,7 +97,7 @@ enum ShaderValidator {
             }
             return .failed(ShaderProblem(
                 kind: .missingRenderFunction,
-                message: "A mode needs a function called render that returns a colour. Copy the example above to start from a working one."))
+                message: "A vibscape needs a function called render that returns a colour. Copy the example above to start from a working one."))
         }
         return .ok
     }

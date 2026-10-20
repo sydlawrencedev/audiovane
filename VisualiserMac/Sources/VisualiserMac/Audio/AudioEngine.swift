@@ -14,7 +14,7 @@ final class AudioEngine: ObservableObject {
     @Published private(set) var bpm: Double = 0
     @Published private(set) var lastBeatStrength: Float = 0
     /// True while there's audible sound (RMS gate with hysteresis). Overlays
-    /// fade out when false so silent modes are a single flat colour.
+    /// fade out when false so silent vibscapes are a single flat colour.
     @Published private(set) var isSounding: Bool = false
 
     /// String the render path uses to decide whether to redraw. Exposed so the
@@ -221,7 +221,7 @@ final class AudioEngine: ObservableObject {
         activeSource = nil
     }
 
-    /// Inject synthetic audio into the ring buffer. Used by snapshot mode to
+    /// Inject synthetic audio into the ring buffer. Used by snapshot vibscape to
     /// produce visible reactions without spinning up AVAudioEngine.
     func injectSyntheticTone(seconds: Double = 2.0, sampleRate: Double = 48000) {
         NSLog("[VIZ] injectSyntheticTone start")
@@ -239,7 +239,7 @@ final class AudioEngine: ObservableObject {
             let sparkle = sin(2 * .pi * 4400 * t) * 0.05 * (0.5 + 0.5 * sin(t * 4))
             samples[i] = Float(kick + pad + sparkle)
         }
-        // Snapshot mode: bypass the FFT pipeline (which has issues in headless mode)
+        // Snapshot vibscape: bypass the FFT pipeline (which has issues in headless vibscape)
         // and write plausible analyzer state directly. The visualizers then react
         // as if real audio were playing.
         analyzer.setSyntheticState()
@@ -282,7 +282,7 @@ final class AudioEngine: ObservableObject {
     }
 
     /// Just rebuild the snapshot from current analyzer state, without ticking the
-    /// analyzer. Used by snapshot mode to avoid running the FFT pipeline.
+    /// analyzer. Used by snapshot vibscape to avoid running the FFT pipeline.
     func refreshSnapshot() {
         var snap = AudioSnapshot()
         snap.rms = analyzer.rms

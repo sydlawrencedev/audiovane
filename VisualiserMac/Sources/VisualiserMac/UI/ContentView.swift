@@ -18,7 +18,7 @@ struct ContentView: View {
     var body: some View {
         ZStack {
             // OpenGL-rendered visualizer (full-bleed)
-            OpenGLVisualizerView(renderer: app.renderer, mode: app.activeMode)
+            OpenGLVisualizerView(renderer: app.renderer, mode: app.activeVibscape)
                 .ignoresSafeArea()
 
             // CRT overlay — scanlines, vignette, glow. Faded out in silence so
@@ -115,14 +115,14 @@ struct ContentView: View {
             pointer.window = w
             app.windowDidAppear()
         }
-        // The two panels the mode list opens. They hang off the window rather
+        // The two panels the vibscape list opens. They hang off the window rather
         // than the visualiser so they stay put when the chrome hides.
-        .sheet(isPresented: $app.showAllModesSheet) {
-            AllModesView()
+        .sheet(isPresented: $app.showVibscapesSheet) {
+            VibscapesView()
                 .environmentObject(app)
         }
-        .sheet(item: $app.customModeSheet) { sheet in
-            CustomModeView(editing: sheet.mode)
+        .sheet(item: $app.customVibscapeSheet) { sheet in
+            CustomVibscapeView(editing: sheet.mode)
                 .environmentObject(app)
         }
     }

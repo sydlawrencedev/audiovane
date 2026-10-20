@@ -39,12 +39,12 @@ struct VisualiserApp: App {
                 Button("Reveal Crash Reports…") { CrashReporter.shared.revealReports() }
             }
             CommandMenu("Visualizer") {
-                // The modes in the order the user arranged them, each with
+                // The vibscapes in the order the user arranged them, each with
                 // the key that picks it. The keys follow the list, so moving
-                // a mode moves its shortcut with it.
-                ForEach(app.enabledModes) { entry in
-                    let button = Button(entry.title) { app.activeMode = entry.id }
-                    // A mode past the end of the key list has no shortcut at
+                // a vibscape moves its shortcut with it.
+                ForEach(app.enabledVibscapes) { entry in
+                    let button = Button(entry.title) { app.activeVibscape = entry.id }
+                    // A vibscape past the end of the key list has no shortcut at
                     // all, rather than one that fights with something else.
                     if let shortcut = entry.shortcut {
                         button.keyboardShortcut(KeyEquivalent(shortcut), modifiers: [])
@@ -53,7 +53,7 @@ struct VisualiserApp: App {
                     }
                 }
                 Divider()
-                // How long each mode holds in Auto Scan, counted in bars of
+                // How long each vibscape holds in Auto Scan, counted in bars of
                 // the song so the change lands on a beat.
                 Menu("Auto Scan Length") {
                     ForEach(AppState.scanBarChoices, id: \.self) { bars in
@@ -100,7 +100,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // MCP mode: this process is a tool server for an AI agent, not the
+        // MCP vibscape: this process is a tool server for an AI agent, not the
         // app. It has no window, no analytics, no update check and no audio
         // — it answers requests on stdin. Everything below is skipped.
         if CommandLine.arguments.contains("--mcp") {
@@ -132,18 +132,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
-        // Look for a newer release on every launch (not in the test modes).
-        let testMode = ["--snapshot", "--record"].contains { CommandLine.arguments.contains($0) }
-        if !testMode { UpdateChecker.shared.check(userInitiated: false) }
+        // Look for a newer release on every launch (not in the test vibscapes).
+        let testVibscape = ["--snapshot", "--record"].contains { CommandLine.arguments.contains($0) }
+        if !testVibscape { UpdateChecker.shared.check(userInitiated: false) }
 
-        // Snapshot mode — render a few frames then exit. Used for verification.
+        // Snapshot vibscape — render a few frames then exit. Used for verification.
         if CommandLine.arguments.contains("--snapshot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 self.runSnapshot()
             }
         }
 
-        // Record mode — capture consecutive frames for diffing.
+        // Record vibscape — capture consecutive frames for diffing.
         if CommandLine.arguments.contains("--record") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 self.runRecord()
@@ -166,22 +166,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // `--all-modes` and `--custom-mode` open the two panels straight
+        // `--vibscapes` and `--custom-vibscape` open the two panels straight
         // away, so they can be looked at without going through the list.
-        if CommandLine.arguments.contains("--all-modes") {
+        if CommandLine.arguments.contains("--vibscapes") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                AppState.shared?.showAllModesSheet = true
+                AppState.shared?.showVibscapesSheet = true
             }
         }
-        if CommandLine.arguments.contains("--custom-mode") {
+        if CommandLine.arguments.contains("--custom-vibscape") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                AppState.shared?.customModeSheet = .new
+                AppState.shared?.customVibscapeSheet = .new
             }
         }
 
         // `--simulate-crash` faults on purpose so the crash-report path can be
         // verified end to end (report written, uploaded next launch) without
-        // waiting for a real band-mode crash to turn up.
+        // waiting for a real band-vibscape crash to turn up.
         if CommandLine.arguments.contains("--simulate-crash") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 CrashReporter.shared.log("simulated crash requested on the command line")
@@ -284,7 +284,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         exit(0)
     }
 
-    /// Session tallies (mode switches, palette switches) only reach PostHog on
+    /// Session tallies (vibscape switches, palette switches) only reach PostHog on
     /// the next flush — 2.5s after the last event — so without this they'd be
     /// lost every time someone quit shortly after fiddling with the controls.
     func applicationWillTerminate(_ notification: Notification) {
@@ -302,8 +302,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let app = AppState.shared else { NSLog("[UI] no AppState"); exit(1) }
 
         // The intro overlay covers the chrome we're trying to look at, and
-        // the genre pill only appears in band mode — so shoot both.
-        let shots: [(String, ModeID, DropdownID?)] = [
+        // the genre pill only appears in band vibscape — so shoot both.
+        let shots: [(String, VibscapeID, DropdownID?)] = [
             ("modes", .builtin(.tunnel), nil),
             ("band", .builtin(.band), nil),
             ("mode-open", .builtin(.tunnel), .mode),
@@ -323,13 +323,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ]
         for (name, mode, open) in shots {
             app.showIntro = false
-            app.activeMode = mode
+            app.activeVibscape = mode
             app.openDropdown = open
             for (suffix, shotSize) in sizes {
                 // The chrome reads the tier from the window's width, which the
                 // shot has to fake — ImageRenderer has no window.
                 app.setWindowWidthForTesting(shotSize.width)
-                // let the body re-evaluate with the new mode
+                // let the body re-evaluate with the new vibscape
                 RunLoop.current.run(until: Date().addingTimeInterval(0.35))
                 let renderer = ImageRenderer(content: ContentView()
                     .environmentObject(app)
@@ -352,18 +352,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // system — `ImageRenderer` can't see one. They're rendered directly
         // instead, so the panels can be reviewed without a screen recorder.
         guard let app = AppState.shared else { exit(1) }
-        // A stand-in for a mode the user already has, so the editing view
+        // A stand-in for a vibscape the user already has, so the editing view
         // can be reviewed without one on disk.
-        let sampleMode = CustomMode(id: "shot", name: "My Mode", author: "Minith Labs",
+        let sampleVibscape = CustomVibscape(id: "shot", name: "My Mode", author: "Minith Labs",
                                     url: "https://minithlabs.com",
-                                    shader: CustomModeGuide.starterTemplate,
+                                    shader: CustomVibscapeGuide.starterTemplate,
                                     enabled: true, modified: Date())
-        for (name, view) in [("all-modes", AnyView(AllModesView(scrollable: false, height: 1400))),
-                             ("all-modes-drop", AnyView(AllModesView(scrollable: false, height: 1400, dropTargetIndex: 4))),
-                             ("custom-mode", AnyView(CustomModeView())),
-                             ("custom-mode-write", AnyView(CustomModeView(initialStep: .write))),
-                             ("custom-mode-ai", AnyView(CustomModeView(initialStep: .ai, scrollable: false))),
-                             ("custom-mode-edit", AnyView(CustomModeView(editing: sampleMode)))] {
+        for (name, view) in [("all-modes", AnyView(VibscapesView(scrollable: false, height: 1400))),
+                             ("all-modes-drop", AnyView(VibscapesView(scrollable: false, height: 1400, dropTargetIndex: 4))),
+                             ("custom-mode", AnyView(CustomVibscapeView())),
+                             ("custom-mode-write", AnyView(CustomVibscapeView(initialStep: .write))),
+                             ("custom-mode-ai", AnyView(CustomVibscapeView(initialStep: .ai, scrollable: false))),
+                             ("custom-mode-edit", AnyView(CustomVibscapeView(editing: sampleVibscape)))] {
             let renderer = ImageRenderer(content: view
                 .environmentObject(app)
                 .frame(width: 720, height: name.hasPrefix("all-modes") ? 1400 : 560)
@@ -383,7 +383,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // In MCP mode the window is hidden on purpose and the server is the
+        // In MCP vibscape the window is hidden on purpose and the server is the
         // app, so hiding it mustn't be the end of the process.
         if CommandLine.arguments.contains("--mcp") { return false }
         return true
@@ -407,7 +407,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[SNAP] ready")
             app.audio.injectSyntheticTone(seconds: 2.0)
             if genresOnly {
-                app.renderer.setMode(.builtin(.band))
+                app.renderer.setVibscape(.builtin(.band))
                 for g in Genre.allCases {
                     app.renderer.genre = g
                     // let a couple of frames go by so the shader settles
@@ -420,14 +420,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("[SNAP] genre sweep done")
                 exit(0)
             }
-            for mode in VisualizerMode.allCases {
+            for mode in Vibscape.allCases {
                 app.renderer.renderToPNG(width: 1280, height: 720, mode: .builtin(mode),
                                          frames: 60,
                                          path: "\(outDir)/viz-\(mode.rawValue).png")
             }
-            // The user's own modes, if they have any, so a snapshot shows
+            // The user's own vibscapes, if they have any, so a snapshot shows
             // everything the app can draw.
-            for custom in app.customModes {
+            for custom in app.customVibscapes {
                 app.renderer.renderToPNG(width: 1280, height: 720, mode: .custom(custom.id),
                                          frames: 60,
                                          path: "\(outDir)/viz-custom-\(custom.id).png")
@@ -474,7 +474,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSLog("[REC] AppState ready, renderer.isReady=\(app.renderer.isReady)")
 
-        // In idle mode, don't start the demo tone — we want to see if the
+        // In idle vibscape, don't start the demo tone — we want to see if the
         // static (no-audio) render is stable.
         let idle = args.contains("--idle")
         if !idle {
@@ -482,9 +482,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             NSLog("[REC] idle mode — no audio source")
         }
-        // Record whatever mode is active (the --mode flag can set it).
-        app.renderer.setMode(app.activeMode)
-        NSLog("[REC] recording mode \(app.activeMode.rawValue)")
+        // Record whatever vibscape is active (the --vibscape flag can set it).
+        app.renderer.setVibscape(app.activeVibscape)
+        NSLog("[REC] recording mode \(app.activeVibscape.rawValue)")
 
         NSLog("[REC] writing \(frames) frames @ \(intervalMs)ms to \(outDir)")
 

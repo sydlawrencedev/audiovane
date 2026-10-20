@@ -25,7 +25,7 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/v
 | `worker/index.js` | Cloudflare Worker: serves `./site` and handles `/download` (redirect + Discord notification). |
 | `site/sitemap.xml`, `site/robots.txt` | What Google is pointed at. One URL; the plain-text agent pages are deliberately left crawlable but unlisted. |
 | `site/_headers`, `site/_redirects` | Cloudflare response headers (caching, security) and canonical-path redirects. |
-| `scripts/check-modes.sh` | Fails if a visualiser mode is missing from the landing page, or the version in its structured data is stale. |
+| `scripts/check-vibscapes.sh` | Fails if a vibscape is missing from the landing page, or the version in its structured data is stale. |
 | `scripts/check-posthog.sh` | Fails if the site and the app report to different PostHog projects. |
 | `scripts/check-no-webhook-leak.sh` | Fails if a Discord webhook URL is anywhere in the tree. |
 | `wrangler.toml` | Deploys the Worker (and `site/` through it) to Cloudflare. |
@@ -38,13 +38,13 @@ cd VisualiserMac
 open build/Vibresia.app
 ```
 
-### Custom modes and the local MCP server
+### Custom vibscapes and the local MCP server
 
-A mode is a fragment shader — one function, `vec3 render(vec2 p, float t)` —
+A vibscape is a fragment shader — one function, `vec3 render(vec2 p, float t)` —
 and the app supplies the uniforms, the helpers and everything else.
 
 Vibresia ships a local [MCP](https://modelcontextprotocol.io) server, so an AI
-agent can write a mode, check it compiles, look at the picture and try again
+agent can write a vibscape, check it compiles, look at the picture and try again
 without anybody copying code by hand:
 
 ```bash
@@ -53,8 +53,8 @@ claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" 
 
 It's the same binary run with `--mcp`, speaking JSON-RPC over stdin — no
 window, no port, no analytics. It reads and writes the same files the app
-does, so a mode an agent writes shows up in the app within a second. See
-[VisualiserMac/README.md](VisualiserMac/README.md#custom-modes-and-the-local-mcp-server)
+does, so a vibscape an agent writes shows up in the app within a second. See
+[VisualiserMac/README.md](VisualiserMac/README.md#custom-vibscapes-and-the-local-mcp-server)
 for the tools it offers.
 
 ### Version numbers
@@ -75,7 +75,7 @@ MAJOR.MINOR.PATCH
 no cookies — reporting into the same PostHog project as the app, separated by a
 `surface` property (`web` vs `mac_app`).
 
-Events: `page_view`, `demo_played`, `mode_card_viewed` (which mode cards got
+Events: `page_view`, `demo_played`, `vibscape_card_viewed` (which vibscape cards got
 scrolled to), `download_clicked`, `install_command_copied` (`ask-ai` or `curl` —
 the interesting split, since they are different audiences), `coffee_clicked`
 (by placement) and `outbound_clicked`.
@@ -126,7 +126,7 @@ a fault, so it isn't reported.
 
 Unlike usage analytics, this is **not** behind the in-app toggle: a crash is
 the report you can least afford to lose, and the user asked for that source
-explicitly. What's sent is app state — mode, genre, error text — never audio or
+explicitly. What's sent is app state — vibscape, genre, error text — never audio or
 track names. Errors get their own cooldown (one a minute, 60/hour) so a broken
 install can't flood the channel, and `DISCORD_ERRORS_ENABLED = "false"` turns
 them off without touching download alerts.
@@ -172,7 +172,7 @@ that honest:
 ## SEO
 
 - **Submit the sitemap** once in [Search Console](https://search.google.com/search-console/sitemaps/submit) — `https://vibresia.com/sitemap.xml`. Re-submit after site deploys; it also carries `lastmod`.
-- **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. The version is the build's date, so there's nothing to bump by hand — `VisualiserMac/version.sh --write` puts it in both `index.html` and `VisualiserMac/VERSION`, and `scripts/check-modes.sh` fails the release if they drift apart.
+- **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. The version is the build's date, so there's nothing to bump by hand — `VisualiserMac/version.sh --write` puts it in both `index.html` and `VisualiserMac/VERSION`, and `scripts/check-vibscapes.sh` fails the release if they drift apart.
 - **Turn on "Always Use HTTPS"** in the Cloudflare zone for `vibresia.com`. The Worker's own `http:` → `https:` redirect covers the same ground, but the zone setting is what stops a duplicate being served at all. The old `audiovane.minithlabs.com` name is still attached to the Worker so it can redirect — see the note below.
 - **The old domain is a redirect, not a second site.** `audiovane.minithlabs.com` is attached to the same Worker, which answers it with a 301 to `vibresia.com` keeping the path — so the old install command and any old link still work. Its DNS has to keep pointing at Cloudflare for that to happen. One thing a domain change can't carry over: the analytics opt-out is in the browser's `localStorage`, which is per-origin, so anyone who opted out of analytics on the old site has to do it again on the new one.
 - **The Worker is attached with routes, not custom domains.** `vibresia.com` was pointed at Cloudflare before the Worker existed, so its DNS records are ones Cloudflare didn't make; a custom domain would want to own them and refuses to overwrite them. A route binds the hostname to the Worker and leaves the DNS alone. `run_worker_first` is on for the same reason: the redirects are decided in the Worker, and an asset served straight from the edge would skip them.
@@ -191,6 +191,6 @@ scripts/band-eval.py --only jazz
 
 ## Releasing
 
-1. Add any new mode to `site/index.html` (a card with `data-mode="<case name>"`).
+1. Add any new vibscape to `site/index.html` (a card with `data-vibscape="<case name>"`).
 2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `Vibresia.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
 3. `npx wrangler deploy` if the site or worker changed, then re-submit the sitemap. First deploy after cloning needs `npx wrangler secret put DISCORD_WEBHOOK_URL` (see [Download notifications](#download-notifications-discord)).

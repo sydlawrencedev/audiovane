@@ -197,7 +197,7 @@ private struct WindowToggles: View {
 ///
 /// This app watches audio and draws the screen, so the line between "harmless"
 /// and "creepy" telemetry is drawn on purpose: the client only ever sends
-/// feature usage (which mode, which palette, did you click the coffee button)
+/// feature usage (which vibscape, which palette, did you click the coffee button)
 /// and crash reports (what was on screen when it died, plus a stack trace).
 /// Nothing about *what is playing or on screen* is ever included. The toggle is
 /// here so that's a decision the user makes rather than one we make for them.
@@ -220,7 +220,7 @@ private struct AnalyticsToggle: View {
             .disabled(!configured)
 
             Text(configured
-                 ? "Counts which modes and palettes you use, and whether the support button got clicked. Also sends crash reports: what was on screen (mode, genre, stage) and a stack trace. Never screen content, audio, window titles or track names."
+                 ? "Counts which vibscapes and palettes you use, and whether the support button got clicked. Also sends crash reports: what was on screen (vibscape, genre, stage) and a stack trace. Never screen content, audio, window titles or track names."
                  : "Not configured in this build.")
                 .font(.system(size: 9))
                 .foregroundStyle(Color(white: 0.45))

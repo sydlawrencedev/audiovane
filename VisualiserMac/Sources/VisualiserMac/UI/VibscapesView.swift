@@ -26,16 +26,16 @@ extension View {
     }
 }
 
-/// The View All panel: every mode the app has, with a picture of it, and a
-/// switch to say whether it appears in the mode list and takes part in Auto
+/// The View All panel: every vibscape the app has, with a picture of it, and a
+/// switch to say whether it appears in the vibscape list and takes part in Auto
 /// Scan.
 ///
-/// This is where a mode the user has never seen becomes findable. The drop-
+/// This is where a vibscape the user has never seen becomes findable. The drop-
 /// down is a list of names; this is a wall of pictures, so someone browsing
 /// on the hunt for something to look at can find it by sight. It is also
-/// where the mode list gets curated — a person with twenty modes wants
+/// where the vibscape list gets curated — a person with twenty vibscapes wants
 /// three in the list and the rest kept, not deleted.
-struct AllModesView: View {
+struct VibscapesView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
 
@@ -58,7 +58,7 @@ struct AllModesView: View {
     /// The editor, if it's open. The panel is itself a sheet, so it
     /// presents its own rather than asking the window to — two sheets on
     /// the same view can't both be up.
-    @State private var editor: AppState.CustomModeSheet?
+    @State private var editor: AppState.CustomVibscapeSheet?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,20 +75,20 @@ struct AllModesView: View {
         .frame(width: 720, height: height)
         .background(Color(red: 0.05, green: 0.02, blue: 0.09))
         .sheet(item: $editor) { sheet in
-            CustomModeView(editing: sheet.mode)
+            CustomVibscapeView(editing: sheet.mode)
                 .environmentObject(app)
         }
         .onAppear {
-            // Draw a picture of each of the user's own modes, so the panel
+            // Draw a picture of each of the user's own vibscapes, so the panel
             // shows what they look like.
-            app.refreshCustomModePreviews()
+            app.refreshCustomVibscapePreviews()
         }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("All modes")
+                Text("Vibscapes")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Switch off the ones you don't want in the list or in Auto Scan. Drag them to change the order.")
@@ -100,7 +100,7 @@ struct AllModesView: View {
             // Put the list back the way it shipped. Only worth offering
             // when it's actually been rearranged.
             if app.hasCustomOrder {
-                Button("Reset Order") { app.resetModeOrder() }
+                Button("Reset Order") { app.resetVibscapeOrder() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color(white: 0.75))
@@ -111,7 +111,7 @@ struct AllModesView: View {
                             .fill(Color.white.opacity(0.08))
                     )
                     .pointingHand()
-                    .help("Put the modes back in their original order")
+                    .help("Put the vibscapes back in their original order")
             }
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
@@ -136,18 +136,18 @@ struct AllModesView: View {
     private var grid: some View {
         VStack(spacing: 14) {
             ForEach(rows, id: \.self) { row in
-                ModeRow(entries: row, columns: columnsPerRow,
+                VibscapeRow(entries: row, columns: columnsPerRow,
                         editor: $editor, dropTargetIndex: dropTargetIndex)
             }
         }
         .padding(18)
     }
 
-    /// The modes, dealt into rows, with a card for making a new one at the
+    /// The vibscapes, dealt into rows, with a card for making a new one at the
     /// end.
-    private var rows: [[ModeEntry]] {
-        var all = app.allModes
-        all.append(ModeEntry(newModeCard: true))
+    private var rows: [[VibscapeEntry]] {
+        var all = app.allVibscapes
+        all.append(VibscapeEntry(newVibscapeCard: true))
         return stride(from: 0, to: all.count, by: columnsPerRow).map {
             Array(all[$0..<min($0 + columnsPerRow, all.count)])
         }
@@ -158,11 +158,11 @@ struct AllModesView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.4))
-            Text("Your own modes are marked ★. Add another with the card at the end.")
+            Text("Your own vibscapes are marked ★. Add another with the card at the end.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.45))
             Spacer()
-            Text("\(app.enabledModes.count) of \(app.allModes.count) switched on")
+            Text("\(app.enabledVibscapes.count) of \(app.allVibscapes.count) switched on")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(white: 0.5))
         }
@@ -173,16 +173,16 @@ struct AllModesView: View {
 
 /// One row of cards. Split out of the panel because the type-checker
 /// struggles with the whole grid in one expression.
-private struct ModeRow: View {
+private struct VibscapeRow: View {
     @EnvironmentObject var app: AppState
-    let entries: [ModeEntry]
+    let entries: [VibscapeEntry]
     let columns: Int
 
     /// The editor, if it's open.
-    @Binding var editor: AppState.CustomModeSheet?
+    @Binding var editor: AppState.CustomVibscapeSheet?
 
-    /// The card a dragged mode is currently over, so it can say so.
-    @State private var dropTargetID: ModeID?
+    /// The card a dragged vibscape is currently over, so it can say so.
+    @State private var dropTargetID: VibscapeID?
 
     /// Which card to draw as the drop target, for the headless UI shots.
     var dropTargetIndex: Int?
@@ -203,32 +203,32 @@ private struct ModeRow: View {
     }
 
     @ViewBuilder
-    private func card(_ entry: ModeEntry) -> some View {
-        let base = ModeCard(entry: entry, onEdit: { target in
-            guard let mode = app.customMode(id: target.id.slug) else { return }
+    private func card(_ entry: VibscapeEntry) -> some View {
+        let base = VibscapeCard(entry: entry, onEdit: { target in
+            guard let mode = app.customVibscape(id: target.id.slug) else { return }
             editor = .editing(mode)
         }, onCreate: {
             editor = .new
         }, onSelect: { target in
-            if target.isNewModeCard {
+            if target.isNewVibscapeCard {
                 editor = .new
                 return
             }
-            // Picking a mode that was switched off would leave it chosen
+            // Picking a vibscape that was switched off would leave it chosen
             // but missing from the list, so switch it back on.
             if !target.isEnabled {
-                app.setModeEnabled(target.id, enabled: true)
+                app.setVibscapeEnabled(target.id, enabled: true)
             }
             app.viaPicker = true
-            app.activeMode = target.id
-            app.showAllModesSheet = false
+            app.activeVibscape = target.id
+            app.showVibscapesSheet = false
         }, isDropTarget: isDropTarget(entry))
             .contentShape(Rectangle())
-        if entry.isNewModeCard {
-            // The "make your own" card isn't a mode, so it isn't dragged
+        if entry.isNewVibscapeCard {
+            // The "make your own" card isn't a vibscape, so it isn't dragged
             // and nothing can be dropped onto it. Its placeholder id is
-            // also another mode's, so letting a drop through would move
-            // that mode instead.
+            // also another vibscape's, so letting a drop through would move
+            // that vibscape instead.
             base
         } else {
             base
@@ -240,24 +240,24 @@ private struct ModeRow: View {
                 }
                 .dropDestination(for: String.self) { items, _ in
                     guard let raw = items.first,
-                          let dragged = ModeID(rawValue: raw),
-                          let index = app.allModes.firstIndex(where: { $0.id == entry.id })
+                          let dragged = VibscapeID(rawValue: raw),
+                          let index = app.allVibscapes.firstIndex(where: { $0.id == entry.id })
                     else { return false }
-                    app.moveMode(dragged, to: index)
+                    app.moveVibscape(dragged, to: index)
                     return true
                 } isTargeted: { targeted in
                     // While something is being dragged over this card, the
                     // card says so — otherwise there's no sign of where the
-                    // mode would land.
+                    // vibscape would land.
                     dropTargetID = targeted ? entry.id : (dropTargetID == entry.id ? nil : dropTargetID)
                 }
         }
     }
 
-    /// True for the card a dragged mode would land on.
-    private func isDropTarget(_ entry: ModeEntry) -> Bool {
+    /// True for the card a dragged vibscape would land on.
+    private func isDropTarget(_ entry: VibscapeEntry) -> Bool {
         if let dropTargetIndex,
-           let index = app.allModes.firstIndex(where: { $0.id == entry.id }),
+           let index = app.allVibscapes.firstIndex(where: { $0.id == entry.id }),
            index == dropTargetIndex {
             return true
         }
@@ -265,7 +265,7 @@ private struct ModeRow: View {
     }
 }
 
-/// What follows the cursor while a mode is being dragged.
+/// What follows the cursor while a vibscape is being dragged.
 ///
 /// Deliberately small. A copy of the whole card would sit right on top of
 /// the card being aimed at, hiding the drop indicator — and the drag image
@@ -295,12 +295,12 @@ private struct DragChip: View {
     }
 }
 
-/// One mode in the grid: a picture, its name, and a switch.
-private struct ModeCard: View {
+/// One vibscape in the grid: a picture, its name, and a switch.
+private struct VibscapeCard: View {
     @EnvironmentObject var app: AppState
-    let entry: ModeEntry
+    let entry: VibscapeEntry
     /// Called when the card's edit button is pressed.
-    var onEdit: ((ModeEntry) -> Void)?
+    var onEdit: ((VibscapeEntry) -> Void)?
     /// Called when the card is pressed, for the "make your own" card.
     var onCreate: (() -> Void)?
 
@@ -308,10 +308,10 @@ private struct ModeCard: View {
     /// instead of taking up room all the time.
     @State private var isHovering = false
 
-    /// Called when the picture is pressed: pick this mode.
-    var onSelect: ((ModeEntry) -> Void)?
-    /// True when a dragged mode is over this card, so it can show where
-    /// the mode would land.
+    /// Called when the picture is pressed: pick this vibscape.
+    var onSelect: ((VibscapeEntry) -> Void)?
+    /// True when a dragged vibscape is over this card, so it can show where
+    /// the vibscape would land.
     var isDropTarget = false
 
     /// Set when the delete button is pressed, so the confirmation can ask.
@@ -321,12 +321,12 @@ private struct ModeCard: View {
         VStack(alignment: .leading, spacing: 7) {
             preview
             HStack(spacing: 6) {
-                if entry.isNewModeCard {
+                if entry.isNewVibscapeCard {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Color(red: 1, green: 0.17, blue: 0.84))
                 } else if entry.isCustom {
-                    // Only the user's own modes are marked. The numbers that
+                    // Only the user's own vibscapes are marked. The numbers that
                     // sit next to the names in the drop-down are keyboard
                     // shortcuts, and this panel isn't about keys.
                     Text("★")
@@ -342,7 +342,7 @@ private struct ModeCard: View {
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
                 if entry.isCustom {
-                    // Only the user's own modes can be changed. The
+                    // Only the user's own vibscapes can be changed. The
                     // shipped ones are part of the app.
                     Button {
                         onEdit?(entry)
@@ -353,7 +353,7 @@ private struct ModeCard: View {
                     }
                     .buttonStyle(.plain)
                     .pointingHand()
-                    .help("Edit this mode")
+                    .help("Edit this vibscape")
                     Button {
                         pendingDelete = true
                     } label: {
@@ -363,23 +363,23 @@ private struct ModeCard: View {
                     }
                     .buttonStyle(.plain)
                     .pointingHand()
-                    .help("Delete this mode")
+                    .help("Delete this vibscape")
                     .confirmationDialog(
                         "Delete “\(entry.title)”?",
                         isPresented: $pendingDelete,
                         titleVisibility: .visible
                     ) {
                         Button("Delete", role: .destructive) {
-                            app.deleteCustomMode(id: entry.id.slug)
+                            app.deleteCustomVibscape(id: entry.id.slug)
                         }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("The mode and its code are removed from this Mac. This can't be undone.")
+                        Text("The vibscape and its code are removed from this Mac. This can't be undone.")
                     }
                 }
-                if !entry.isNewModeCard {
-                    ModeSwitch(isOn: entry.isEnabled) {
-                        app.setModeEnabled(entry.id, enabled: !entry.isEnabled)
+                if !entry.isNewVibscapeCard {
+                    VibscapeSwitch(isOn: entry.isEnabled) {
+                        app.setVibscapeEnabled(entry.id, enabled: !entry.isEnabled)
                     }
                 }
             }
@@ -388,7 +388,7 @@ private struct ModeCard: View {
             // Who made it. Always shown, and clickable — the name and the
             // link both lead to the same place.
             HStack(spacing: 4) {
-                if !entry.isNewModeCard {
+                if !entry.isNewVibscapeCard {
                     if let link = entry.link {
                         Link(destination: link) {
                             HStack(spacing: 4) {
@@ -424,7 +424,7 @@ private struct ModeCard: View {
                 }
             }
             .frame(height: 12, alignment: .leading)
-            if let problem = app.customModeProblems[entry.id.slug] {
+            if let problem = app.customVibscapeProblems[entry.id.slug] {
                 Label("Needs a fix", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(Color(red: 1, green: 0.55, blue: 0.2))
@@ -441,7 +441,7 @@ private struct ModeCard: View {
                 )
         )
         .overlay(alignment: .bottom) {
-            // The drop zone. While a mode is being dragged over this card,
+            // The drop zone. While a vibscape is being dragged over this card,
             // a bar appears along the bottom showing it would land here.
             if isDropTarget {
                 RoundedRectangle(cornerRadius: 2)
@@ -472,14 +472,14 @@ private struct ModeCard: View {
     /// "make your own" card always stands out a little.
     private var borderColour: Color {
         if isDropTarget { return Color(red: 1, green: 0.17, blue: 0.84) }
-        if entry.isNewModeCard { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.45) }
+        if entry.isNewVibscapeCard { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.45) }
         if entry.isEnabled { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.28) }
         return Color.white.opacity(0.06)
     }
 
     /// The author, and where to find more.
     private var tooltip: String {
-        if entry.isNewModeCard {
+        if entry.isNewVibscapeCard {
             return "Make a mode of your own"
         }
         var text = entry.author.isEmpty ? "Made by an unknown author" : "Made by \(entry.author)"
@@ -492,17 +492,17 @@ private struct ModeCard: View {
         return text
     }
 
-    /// The picture. A user's own mode is drawn for real, so the panel shows
+    /// The picture. A user's own vibscape is drawn for real, so the panel shows
     /// what it looks like rather than a stand-in.
     ///
-    /// Clicking it picks the mode: the panel closes and that mode is what
+    /// Clicking it picks the vibscape: the panel closes and that vibscape is what
     /// gets drawn.
     @ViewBuilder
     private var preview: some View {
         Button {
             onSelect?(entry)
         } label: {
-            if entry.isNewModeCard {
+            if entry.isNewVibscapeCard {
                 VStack(spacing: 6) {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 22, weight: .light))
@@ -520,7 +520,7 @@ private struct ModeCard: View {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 5))
             } else if entry.isCustom {
-                if let image = app.customModePreviews[entry.id.slug] {
+                if let image = app.customVibscapePreviews[entry.id.slug] {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -539,7 +539,7 @@ private struct ModeCard: View {
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 5))
                 }
-            } else if let image = ModePreviewImage.builtIn(entry.id) {
+            } else if let image = VibscapePreviewImage.builtIn(entry.id) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -547,14 +547,14 @@ private struct ModeCard: View {
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             } else {
-                CustomModeCover(name: entry.title, seed: entry.id.slug)
+                CustomVibscapeCover(name: entry.title, seed: entry.id.slug)
                     .frame(height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
         }
         .buttonStyle(.plain)
         .pointingHand()
-        .help(entry.isNewModeCard ? "Make a mode of your own" : "Switch to \(entry.title)")
+        .help(entry.isNewVibscapeCard ? "Make a mode of your own" : "Switch to \(entry.title)")
     }
 }
 
@@ -562,9 +562,9 @@ private struct ModeCard: View {
 ///
 /// SwiftUI's own `Toggle` renders through an NSView that `ImageRenderer`
 /// can't capture — it comes out as the "unsupported" placeholder — which is
-/// the same reason the mode drop-down is hand-rolled. This one is drawn, so
+/// the same reason the vibscape drop-down is hand-rolled. This one is drawn, so
 /// it looks the same everywhere and can be reviewed in a screenshot.
-struct ModeSwitch: View {
+struct VibscapeSwitch: View {
     let isOn: Bool
     let action: () -> Void
 
@@ -589,16 +589,16 @@ struct ModeSwitch: View {
     }
 }
 
-/// Loads the mode pictures that ship with the app's website.
+/// Loads the vibscape pictures that ship with the app's website.
 ///
 /// They're in the site folder rather than in the bundle because the app
 /// doesn't ship them today. If they're not there — a build from source, or
 /// a trimmed bundle — the card falls back to a generated cover rather than
 /// showing a broken image.
-enum ModePreviewImage {
+enum VibscapePreviewImage {
     private static var cache: [String: NSImage] = [:]
 
-    static func builtIn(_ id: ModeID) -> NSImage? {
+    static func builtIn(_ id: VibscapeID) -> NSImage? {
         guard let builtin = id.builtin, builtin != .autoScan else { return nil }
         let key = builtin.rawValue
         if let cached = cache[key] { return cached }
@@ -607,7 +607,7 @@ enum ModePreviewImage {
         return image
     }
 
-    private static func load(builtin: VisualizerMode) -> NSImage? {
+    private static func load(builtin: Vibscape) -> NSImage? {
         // The pictures live beside the site, and the app is usually run from
         // a build in the same checkout. Look in a few places rather than
         // insisting on one layout.
@@ -630,12 +630,12 @@ enum ModePreviewImage {
     }
 }
 
-/// A generated cover for a mode with no picture: the user's own, or any
+/// A generated cover for a vibscape with no picture: the user's own, or any
 /// built-in whose picture couldn't be found.
 ///
-/// It's drawn from the name, so the same mode always gets the same cover and
+/// It's drawn from the name, so the same vibscape always gets the same cover and
 /// a wall of them looks like a set rather than a row of grey boxes.
-struct CustomModeCover: View {
+struct CustomVibscapeCover: View {
     let name: String
     let seed: String
 

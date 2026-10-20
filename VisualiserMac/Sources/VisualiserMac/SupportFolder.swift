@@ -6,14 +6,14 @@ import Foundation
 /// this was first written, and the folder was called AUDIOVANE (and, briefly,
 /// AudioVane — the same directory on a case-insensitive disk). It is now
 /// Vibresia, and the old folder is moved across on first launch so that
-/// nobody loses their custom modes, their hamster sprites or their settings.
+/// nobody loses their custom vibscapes, their hamster sprites or their settings.
 enum SupportFolder {
     /// The folder: `~/Library/Application Support/Vibresia`.
     static var root: URL {
         base.appendingPathComponent("Vibresia", isDirectory: true)
     }
 
-    /// A subfolder of it — `Hamsters`, `CustomModes`, `Crashes`.
+    /// A subfolder of it — `Hamsters`, `Vibscapes`, `Crashes`.
     static func folder(_ name: String) -> URL {
         root.appendingPathComponent(name, isDirectory: true)
     }
@@ -38,20 +38,43 @@ enum SupportFolder {
     static func migrateIfNeeded() {
         let fm = FileManager.default
         let new = root
-        if fm.fileExists(atPath: new.path) { return }
+        if !fm.fileExists(atPath: new.path) {
+            for legacy in legacyNames {
+                let old = base.appendingPathComponent(legacy, isDirectory: true)
+                guard fm.fileExists(atPath: old.path) else { continue }
+                do {
+                    try fm.moveItem(at: old, to: new)
+                    NSLog("[MIGRATE] moved Application Support/\(legacy) to Vibresia")
+                } catch {
+                    // Not fatal: the app will start with an empty folder, and
+                    // the old one is still there to be moved by hand.
+                    NSLog("[MIGRATE] couldn't move \(legacy): \(error.localizedDescription)")
+                }
+                return
+            }
+        }
+        migrateSubfolders(of: new)
+    }
 
-        for legacy in legacyNames {
-            let old = base.appendingPathComponent(legacy, isDirectory: true)
-            guard fm.fileExists(atPath: old.path) else { continue }
+    /// Renames the folders inside the app's own directory that were renamed
+    /// with the terminology.
+    ///
+    /// The user's own vibscapes live in a folder the app points at, so a
+    /// rename that missed this would quietly look like their work had
+    /// vanished.
+    private static func migrateSubfolders(of root: URL) {
+        let fm = FileManager.default
+        let renames = [("CustomModes", "Vibscapes")]
+        for (oldName, newName) in renames {
+            let old = root.appendingPathComponent(oldName, isDirectory: true)
+            let new = root.appendingPathComponent(newName, isDirectory: true)
+            guard fm.fileExists(atPath: old.path), !fm.fileExists(atPath: new.path) else { continue }
             do {
                 try fm.moveItem(at: old, to: new)
-                NSLog("[MIGRATE] moved Application Support/\(legacy) to Vibresia")
+                NSLog("[MIGRATE] moved \(oldName) to \(newName)")
             } catch {
-                // Not fatal: the app will start with an empty folder, and
-                // the old one is still there to be moved by hand.
-                NSLog("[MIGRATE] couldn't move \(legacy): \(error.localizedDescription)")
+                NSLog("[MIGRATE] couldn't move \(oldName): \(error.localizedDescription)")
             }
-            return
         }
     }
 }

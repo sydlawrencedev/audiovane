@@ -22,7 +22,7 @@ REPO="sydlawrencedev/vibresia"
 VERSION="$(./version.sh --write)"
 TAG="v$VERSION"
 
-../scripts/check-modes.sh
+../scripts/check-vibscapes.sh
 ../scripts/check-posthog.sh
 ../scripts/check-no-webhook-leak.sh
 

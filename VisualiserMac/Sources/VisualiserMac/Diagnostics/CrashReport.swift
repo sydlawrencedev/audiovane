@@ -10,7 +10,7 @@ import Foundation
 /// The point of this file is the part the system's own `.ips` can't have.
 /// "SIGSEGV" on its own is a shrug; SIGSEGV *with the genre on stage, four
 /// musicians up, a cross-fade half finished and the last dozen actions
-/// leading up to it* is a bug report. Everything here is app state — mode,
+/// leading up to it* is a bug report. Everything here is app state — vibscape,
 /// genre, lineup, our own backtrace. Nothing derived from what the user is
 /// watching or listening to goes in: no track names, no audio, no screen
 /// content. Same line the analytics client draws.
@@ -58,7 +58,7 @@ struct CrashReport: Codable {
     /// NSException reason string, when there is one.
     let exceptionReason: String?
     let frames: [Frame]
-    /// What was on screen: mode, genre, palette, band lineup, audio source.
+    /// What was on screen: vibscape, genre, palette, band lineup, audio source.
     let state: [String: String]
     let breadcrumbs: [String]
 

@@ -104,7 +104,7 @@ def start_app(log_path, build):
     subprocess.run(["open", "-n", "-a", APP,
                     "--env", f"VIBRESIA_EVAL_LOG={log_path}",
                     "--env", "VIBRESIA_NO_UPDATE_CHECK=1",
-                    "--args", "--mode", "band", "--system-audio", "--genre-auto"], check=True)
+                    "--args", "--vibscape", "band", "--system-audio", "--genre-auto"], check=True)
     time.sleep(8)
 
 

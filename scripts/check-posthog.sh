@@ -6,7 +6,7 @@
 # the dashboard would quietly show half the data. VisualiserMac/.env is the
 # source of truth (it's also what build-app.sh bakes into Info.plist).
 #
-# Runs as part of release.sh, same as check-modes.sh.
+# Runs as part of release.sh, same as check-vibscapes.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 python3 - "$ROOT" <<'PY'
