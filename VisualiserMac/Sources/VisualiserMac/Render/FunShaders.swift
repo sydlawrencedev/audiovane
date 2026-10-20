@@ -17,7 +17,7 @@ enum FunShaders {
         (.waveform, waveform),
         (.ribbons, ribbons),
         (.silk, silk),
-        (.wormhole, wormhole),
+        (.knot, knot),
     ]
 
     static let prelude = """
@@ -2192,184 +2192,327 @@ extension FunShaders {
 }
 
 extension FunShaders {
-    // MARK: - Wormhole
+    // MARK: - Knot
 
-    /// Falling through a knot of light, after the climax of the AudioVane
-    /// brand film (0:38 to 0:40): a few thick, glittering streams of hot pink
-    /// and gold sweep in from the edges of the screen over black space and
-    /// twist into an off-centre knot, a gold coil turning away into the
-    /// distance. Gold glitter, warm bokeh and a few cyan glass cubes fly out
-    /// past the camera in depth layers. Drawn in log-polar space round the
-    /// knot (angle, and log of the distance for depth), so it's a handful of
-    /// noise lookups per pixel and five particle layers, with no raymarching.
+    /// A tangle of glowing paint threads, after the climax of the AudioVane
+    /// brand film (0:38 to 0:40). Two broad streams of fibres, hot pink
+    /// sweeping in from the top left and gold from the bottom right, pinch
+    /// through one tight twisted neck like a wrung-out rope and flare out
+    /// again, with a couple of loose threads tangled round the neck. Each
+    /// stream is drawn as a projected twisted cylinder: the angle round it at
+    /// each pixel comes straight from acos, so every single fibre can be read,
+    /// splits into finer threads where the stream fans out, and frays at the
+    /// edges, with no raymarching. The loose threads are polar loops that
+    /// cross themselves like a trefoil. Gold glitter, chunky soft flakes and
+    /// cyan glass shards stream out past the camera in four depth layers.
     /// The colours are picked to land as hot pink and gold through the NEON
     /// grade, and the background carries a touch of green so the grade's
-    /// purple lift reads as black. The fall runs on uScroll, so it rushes when
-    /// the music is loud. The bass tightens the curl and the coil, every beat
-    /// turns the knot a step and lifts the light, and the treble adds glitter
-    /// and makes the glass glint. In silence: dim, and still.
-    static let wormhole = """
-    // Wormhole: falling through a knot of light in black space. A few thick,
-    // glittering streams of hot pink and gold sweep in from the edges of the
-    // screen and twist into an off-centre knot, while gold glitter, soft bokeh
-    // and cyan glass cubes fly out past the camera.
+    /// purple lift reads as black. Streaks run along the fibres on uScroll, so
+    /// it moves more when the music is loud. The bass wrings the neck tighter
+    /// and swells the fans, every beat twists the neck another notch and
+    /// re-ties one of the loose threads, and the treble sparkles the fibres.
+    /// In silence: dim, and still.
+    static let knot = """
+    // Knot: two broad streams of glowing paint threads, hot pink sweeping in
+    // from the top left and gold from the bottom right, pinch through one tight
+    // twisted neck like a wrung-out rope and flare out again, with loose threads
+    // tangled round the neck. Each stream is a bundle of single fibres that fray,
+    // split and rejoin. Gold glitter, chunky flakes and cyan glass shards stream
+    // out past the camera through black space.
 
-    const int kWormLayers = 5;
-    const vec3 wormPink = vec3(1.0, 0.13, 0.24);
-    const vec3 wormGold = vec3(1.0, 0.54, 0.02);
-    const vec3 wormCyan = vec3(0.0, 1.0, 0.80);
+    const vec3 knotPink = vec3(1.0, 0.12, 0.42);
+    const vec3 knotGold = vec3(1.0, 0.52, 0.06);
+    const vec3 knotCyan = vec3(0.0, 1.0, 0.80);
 
-    // How far we've fallen. Forward-only, faster when louder.
-    float wormTravel() { return uScroll * 9.0; }
-    // One step per beat, eased in, so beat-driven turns never run backwards.
-    float wormTurn() { return floor(uBeats) + smoothstep(0.0, 0.5, fract(uBeats)); }
+    float knotSq(float x) { return x * x; }
 
-    // Value noise that repeats every `period` cells in x, so it wraps round the
-    // circle without a seam.
-    float wormNoise(vec2 p, float period) {
-        vec2 i = floor(p), f = fract(p);
-        f = f * f * (3.0 - 2.0 * f);
-        float i0 = mod(i.x, period), i1 = mod(i.x + 1.0, period);
-        float a = hash21(vec2(i0, i.y)), b = hash21(vec2(i1, i.y));
-        float c = hash21(vec2(i0, i.y + 1.0)), d = hash21(vec2(i1, i.y + 1.0));
-        return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    // Cheap 1D value noise for things that only vary along a strand.
+    float knotNoise1(float x) {
+        float i = floor(x), f = fract(x);
+        return mix(hash21(vec2(i, 0.37)), hash21(vec2(i + 1.0, 0.37)), f * f * (3.0 - 2.0 * f));
     }
 
-    // Signed angle from `a` to `c`, wrapped to -PI..PI.
-    float wormAngle(float a, float c) { return mod(a - c + PI, 2.0 * PI) - PI; }
-
-    // One stream: a soft, ragged band of angle around `c` with half-width `w`.
-    // `rag` roughens its edges.
-    float wormStream(float a, float u, float c, float w, float seed, float rag) {
-        float wob = wormNoise(vec2(u * 0.55 + seed, seed), 64.0) - 0.5;
-        float d = abs(wormAngle(a, c + wob * 0.9));
-        return smoothstep(w * (0.85 + 0.4 * wob), w * 0.45, d + (rag - 0.5) * w * 0.7);
+    // A cheap atan2 (error under 0.01 rad), good enough for drawing curves.
+    float knotAtan(float y, float x) {
+        float ax = abs(x), ay = abs(y);
+        float a = min(ax, ay) / max(max(ax, ay), 1e-6);
+        float s = a * a;
+        float r = ((-0.0464964749 * s + 0.15931422) * s - 0.327622764) * s * a + a;
+        if (ay > ax) r = 1.57079637 - r;
+        if (x < 0.0) r = PI - r;
+        return y < 0.0 ? -r : r;
     }
 
-    // Roughly how close angle `a` is to a stream centred on `c`.
-    float wormLobe(float a, float c) { return pow(0.5 + 0.5 * cos(a - c), 5.0); }
+    // How thick a strand is along its length: a cheap smooth wobble.
+    float knotThick(float t, float seed) {
+        float x = fract(t * 0.21 + seed * 0.37);
+        return 0.6 + 0.4 * (8.0 * x * (1.0 - x) - 1.0);
+    }
 
-    // Long streaks running along the streams, stretched by the speed of the fall.
-    float wormStreaks(float a, float flow, float n, float seed) {
-        float x = a / (2.0 * PI) * n;
-        float f = wormNoise(vec2(x, flow * 0.6 + seed), n);
-        f = 0.6 * f + 0.4 * wormNoise(vec2(x * 3.0, flow * 1.0 - seed), n * 3.0);
-        return f * f * f;
+    // Slow motion clock: runs faster when louder, stops in silence.
+    float knotClock() { return uTime * 0.3 + uScroll * 1.4; }
+    // One re-tie per beat, eased in, so the twist never snaps backwards.
+    float knotRetie() { return floor(uBeats) + smoothstep(0.0, 0.35, fract(uBeats)); }
+
+    // Paint one pass of a strand. `u` runs -1..1 across it, `t` along it.
+    // Returns the colour to add in rgb and how much it covers what's behind in a.
+    vec4 knotShade(float u, float t, float R, float seed, float nf, float gold,
+                   float ends, float depth, float level) {
+        float au = abs(u);
+        float arc = t * R * 6.0;
+        vec3 tint = mix(knotPink, knotGold, gold);
+        // single fibres: they weave across the strand, split and rejoin
+        float weave = knotNoise1(arc * 1.5 + seed * 17.0);
+        float fr = (u * 0.5 + 0.5) * nf + (weave - 0.5) * 3.0;
+        float fi = floor(fr);
+        float fh = hash21(vec2(fi, seed));
+        float fl = abs(fract(fr) - 0.5);
+        float thread = smoothstep(0.14 + 0.24 * fh, 0.02, fl);
+        float streak = knotNoise1(arc * (5.0 + 5.0 * fh) + fi * 13.7 + seed * 5.0);
+        thread *= smoothstep(0.3, 0.6, streak);
+        // ragged edges with loose fibres straying out
+        float env = smoothstep(1.0 + 0.8 * fract(weave * 3.7), 0.45, au) * ends;
+        // brushy paint body, streaked along the strand and full of flecks
+        float fa = arc * 40.0 + fh * 7.0;
+        float fleck = step(0.82, hash21(vec2(floor(fa), fi + seed * 41.0)));
+        fleck *= smoothstep(0.5, 0.15, length(vec2(fract(fa) - 0.5, fract(fr) - 0.5)));
+        float body = knotSq(max(1.0 - 0.45 * u * u, 0.0)) * (0.35 + 0.9 * streak * streak) * (0.8 + 0.7 * fleck);
+        float s = env * (body * mix(1.0, 0.75, gold) + thread * (0.35 + 0.9 * fh) * mix(0.7, 1.1, gold));
+        // treble sparkles along the fibres
+        float gl = step(0.985 - 0.04 * uTreble, hash21(vec2(fi + seed * 31.0, floor(arc * 30.0))));
+        vec3 hot = mix(tint, mix(vec3(1.0, 0.7, 0.85), vec3(1.0, 0.88, 0.55), gold), mix(0.4, 0.6, gold));
+        vec3 c = tint * s + hot * env * (thread * fh * fh * fh * fh * 1.2 + (fleck * 0.35 + gl * (0.9 + 2.0 * uTreble)) * step(0.5, fh));
+        // a soft glow round the strand
+        c += tint * ends * 0.08 / (1.0 + 3.0 * au * au);
+        return vec4(c * level * depth * (1.0 + 0.25 * gold), 0.5 * env);
+    }
+
+    // One strand: a looping polar curve round the knot whose ends open out and fly
+    // off the screen. A: centre offset, tilt, squash. B: loop radius, lobes, lobe
+    // depth, phase. C: knot section start and end angle, how far each end flies
+    // out. D: width, fibre count, gold (0 pink, 1 gold), seed.
+    // A cheaper paint for the far pass where a strand crosses behind itself.
+    vec4 knotShadeFar(float u, float t, float R, float seed, float gold, float ends, float level) {
+        float au = abs(u);
+        vec3 tint = mix(knotPink, knotGold, gold);
+        float streak = knotNoise1(t * R * 50.0 + floor(u * 6.0) * 7.3 + seed * 5.0);
+        float env = smoothstep(1.2, 0.5, au) * ends;
+        float s = env * knotSq(max(1.0 - 0.45 * u * u, 0.0)) * (0.3 + 0.8 * streak);
+        return vec4(tint * s * level, 0.5 * env);
+    }
+
+    void knotStrand(inout vec3 col, inout float near, vec2 p, vec2 knot, float clk, float retie,
+                    float tight, float swell, float level, vec4 A, vec4 B, vec4 C, vec4 D) {
+        float seed = D.w;
+        float flip = mod(seed, 2.0) * 2.0 - 1.0;
+        // every third beat this strand re-ties: its loops slide round and flip
+        // (the strands take turns, so something re-ties on every beat)
+        float bt3 = (retie - mod(seed, 3.0)) / 3.0;
+        float tie = floor(bt3) + smoothstep(0.0, 0.35, fract(bt3));
+        float ph = B.w + clk * (0.35 + 0.06 * seed) * flip + tie * 1.7 * flip;
+        // the knot twists slowly: a small sway on top of each strand's fixed tilt
+        float sway = sin(clk * 0.23 + seed * 2.1);
+        float da = 0.3 * sway;
+        vec2 q = rot(A.z + 0.35 * tie * flip) * (mat2(1.0 - 0.5 * da * da, -da, da, 1.0 - 0.5 * da * da) * (p - knot - A.xy));
+        float sq = A.w * (0.85 + 0.15 * sway);
+        q.y /= sq;
+        float r = length(q);
+        float th = knotAtan(q.y, q.x);
+        float R = B.x * 0.6 * tight;
+        float t0 = C.x - C.z, t1 = C.y + C.w;
+        float k0 = ceil((t0 - th) / (2.0 * PI));
+        // lobes that don't divide a turn evenly (1.5 = a trefoil) so the passes
+        // cross over each other like a real knot; each pass is the last one turned
+        // on by a fixed angle
+        float la = B.y * (th + 2.0 * PI * k0) + ph;
+        float lobe = sin(la), dlobe = cos(la);
+        float sa = sin(2.0 * PI * B.y), ca = cos(2.0 * PI * B.y);
+        float bdl = dlobe, cdl = dlobe;
+        // the two nearest passes of this strand (it winds round up to 3 times)
+        float bu = 1e3, bt = t0, bd = 0.0, bw = 1.0;
+        float cu = 1e3, ct = t0, cd = 0.0, cw = 1.0;
+        for (int j = 0; j < 3; j++) {
+            float t = th + 2.0 * PI * (k0 + float(j));
+            // out on a tail the loop opens up and flies to the edge of the screen
+            float o = max(C.x - t, 0.0) + max(t - C.y, 0.0);
+            float tail = 1.0 + o * (0.9 + o * 0.45);
+            float rho = R * (tail + B.z * lobe);
+            float drho = R * (B.z * B.y * dlobe + (step(C.y, t) - step(t, C.x)) * (0.9 + 0.9 * o));
+            float sl = drho / max(rho, 1e-3);
+            float d = (r - rho) * inversesqrt(1.0 + sl * sl) * mix(1.0, sq, 0.5);
+            float w = D.x * swell * mix(0.75, tail, 0.6);
+            float u = abs(d) / w + step(t1, t) * 1e3;
+            if (u < bu) { cu = bu; ct = bt; cd = bd; cw = bw; cdl = bdl; bu = u; bt = t; bd = d; bw = w; bdl = dlobe; }
+            else if (u < cu) { cu = u; ct = t; cd = d; cw = w; cdl = dlobe; }
+            float nl = lobe * ca + dlobe * sa;
+            dlobe = dlobe * ca - lobe * sa;
+            lobe = nl;
+        }
+        // the further pass first, then the nearer one over it
+        if (cu < 2.0) {
+            float e2 = smoothstep(t0, t0 + 1.2, ct) * smoothstep(t1, t1 - 1.2, ct);
+            vec4 s2 = knotShadeFar(cd / (cw * knotThick(ct, seed)), ct, R, seed, D.z, e2, (0.56 + 0.24 * cdl) * level);
+            col = col * (1.0 - s2.a) + s2.rgb;
+        }
+        near += 1.0 / (1.0 + bu * bu);
+        if (bu > 2.2) return;              // this pixel is nowhere near the strand
+        float e1 = smoothstep(t0, t0 + 1.2, bt) * smoothstep(t1, t1 - 1.2, bt);
+        vec4 s1 = knotShade(bd / (bw * knotThick(bt, seed)), bt, R, seed, D.y, D.z, e1, 0.7 + 0.3 * bdl, level);
+        col = col * (1.0 - s1.a) + s1.rgb;
+    }
+
+    // One layer (front or back half) of a twisted bundle of fibres.
+    // `ph` is the angle round the bundle, `s` the distance along it.
+    // Returns the colour in rgb and how much it covers what's behind in a.
+    vec4 knotFibres(float ph, float s, float x, float flow, float nf, float seed,
+                    vec3 tint, float fan, float lit) {
+        float ax = abs(x);
+        // fibres: count them round the bundle; where it fans out wide, each one
+        // splits into finer threads
+        float c = ph * nf / (2.0 * PI) + seed * 13.0;
+        float fi = floor(c);
+        float fh = hash21(vec2(fi, seed));
+        float fl = abs(fract(c) - 0.5);
+        float thread = smoothstep(0.12 + 0.25 * fh, 0.02, fl);
+        float c2 = c * 3.0;
+        float fine = smoothstep(0.3, 0.05, abs(fract(c2) - 0.5)) * hash21(vec2(floor(c2), seed + 3.0));
+        thread = mix(thread, max(thread * 0.6, fine), fan);
+        // long streaks flowing in along the fibres: they split, thin out and rejoin
+        float streak = knotNoise1((abs(s) * 14.0 - flow) * (1.0 + fh) + fi * 7.3);
+        thread *= smoothstep(0.25, 0.6, streak);
+        // ragged edges: some fibres stray outside the bundle, some stop short
+        float rag = knotNoise1(abs(s) * 6.0 + fi * 3.1);
+        float env = smoothstep(1.0, 0.75 - 0.3 * rag * fan, ax);
+        // the paint body: a soft round bundle, streaked along its length
+        float body = sqrt(max(1.0 - x * x, 0.0)) * (0.3 + 0.9 * streak * streak);
+        // glittering flecks caught in the paint, and treble sparkle on the fibres
+        float fa = (abs(s) * 90.0 - flow * 2.0) + fh * 7.0;
+        float fleck = step(0.8, hash21(vec2(floor(fa), floor(c2) + seed * 41.0)));
+        fleck *= smoothstep(0.35, 0.05, length(vec2(fract(fa) - 0.5, fract(c2) - 0.5)));
+        float gl = step(0.985 - 0.04 * uTreble, hash21(vec2(fi + seed * 31.0, floor(fa * 0.5))));
+        // fine bright filaments running through the gold
+        float c3 = c * 2.0 + 0.37;
+        float fil = smoothstep(0.08, 0.0, abs(fract(c3) - 0.5)) * step(0.65, hash21(vec2(floor(c3), seed + 9.0)));
+        fil *= smoothstep(0.4, 0.8, knotNoise1(abs(s) * 5.0 - flow * 0.5 + floor(c3) * 5.1)) * step(0.3, tint.g);
+        float s1 = env * (body * 0.75 + thread * (0.35 + 0.9 * fh));
+        vec3 hot = mix(tint, vec3(1.0, 0.85, 0.7), 0.5);
+        vec3 col = tint * s1 + hot * env * (fil * 1.6 + thread * fh * fh * fh * fh + (fleck * 0.6 + gl * thread * (0.9 + 2.0 * uTreble)) * step(0.4, fh));
+        return vec4(col * lit, 0.55 * env);
+    }
+
+    // A stream: a bundle of fibres along a gently bent axis through the neck at
+    // `n`, `ang` pointing back up the stream to where it comes in. It is narrow
+    // at the neck and fans out either side (`flareIn` where it enters, `flareOut`
+    // past the neck), and twists hardest right at the neck.
+    void knotStream(inout vec3 col, inout float near, vec2 p, vec2 n, float ang, float bend,
+                    float flareIn, float flareOut, float twist, float spin, float flow,
+                    float nf, float seed, vec3 tint, float fadeOut, float lit) {
+        vec2 dir = vec2(cos(ang), sin(ang));
+        vec2 q = p - n;
+        float s = dot(q, dir);                                // > 0: coming in
+        float v = dot(q, vec2(-dir.y, dir.x)) - bend * s * s;
+        float neck = 0.018 * (1.0 - 0.3 * uBass);            // bass wrings the neck tighter
+        float W = neck + s * s * (s > 0.0 ? flareIn : flareOut);
+        float x = v / W;
+        float ax = abs(x);
+        float side = s > 0.0 ? 1.0 : fadeOut;
+        float reach = smoothstep(0.0, 0.08, s + 0.9);
+        float fan = smoothstep(0.03, 0.3, W);
+        near += side * reach / (1.0 + ax * ax);
+        // a soft glow round the stream
+        col += tint * side * reach * 0.06 * lit / (1.0 + 2.0 * ax * ax);
+        if (ax > 1.05) return;
+        // a projected twisted cylinder: each fibre sits at angle ph round it
+        float a = acos(clamp(x, -1.0, 1.0));
+        float T = twist * s / (0.05 + abs(s)) + spin;         // twists hardest at the neck
+        float depth = 0.65 + 0.35 * sqrt(max(1.0 - x * x, 0.0));
+        vec4 back = knotFibres(-a - T, s, x, flow, nf, seed, tint, fan, lit * side * reach * 0.55);
+        col = col * (1.0 - back.a * 0.6) + back.rgb;
+        vec4 front = knotFibres(a - T, s, x, flow, nf, seed, tint, fan, lit * side * reach * depth);
+        col = col * (1.0 - front.a) + front.rgb;
     }
 
     void main() {
         vec2 p = screenP();
-        float travel = wormTravel();
-        float turn = wormTurn();
-        float lit = 0.35 + 0.65 * uActive;
-        // The knot sits low and a little left of centre, drifting slowly.
-        vec2 eye = vec2(-0.03 + 0.03 * sin(uTime * 0.11), -0.07 + 0.025 * sin(uTime * 0.09 + 1.0));
-        vec2 q = p - eye;
-        float r = max(length(q), 1e-4);
-        float a = atan(q.y, q.x);
-        float u = -log(r);                                // depth into the knot
-        float flow = u * 3.0 - travel;                    // streaks rush outward
+        float clk = knotClock();
+        float retie = knotRetie();
+        float lit = (0.35 + 0.65 * uActive) * (1.1 + 0.5 * uLevel + 0.4 * uBass);
+        // the neck sits a little left of centre, wandering slowly
+        vec2 n = vec2(-0.08 + 0.03 * sin(clk * 0.13), 0.0 + 0.02 * sin(clk * 0.11 + 1.0));
+        float flow = uScroll * 6.0 + uTime * 0.6;             // streaks run in along the streams
+        float swell = 1.0 + 0.4 * uBass;                       // bass swells the fans
+        float wring = 2.6 + 0.6 * uBass;                       // and twists it harder
+        float tie = retie * 0.9;                                // every beat twists it another notch
 
-        // The streams curl hard near the knot and straighten out at the edges.
-        // Bass tightens the curl; each beat turns the whole knot a step.
-        float curl = (0.14 + 0.06 * uBass) / (r + 0.05);
-        float a2 = a + curl + uTime * 0.012 + turn * 0.04;
+        vec3 col = vec3(0.004, 0.03, 0.0);                     // lands near-neutral black after the grade
+        float near = 0.0;
+        // gold comes in from the bottom right, pink from the top left
+        knotStream(col, near, p, n, -0.9 + 0.08 * sin(clk * 0.2), 0.5, 3.0 * swell, 0.8 * swell,
+                   wring, clk * 0.5 + tie, flow, 40.0, 2.0, knotGold, 0.4, lit);
+        knotStream(col, near, p, n, 2.6 + 0.08 * sin(clk * 0.17 + 2.0), -0.4, 2.4 * swell, 0.7 * swell,
+                   -wring, -clk * 0.6 - tie, flow * 1.1, 46.0, 1.0, knotPink, 0.35, lit);
+        // loose threads tangled round the neck
+        knotStrand(col, near, p, n, clk, retie, 1.0 - 0.16 * uBass, swell, lit,
+                   vec4(0.01, 0.0, 0.4, 0.6), vec4(0.07, 1.5, 0.5, 0.0), vec4(0.0, 9.0, 1.6, 1.4), vec4(0.022, 8.0, 1.0, 4.0));
+        knotStrand(col, near, p, n, clk, retie, 1.0 - 0.16 * uBass, swell, lit,
+                   vec4(-0.01, 0.01, 2.0, 0.5), vec4(0.06, 2.5, 0.45, 2.0), vec4(1.0, 8.0, 1.4, 1.6), vec4(0.018, 7.0, 0.0, 5.0));
+        near = min(near, 2.0);
+        // warm light gathered in the neck
+        float kr = length(p - n);
+        col += mix(knotPink, knotGold, 0.6) * exp(-kr * 10.0) * (0.25 + 0.5 * uBeatStrength) * lit;
 
-        // A few broad streams: a wide pink fan, a gold river, and pink accents.
-        float rag = wormNoise(vec2(a2 / (2.0 * PI) * 24.0, u * 0.8), 24.0);
-        float pinkA = wormStream(a2, u, 3.2, 1.15, 1.0, rag);
-        float goldA = wormStream(a2, u, -0.8, 1.0, 5.0, rag);
-        float pinkB = wormStream(a2, u, 0.4, 0.5, 9.0, 1.0 - rag);
-        float pinkC = wormStream(a2, u, 1.4, 0.22, 13.0, 1.0 - rag);
-        float pink = max(max(pinkA, pinkB), pinkC * 0.8);
-
-        float sp = wormStreaks(a2, flow, 90.0, 0.0);
-        float sg = wormStreaks(a2 + 0.4, flow * 1.15, 120.0, 7.0);
-        float level = (0.8 + 0.6 * uLevel + 0.5 * uBass) * lit;
-
-        // Light gathers in the knot and dies in its very throat.
-        float throat = smoothstep(0.0, 0.018, r);
-        float knotGlow = exp(-r * 22.0);
-        // A touch of green so the grade's purple lift lands as a near-neutral black.
-        vec3 col = vec3(0.004, 0.03, 0.0);
-        // a medium grain so the streams read as made of particles, not paint
-        float grain = wormNoise(vec2(a2 / (2.0 * PI) * 200.0, u * 4.0 - travel * 1.3), 200.0);
-        float sheet = wormNoise(vec2(a2 / (2.0 * PI) * 6.0, u * 0.7 - travel * 0.25), 6.0);
-        grain = (0.25 + 1.5 * grain * grain) * (0.4 + 1.4 * sheet * sheet);
-        col += wormPink * pink * (1.0 + 3.6 * sp) * grain * level * throat;
-        col += wormGold * goldA * (0.9 + 3.4 * sg) * grain * level * throat;
-        // the knot itself: a bright gold loop of light
-        if (r < 0.2) {
-            // the knot: a gold coil of light twisting away into the distance
-            float loop = exp(-pow((r - 0.03) / 0.028, 2.0)) * (0.4 + 1.2 * wormStreaks(a2 * 2.0, flow, 40.0, 3.0));
-            float coil = fract(u * 2.2 + a2 / (2.0 * PI) - travel * 0.5);
-            coil = smoothstep(0.0, 0.3, coil) * smoothstep(0.9, 0.35, coil) * smoothstep(0.17, 0.05, r) * smoothstep(0.01, 0.03, r);
-            coil *= 0.3 + 1.4 * sg;
-            col += mix(wormGold, vec3(1.0, 0.85, 0.55), 0.3) * (loop * 2.4 + coil * (0.7 + 0.6 * uBass)) * level * throat;
-        }
-        col += vec3(1.0, 0.78, 0.45) * goldA * sg * sg * 2.4 * level * throat;     // white-hot cores
-        col += vec3(1.0, 0.7, 0.85) * pink * sp * sp * sheet * 2.5 * level * throat;
-        col += wormGold * pink * sg * sg * (1.0 - sheet) * 2.5 * level * throat;     // gold threads woven through the pink
-        col += mix(wormGold, wormPink, 0.4) * knotGlow * (0.5 + 0.9 * uBeatStrength) * lit * throat;
-
-        // Fine glitter inside the streams.
-        // (log-polar cells are square on screen, so the specks keep their shape)
-        vec2 gg = vec2(a2 / (2.0 * PI) * 220.0, (u * 3.0 - travel) * 220.0 / (6.0 * PI));
-        vec2 gc = floor(gg);
-        gc.x = mod(gc.x, 220.0);
+        // gold glitter flecks, thicker round the streams
+        vec2 gq = (p - n) * 60.0;
+        vec2 gc = floor(gq);
         float gh = hash21(gc);
-        vec2 gj = fract(gg) - 0.5 - (vec2(hash21(gc + 2.9), hash21(gc + 6.1)) - 0.5) * 0.8;
-        float gsz = 0.1 + 0.5 * pow(hash21(gc + 4.3), 2.0);
-        float glit = smoothstep(gsz, gsz * 0.3, length(gj * vec2(1.0, 0.55))) * step(0.80 - 0.18 * max(pink, goldA) - 0.10 * uTreble, gh) * (0.3 + 0.7 * hash21(gc + 8.2));
-        col += mix(vec3(1.0, 0.36, 0.0), vec3(1.0, 0.75, 0.35), gh * gh * gh * gh) * glit * (pink * 1.4 + goldA * 1.4 + 0.4 * exp(-r * 8.0)) * 1.7 * (1.0 + uTreble) * lit * throat;
+        vec2 go = fract(gq) - 0.5 - (vec2(hash21(gc + 3.1), hash21(gc + 7.7)) - 0.5) * 0.6;
+        float gsz = 0.07 + 0.2 * knotSq(hash21(gc + 1.9));
+        float speck = smoothstep(gsz, gsz * 0.3, length(go)) * step(0.99 - 0.25 * near - 0.04 * uTreble, gh);
+        col += mix(knotGold, vec3(1.0, 0.85, 0.5), hash21(gc + 5.5)) * speck * (0.8 + 1.0 * uTreble) * lit;
 
-        // Gold sparks spraying out of the knot, streaked by their speed.
-        vec2 sg2 = vec2(a2 / (2.0 * PI) * 150.0, u * 5.0 - travel * 1.6);
-        vec2 sc = floor(sg2);
-        sc.x = mod(sc.x, 150.0);
-        float sh = hash21(sc + 31.0);
-        vec2 so = fract(sg2) - 0.5 - (vec2(hash21(sc + 3.7), hash21(sc + 9.1)) - 0.5) * vec2(0.6, 0.4);
-        float spark = smoothstep(0.18, 0.0, length(so * vec2(1.0, 0.18))) * step(0.93 - 0.05 * uTreble, sh) * (goldA + 2.0 * knotGlow);
-        col += mix(wormGold, vec3(1.0, 0.9, 0.7), sh) * spark * (0.5 + 1.0 * uTreble + 1.0 * uBeatStrength) * throat * lit;
-
-        // Bokeh, glitter specks and cyan glass cubes flying past in depth layers.
-        vec2 dir = q / r;
-        // more debris near the streams than out in empty space
-        float near = 0.4 + 0.6 * max(wormLobe(a2, 3.2), wormLobe(a2, -0.8));
-        for (int i = 0; i < kWormLayers; i++) {
-            float fi = float(i);
-            float z = fract(fi / float(kWormLayers) + travel * 0.25);     // 0 far, 1 right past us
-            float scale = mix(14.0, 1.3, z * z);
-            vec2 bq = q * scale + vec2(fi * 17.3, fi * 9.1);
-            vec2 cell = floor(bq);
-            float h = hash21(cell + fi * 3.1);
-            vec2 local = fract(bq) - 0.5 - (vec2(hash21(cell + 1.3), hash21(cell + 5.9)) - 0.5) * 0.3;
-            float along = dot(local, dir), side = dot(local, vec2(-dir.y, dir.x));
-            float blur = 1.0 + 0.8 * z * z;                                 // motion blur
-            float fade = smoothstep(0.0, 0.25, z) * smoothstep(1.0, 0.85, z);
-            float size = 0.03 + 0.14 * pow(hash21(cell + 2.2), 2.0);
-            if (h < 0.02 && z > 0.4) {
-                // a cyan glass cube, tumbling
-                vec2 cp = rot(h * 300.0 + uTime * 1.5 + turn * 0.5) * vec2(along / blur, side);
-                float d = max(abs(cp.x), abs(cp.y)) - (0.09 + size * 0.8);
-                float edge = 0.01 + 0.025 * z;                               // softer when close
-                float cube = smoothstep(edge, -edge, d);
-                float rim = smoothstep(edge + 0.03, 0.0, abs(d + 0.02));    // bright glass edges
-                float face = smoothstep(-0.12, 0.12, cp.y + 0.4 * cp.x);              // lit from one side
-                vec3 glass = wormCyan * (0.35 + 0.6 * face + 1.0 * rim) * (1.1 + 0.8 * uTreble + 0.6 * uBeatStrength) * lit;
-                col = mix(col, glass + col * 0.45, cube * fade * 0.75);
-            } else if (h < 0.06 + 0.5 * z * z) {
-                // a soft out-of-focus disc, or a sharp gold speck
-                float soft = mix(0.01, 0.07, z) * (0.5 + hash21(cell + 4.4));
-                float d = length(vec2(along / blur, side)) - size;
-                float disc = smoothstep(soft, -soft, d);
-                vec3 bc = mix(vec3(0.85, 0.62, 0.40), vec3(1.0, 0.72, 0.25), hash21(cell + 7.7));
-                col += bc * (0.25 + 0.9 * hash21(cell + 8.8)) * lit * disc * fade * near * (0.4 + 0.6 * z);
+        // a dense field of glitter, flakes and glass streaming out from the neck
+        // towards the camera: far layers are fine specks, near ones big, soft,
+        // chunky flakes streaked by their speed
+        float travel = uScroll * 0.5 + uTime * 0.04;
+        vec2 rq = p - n;
+        float rr = max(length(rq), 1e-3);
+        vec2 rdir = rq / rr;
+        float busy = min(near, 1.0) * 0.7 + exp(-rr * 5.0);
+        for (int k = 0; k < 4; k++) {
+            float fk = float(k);
+            float z = fract(fk * 0.25 + travel);                    // 0 far, 1 right past us
+            float scale = mix(26.0, 2.2, z * z);
+            vec2 bq = rq * scale + vec2(fk * 17.3, fk * 9.1);
+            vec2 bc = floor(bq);
+            float bh = hash21(bc + fk * 3.1);
+            vec2 lo = fract(bq) - 0.5 - (vec2(hash21(bc + 1.3), hash21(bc + 5.9)) - 0.5) * 0.4;
+            float along = dot(lo, rdir), across = dot(lo, vec2(-rdir.y, rdir.x));
+            float blur = 1.0 + 2.5 * z * z * (0.4 + 0.6 * uLevel);   // motion streaks
+            float fade = smoothstep(0.0, 0.2, z) * smoothstep(1.0, 0.8, z);
+            float size = (0.05 + 0.18 * knotSq(hash21(bc + 2.2))) * (0.8 + 0.6 * z);
+            if (bh < 0.02 && z > 0.55) {
+                // a cyan glass shard, tumbling
+                vec2 cp = rot(bh * 300.0 + clk * 1.5 + retie * 0.5) * vec2(along / blur, across);
+                vec2 kp = vec2(cp.x + 0.5 * cp.y, cp.y);
+                float sd = max(sdBox(kp, vec2(size * 1.6 + 0.08, size * 0.8 + 0.05)), dot(cp, vec2(0.6, 0.8)) - size * 0.6 - 0.03);
+                float edge = 0.015 + 0.03 * z;
+                float shard = smoothstep(edge, -edge, sd);
+                float rim = smoothstep(edge + 0.03, 0.0, abs(sd));
+                float face = smoothstep(-0.1, 0.1, cp.x - cp.y);
+                vec3 glass = knotCyan * (0.3 + 0.4 * face + 0.7 * rim) * (1.0 + 0.8 * uTreble + 0.6 * uBeatStrength) * (0.35 + 0.65 * uActive);
+                col = mix(col, glass + col * 0.4, shard * fade * 0.75);
+            } else if (bh < 0.08 + 0.55 * busy) {
+                // a gold speck far off, a soft chunky flake up close
+                float soft = mix(0.04, 0.35, z) * size + 0.01;
+                float d = length(vec2(along / blur, across) * vec2(1.0, 1.0 + 0.4 * hash21(bc + 8.1))) - size;
+                float flake = smoothstep(soft, -soft, d);
+                vec3 fc = mix(vec3(1.0, 0.45, 0.1), vec3(1.0, 0.75, 0.4), hash21(bc + 6.6));
+                float fb = (0.3 + 1.0 * hash21(bc + 3.3)) * mix(1.4, 0.7, z) * lit * fade;
+                col += fc * flake * fb * (0.6 + 0.6 * uTreble * (1.0 - z));
             }
         }
 
-        col *= 1.0 + 0.25 * uBeatStrength * uActive;      // a lift on the beat
-        col = 1.0 - exp(-col * 1.4);                      // soft highlight roll-off
+        col = 1.0 - exp(-col * 1.5);                      // soft highlight roll-off
         col = mix(col * 0.4, col, uActive);               // dims and settles in silence
         fragColor = vec4(col, 1.0);
     }
