@@ -4,110 +4,74 @@
   "built_ins": [
     {
       "slug": "ribbons",
-      "num": 1,
-      "key": "1",
       "title": "Ribbons"
     },
     {
       "slug": "vortex",
-      "num": 2,
-      "key": "2",
       "title": "Vortex"
     },
     {
       "slug": "silk",
-      "num": 3,
-      "key": "3",
       "title": "Silk Flight"
     },
     {
       "slug": "flux",
-      "num": 4,
-      "key": "4",
       "title": "Flux"
     },
     {
       "slug": "spectrum",
-      "num": 5,
-      "key": "5",
       "title": "Spectrum"
     },
     {
       "slug": "tunnel",
-      "num": 6,
-      "key": "6",
       "title": "Tunnel"
     },
     {
       "slug": "liquid",
-      "num": 7,
-      "key": "7",
       "title": "Liquid"
     },
     {
       "slug": "kaleidoscope",
-      "num": 8,
-      "key": "8",
       "title": "Kaleidoscope"
     },
     {
       "slug": "waveform",
-      "num": 9,
-      "key": "9",
       "title": "Neon Wave"
     },
     {
       "slug": "machine",
-      "num": 10,
-      "key": "0",
       "title": "Machine"
     },
     {
       "slug": "warp",
-      "num": 11,
-      "key": "-",
       "title": "Warp"
     },
     {
       "slug": "particles",
-      "num": 12,
-      "key": "[",
       "title": "Constellation"
     },
     {
       "slug": "nyan",
-      "num": 13,
-      "key": "]",
       "title": "Nyan Cat"
     },
     {
       "slug": "hamster",
-      "num": 14,
-      "key": ";",
       "title": "Hamster Dance"
     },
     {
       "slug": "badger",
-      "num": 15,
-      "key": "'",
       "title": "Badger Badger"
     },
     {
       "slug": "llama",
-      "num": 16,
-      "key": "\\",
       "title": "Whooping Llama"
     },
     {
       "slug": "danceFloor",
-      "num": 17,
-      "key": ",",
       "title": "Dance Floor"
     },
     {
       "slug": "band",
-      "num": 18,
-      "key": ".",
       "title": "The Band"
     }
   ]

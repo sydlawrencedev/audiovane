@@ -37,38 +37,37 @@ OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
 def parse_vibscape_cards() -> list[dict]:
-    """Read the homepage and pull (slug, num, key, title, description) from
-    each vibscape card. The cards are simple enough that a regex beats a
-    full HTML parser for this one job, and we never round-trip them so the
-    brittleness is contained."""
+    """Read the homepage and pull (slug, title, description) from each vibscape card."""
     html = INDEX_HTML.read_text(encoding="utf-8")
 
-    # Each card looks like:
-    #   <article class="vibscape" data-vibscape="ribbons">
-    #   ...<div class="num">01 · KEY 1</div><h3>Ribbons</h3><p>...</p>
-    pattern = re.compile(
-        r'<article class="vibscape" data-vibscape="(?P<slug>[a-zA-Z]+)">'
-        r'.*?'
-        r'<div class="num">(?P<num>[0-9]{2}) · KEY (?P<key>[^<]+)</div>'
-        r'<h3>(?P<title>[^<]+)</h3>'
-        r'(?:\s*<p>)?(?P<desc>.*?)(?:</p>)?</div>',
-        re.DOTALL,
-    )
+    # Split on the card opener, then parse each card on its own. This used to be
+    # one regex across the whole page, anchored on the "01 · KEY 1" label that
+    # used to sit above every title — the label that has since been removed from
+    # the cards. Anchoring on the opener instead means each card can only ever
+    # match itself, so a card that drifts takes out one card rather than
+    # silently pairing one card's title with another's description.
+    #
+    # Only the shipped vibscapes carry data-vibscape; the Auto Scan card
+    # doesn't, because it isn't shareable.
     cards = []
-    for m in pattern.finditer(html):
+    for chunk in html.split('<article class="vibscape" data-vibscape="')[1:]:
+        slug = chunk[:chunk.index('"')].strip()
+        head = re.search(
+            r'<h3>(?P<title>[^<]+)</h3>(?:\s*<p>(?P<desc>.*?)</p>)?',
+            chunk, re.DOTALL)
+        if not head:
+            sys.exit(f'vibscape card "{slug}" has no <h3> — homepage template drifted')
         cards.append({
-            "slug": m["slug"],
-            "num": int(m["num"]),
-            "key": m["key"].strip(),
-            "title": m["title"].strip(),
-            "desc": m["desc"].strip(),
+            "slug": slug,
+            "title": head["title"].strip(),
+            "desc": (head["desc"] or "").strip(),
         })
     if not cards:
         sys.exit("no vibscape cards parsed from site/index.html — template likely drifted")
     return cards
 
 
-def render(slug: str, num: int, key: str, title: str, desc: str) -> str:
+def render(slug: str, title: str, desc: str) -> str:
     # Hand-stamped canonical URL and og:image so the static file is correct
     # the moment it lands, without any client-side rewrite. Width/height
     # mirror the existing share image and what Twitter / Slack / iMessage
@@ -175,7 +174,7 @@ def main() -> int:
         "generated": "regenerate with scripts/generate-share-pages.py",
         "base": "https://vibresia.com",
         "built_ins": [
-            {"slug": c["slug"], "num": c["num"], "key": c["key"], "title": c["title"]}
+            {"slug": c["slug"], "title": c["title"]}
             for c in cards
         ],
     }
