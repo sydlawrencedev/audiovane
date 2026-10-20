@@ -1958,17 +1958,18 @@ extension FunShaders {
     // MARK: - Silk Flight
 
     /// Flying forward through the music, after the fly-through in the AudioVane
-    /// brand film (0:11 to 0:13): a wide satin ribbon, hot pink with deep
-    /// folds, sweeps in from both frame edges and twists away into a teal dust
-    /// cloud, turning electric violet in the distance, while chunky cyan glass
-    /// blocks tumble past on near-black space. The ribbon is found per pixel by
-    /// a sign change of its side function along the ray (at most 36 depth
-    /// steps for both ends together, stopping once both are found); the glass
-    /// blocks are exact ray/box slabs. The camera flies on uScroll, so it races
-    /// when the music is loud. The bass widens the ribbon, the spectrum lights
-    /// its far reaches, the mids thicken the dust, every beat turns the glass a
-    /// step and throws a burst of glitter, and the treble makes the specks and
-    /// the glass edges sparkle. In silence: dim, and still.
+    /// brand film (0:11 to 0:13): a wide satin ribbon, thick and glossy hot pink in a
+    /// few broad folds, sweeps in from both frame edges and twists away into a teal dust cloud, turning electric
+    /// violet in the distance, while chunky cyan glass blocks with crisp edges
+    /// and hard reflections tumble past on near-black space. The ribbon is
+    /// found per pixel by a sign change of its side function along the ray (at
+    /// most 36 depth steps for both ends together, stopping once both are
+    /// found); the glass blocks are exact ray/box slabs. The camera flies on
+    /// uScroll, so it races when the music is loud. The bass widens the ribbon,
+    /// the spectrum lights its far reaches, the mids thicken the dust, every
+    /// beat turns the glass a step and throws a burst of glitter, and the
+    /// treble makes the specks and the glass edges sparkle. In silence: dim,
+    /// and still.
     static let silk = """
     // Silk Flight: flying forward through the music. A wide satin ribbon, hot
     // pink with deep folds, sweeps in from both frame edges and twists away
@@ -2018,23 +2019,26 @@ extension FunShaders {
         vec3 V = normalize(vec3(rd, 1.0));
         float side = dot(N, V) < 0.0 ? 1.0 : -1.0;     // which face we see
         N *= side;
-        // Lengthwise pleats tilt the normal across the ribbon.
-        float ph = u * 5.5 + 1.4 * sin(s * 0.35 + u * 2.0 + b * 3.0);
-        float pleat = sin(ph);
-        vec3 Np = normalize(N + T * 1.1 * cos(ph) + normalize(D) * 0.45 * sin(s * 1.1 + u * 1.5 + b * 2.0));
+        // Broad folds: the width is split into a few wide panels, each tilted its
+        // own way and slowly re-folding along the length, rounded at the corners.
+        float uq = (u * 0.5 + 0.5) * 3.5 + 0.4 * sin(s * 0.3 + b * 3.0);
+        float id = floor(uq), fu = fract(uq);
+        float tilt = 0.55 * sin(s * 0.45 + id * 2.1 + b * 1.3) + 0.35 * (hash11(id * 3.1 + b * 17.0) - 0.5);
+        vec3 Np = normalize(N + T * (tilt + 1.1 * (fu - 0.5)) + normalize(D) * 0.2 * sin(s * 0.8 + id));
+        float crease = smoothstep(0.0, 0.14, fu) * smoothstep(1.0, 0.86, fu);
         vec3 L = normalize(vec3(0.35, 0.75, -0.55));
         float dif = max(dot(Np, L), 0.0);
         vec3 H = normalize(L - V);
-        float spec = pow(max(dot(Np, H), 0.0), 22.0) * 1.3 + 0.25 * pow(max(dot(Np, H), 0.0), 4.0);
+        float spec = pow(max(dot(Np, H), 0.0), 40.0) * 2.2 + 0.4 * pow(max(dot(Np, H), 0.0), 6.0);
         float sheen = pow(1.0 - abs(dot(Np, V)), 2.0);
         // Satin: a ramp from deep magenta folds through hot pink to a pale pink
         // sheen, cooling to lilac on the underside and at grazing angles.
-        float k = clamp(0.15 + 0.5 * dif + 0.4 * smoothstep(0.3, 1.0, pleat) - 0.45 * smoothstep(0.1, 0.9, -pleat), 0.0, 1.0);
+        float k = clamp(0.18 + 0.7 * dif + 0.2 * tilt, 0.0, 1.0);
         vec3 col = k < 0.5 ? mix(silkFold * 0.75, silkPink, k * 2.0) : mix(silkPink, silkPinkHi, k * 2.0 - 1.0);
         col = mix(col, mix(silkViolet, silkLilac, k) * (0.6 + 0.6 * k), step(N.y, 0.0) * 0.4);
         col = mix(col, silkPinkHi, sheen * 0.15);
         col += vec3(1.0, 0.82, 0.95) * spec * (1.2 + 0.6 * uBeatStrength);
-        col *= 1.0 - 0.45 * smoothstep(0.75, 1.0, abs(u));   // rolled edges
+        col *= (0.72 + 0.28 * crease) * (1.0 - 0.5 * smoothstep(0.82, 1.0, abs(u)));   // soft folds, thick rolled edges
         // Far away the ribbon cools to electric violet-blue and sinks into the dust.
         float far = smoothstep(1.8, 7.0, z);
         float band = 0.8 + 0.7 * bandAt(clamp(z / 18.0, 0.0, 1.0));     // the spectrum lights the far ribbon
@@ -2075,25 +2079,30 @@ extension FunShaders {
         vec3 ef = 1.0 - af, eb = 1.0 - ab;
         float edgeF = min(min(max(ef.x, ef.y), max(ef.y, ef.z)), max(ef.x, ef.z));
         float edgeB = min(min(max(eb.x, eb.y), max(eb.y, eb.z)), max(eb.x, eb.z));
-        float lineF = 1.0 - smoothstep(0.0, 0.045 + px, edgeF);
-        float lineB = 1.0 - smoothstep(0.0, 0.03 + px, edgeB);
+        float lineF = 1.0 - smoothstep(0.02, 0.02 + px, edgeF);
+        float lineB = 1.0 - smoothstep(0.012, 0.012 + px, edgeB);
         // Face normal of the front hit, and an inner diagonal on the back face.
         vec3 nf = step(vec3(max(max(af.x, af.y), af.z)), af) * sign(pf);
         vec3 bq = ab;
         float diag = abs(abs(bq.x * nf.y + bq.y * nf.z + bq.z * nf.x) - abs(bq.y * nf.y + bq.z * nf.z + bq.x * nf.x));
-        float lineD = (1.0 - smoothstep(0.0, 0.035 + px, diag)) * 0.7;
+        float diagF = abs(abs(af.x * nf.y + af.y * nf.z + af.z * nf.x) - abs(af.y * nf.y + af.z * nf.z + af.x * nf.x));
+        float lineD = (1.0 - smoothstep(0.012, 0.012 + px, diag)) * 0.7 + (1.0 - smoothstep(0.01, 0.01 + px, diagF)) * 0.5;
         vec3 L = normalize(vec3(0.4, 0.8, -0.4));
         L.xz = r1 * L.xz; L.xy = r2 * L.xy;
         float lit = max(dot(nf, L), 0.0);
         vec3 nb = step(vec3(max(max(ab.x, ab.y), ab.z)), ab) * sign(pb);
         float litB = max(dot(-nb, L), 0.0);
-        float refl = smoothstep(0.6, 1.0, sin(dot(pf, vec3(3.1, 2.3, 3.7)) + n * 1.7)) + 0.5 * smoothstep(0.7, 1.0, sin(dot(pb, vec3(-2.7, 3.3, 1.9)) + n));
+        // Hard-edged reflections: bright bands across the faces, and a sharp glint.
+        float st = abs(fract(dot(pf, vec3(0.55, 0.4, 0.5)) * 0.9 + hash11(n * 4.7)) - 0.5);
+        float refl = (1.0 - smoothstep(0.06, 0.06 + px, st)) + 0.5 * (1.0 - smoothstep(0.03, 0.03 + px, abs(fract(dot(pb, vec3(-0.5, 0.6, 0.35)) + n * 0.37) - 0.5)));
+        float glint = pow(max(dot(reflect(normalize(d), nf), L), 0.0), 60.0);
         float tone = hash11(dot(nf, vec3(1.0, 2.0, 3.0)) + n * 1.3 + 0.5);   // each face its own shade
         float fres = pow(1.0 - abs(dot(nf, normalize(d))), 3.0);
         float thick = clamp((tF - tN) / (2.0 * hs.z), 0.0, 1.5);
-        vec3 g = col * mix(0.5, 0.2, min(thick, 1.0)) + vec3(0.0, 0.035, 0.04) * min(thick, 1.0);            // tinted glass body
-        g += silkCyan * (0.03 + 1.0 * smoothstep(0.35, 0.95, lit) + 0.8 * smoothstep(0.45, 0.85, tone) + 0.15 * fres + 0.45 * refl + 0.25 * litB) * (0.7 + 0.5 * uTreble);
-        g += vec3(0.15, 1.0, 0.92) * (lineF * 1.3 + lineB * 0.6 + lineD * 0.8) * (0.85 + 0.5 * uTreble + 0.5 * uBeatStrength);
+        vec3 g = col * mix(0.45, 0.15, min(thick, 1.0)) + vec3(0.0, 0.03, 0.035) * min(thick, 1.0);            // tinted glass body
+        g += silkCyan * (0.02 + 0.9 * step(0.45, lit) * (0.5 + 0.5 * lit) + 0.7 * step(0.6, tone) + 0.15 * fres + 0.4 * refl + 0.35 * step(0.4, litB)) * (0.7 + 0.5 * uTreble);
+        g += vec3(0.85, 1.0, 1.0) * (glint * 1.5 + refl * 0.25);
+        g += vec3(0.45, 1.0, 0.98) * (lineF * 1.6 + lineB * 0.7 + lineD * 0.8) * (0.85 + 0.5 * uTreble + 0.5 * uBeatStrength);
         col = mix(col, g, fade);
     }
 
