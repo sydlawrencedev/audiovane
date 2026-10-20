@@ -1045,8 +1045,9 @@ final class OpenGLRenderer: NSObject {
             return .failure(problem)
         }
         guard let ctx = glContext else {
+            // Not the mode's fault: the window hasn't made its context yet.
             return .failure(ShaderProblem(
-                kind: .compileFailed,
+                kind: .notReady,
                 message: "The visualiser hasn't started yet. Give it a moment and try again."))
         }
         ctx.makeCurrentContext()

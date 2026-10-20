@@ -151,6 +151,8 @@ final class AppState: ObservableObject {
         // Before anything reads the user's folder: it was called AUDIOVANE
         // when the app was called AudioVane.
         SupportFolder.migrateIfNeeded()
+        // Start the watch from here, so the first tick isn't a change.
+        lastCustomModesStamp = Self.customModesStamp
         Self.primeDefaults()
         let audio = AudioEngine()
         self.audio = audio
@@ -247,6 +249,7 @@ final class AppState: ObservableObject {
             self?.syncScanTarget()
             self?.writeEvalLine()
             self?.refreshCrashState()
+            self?.reloadCustomModesIfChanged()
         }
         // `--genre-auto` forces auto-detect on (ignoring a remembered lock) and
         // `--system-audio` starts listening straight away: both used by the
@@ -267,7 +270,8 @@ final class AppState: ObservableObject {
     /// there would fight them for the same device.
     private var isHeadlessRun: Bool {
         let args = CommandLine.arguments
-        return args.contains("--snapshot") || args.contains("--record") || args.contains("--ui-shot")
+        return args.contains("--snapshot") || args.contains("--record")
+            || args.contains("--ui-shot") || args.contains("--mcp")
     }
 
     /// One `app_launched` per run. Fired from init rather than from
@@ -281,6 +285,7 @@ final class AppState: ObservableObject {
         let isHeadless = args.contains("--snapshot")
             || args.contains("--record")
             || args.contains("--ui-shot")
+            || args.contains("--mcp")
         guard !isHeadless else { return }
 
         let mode = activeMode.rawValue
@@ -656,6 +661,35 @@ final class AppState: ObservableObject {
         pushScanCycle()
     }
 
+    /// Picks up modes that appeared on disk since the last look.
+    ///
+    /// The MCP server writes the same files this reads, and so does anyone
+    /// who edits them by hand. Watching the folder means a mode an agent
+    /// writes turns up in the list within a second, rather than waiting for
+    /// the next launch.
+    private func reloadCustomModesIfChanged() {
+        let stamp = Self.customModesStamp
+        guard stamp != lastCustomModesStamp else { return }
+        lastCustomModesStamp = stamp
+        NSLog("[CUSTOM] the folder changed — reloading")
+        reloadCustomModes()
+    }
+
+    /// When the modes folder last changed. Cheap to ask for; the folder is
+    /// small and the file system is good at this.
+    private static var customModesStamp: Date {
+        let folder = CustomModeStore.folder
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: [.contentModificationDateKey])) ?? []
+        let newest = contents.compactMap { url -> Date? in
+            let values = try? url.resourceValues(forKeys: [.contentModificationDateKey])
+            return values?.contentModificationDate
+        }.max() ?? .distantPast
+        return newest
+    }
+
+    private var lastCustomModesStamp: Date = .distantPast
+
     /// Re-reads the user's modes from disk and recompiles them.
     func reloadCustomModes() {
         customModes = CustomModeStore.loadAll()
@@ -665,6 +699,11 @@ final class AppState: ObservableObject {
             // want to fix it — but it can't be drawn, so it's switched off
             // and the reason is kept to show in the View All panel.
             if case .failure(let problem) = renderer.installCustomShader(id: mode.id, body: mode.shader) {
+                if problem.kind == .notReady {
+                    // The window hasn't made its context yet. Try again
+                    // later rather than turning the mode off for it.
+                    continue
+                }
                 NSLog("[CUSTOM] \(mode.id) failed to compile: \(problem.message)")
                 problems[mode.id] = problem
                 if let i = customModes.firstIndex(where: { $0.id == mode.id }), customModes[i].enabled {
@@ -674,6 +713,7 @@ final class AppState: ObservableObject {
             }
         }
         customModeProblems = problems
+        lastCustomModesStamp = Self.customModesStamp
         // The app was last in one of the user's modes, and that mode has
         // since been deleted. There is nothing to draw, so start in auto-scan
         // rather than on a blank screen.

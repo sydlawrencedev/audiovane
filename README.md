@@ -38,6 +38,25 @@ cd VisualiserMac
 open build/Vibresia.app
 ```
 
+### Custom modes and the local MCP server
+
+A mode is a fragment shader — one function, `vec3 render(vec2 p, float t)` —
+and the app supplies the uniforms, the helpers and everything else.
+
+Vibresia ships a local [MCP](https://modelcontextprotocol.io) server, so an AI
+agent can write a mode, check it compiles, look at the picture and try again
+without anybody copying code by hand:
+
+```bash
+claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp
+```
+
+It's the same binary run with `--mcp`, speaking JSON-RPC over stdin — no
+window, no port, no analytics. It reads and writes the same files the app
+does, so a mode an agent writes shows up in the app within a second. See
+[VisualiserMac/README.md](VisualiserMac/README.md#custom-modes-and-the-local-mcp-server)
+for the tools it offers.
+
 ### Version numbers
 
 The build version is the date it was built, so there's no number to bump:

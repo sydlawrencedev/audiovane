@@ -109,7 +109,7 @@ struct SourcePicker: View {
             showsPillText: app.layout.showsPillText
         )
         .animation(.easeInOut(duration: 0.2), value: app.sourceState)
-        .help("Change what AudioVane listens to")
+        .help("Change what Vibresia listens to")
     }
 
     /// Live is magenta, demo is amber, idle is grey and anything that failed is

@@ -16,6 +16,15 @@ actor Analytics {
     static let distinctIdKey = "analytics.distinctId"
     private static let seenBeforeKey = "analytics.seenBefore"
 
+    /// True when this process isn't the app — the MCP server, which an
+    /// agent launches. It is a tool, not a user, and its run says nothing
+    /// about how the app is used.
+    ///
+    /// Read from the command line rather than set by a flag, because the
+    /// app changes its mode on the way up — before anything had a chance to
+    /// switch the analytics off.
+    static var suppressed: Bool { CommandLine.arguments.contains("--mcp") }
+
     /// Build-time kill switch — set POSTHOG_DISABLE=1 to compile telemetry out
     /// entirely, so a build can be shipped with no capture code path at all.
     private static let disabledAtBuild: Bool = {
@@ -135,6 +144,7 @@ actor Analytics {
     }
 
     func track(_ event: String, _ properties: [String: Any] = [:]) {
+        guard !Self.suppressed else { return }
         guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         guard defaults.bool(forKey: Self.enabledKey) else { return }
 
@@ -155,6 +165,7 @@ actor Analytics {
     /// Purpose-written operational logs only. Existing system and app loggers
     /// remain local, so every log sent to PostHog is visible at its call site.
     func logToPostHog(_ message: String, attributes: [String: Any] = [:]) {
+        guard !Self.suppressed else { return }
         guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         guard defaults.bool(forKey: Self.enabledKey) else { return }
         PostHogSDK.shared.logger?.info(message, attributes: attributes)
@@ -163,6 +174,7 @@ actor Analytics {
     /// Counts an occurrence in a per-session tally instead of sending a row.
     /// Detail screens send the exact sequence; PostHog gets the histogram.
     func countInSession(_ key: String, by amount: Int = 1) {
+        guard !Self.suppressed else { return }
         guard !Self.disabledAtBuild, apiKey != nil, host != nil else { return }
         guard defaults.bool(forKey: Self.enabledKey) else { return }
         session[key, default: 0] += amount

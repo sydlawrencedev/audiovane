@@ -253,6 +253,68 @@ Everything lives in the top bar so the visualiser gets the whole window:
 
 Click away from an open list to dismiss it.
 
+## Custom modes, and the local MCP server
+
+A mode is a fragment shader: one function, `vec3 render(vec2 p, float t)`,
+that returns a colour. The app supplies the uniforms (`uBass`, `uBands`,
+`uBeats`, …), the helpers and `main()`; the mode supplies the picture.
+
+There are three ways to write one, and the app offers all three in
+**View All → + Custom Mode**: paste code you already have, ask an AI
+assistant to write it (a prompt is provided), or open a file somebody sent
+you. Nothing is saved until it compiles — **Test** draws the mode and shows
+you the picture, and a failure is explained in words rather than in the
+graphics driver's log.
+
+### The MCP server
+
+Vibresia also ships a local [MCP](https://modelcontextprotocol.io) server,
+so an agent can write a mode, check it compiles, look at the result and try
+again — without anybody copying code by hand.
+
+Point an agent at it with:
+
+```bash
+claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp
+```
+
+The path has to be wherever the app actually is. The Custom Mode sheet shows
+the right command for the copy on the machine, with a button to copy it.
+
+For clients that read a JSON file rather than a command line:
+
+```json
+{
+  "mcpServers": {
+    "vibresia": {
+      "command": "/Applications/Vibresia.app/Contents/MacOS/Vibresia",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+It's the same binary, run with `--mcp`: it speaks JSON-RPC over stdin and
+stdout, has no window, no dock icon and no analytics, and doesn't listen on
+a port — so there's nothing to secure. It reads and writes the same files
+the app does, so a mode an agent writes turns up in the app within a
+second, whether or not Vibresia is open.
+
+The tools it offers:
+
+| Tool | What it does |
+| --- | --- |
+| `list_modes` | Every mode: the ones that ship with the app and the user's own. |
+| `get_mode` | The full source of one of the user's own modes. |
+| `mode_reference` | The uniforms and helpers available, and a worked example. |
+| `test_mode` | Compile a shader and draw it, without saving anything. |
+| `create_mode` | Save a new mode. Compiles first; won't save code that doesn't run. |
+| `update_mode` | Change one of the user's own modes. Compiles first. |
+| `delete_mode` | Remove one of the user's own modes. |
+
+`test_mode` returns the picture as well as the verdict, so an agent can see
+what it made rather than being told it compiled.
+
 ## Keyboard shortcuts
 
 - `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch visualiser mode. The keys follow the order of the mode list, so rearranging the list in View All rearranges the shortcuts.

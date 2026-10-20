@@ -100,6 +100,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // MCP mode: this process is a tool server for an AI agent, not the
+        // app. It has no window, no analytics, no update check and no audio
+        // — it answers requests on stdin. Everything below is skipped.
+        if CommandLine.arguments.contains("--mcp") {
+            // No dock icon and no menu bar: this is a tool, not a window
+            // somebody is going to look at.
+            NSApp.setActivationPolicy(.accessory)
+            // Any window the scene would have made is hidden rather than
+            // shown: an agent launching the server shouldn't flash a window.
+            NSApp.windows.forEach { $0.orderOut(nil) }
+            DispatchQueue.main.async {
+                MCPServer().run()
+            }
+            return
+        }
+
         _ = Analytics.shared
         // First thing in: a crash handler that installs after the app has
         // already started crashing is a handler that misses the first crash.
@@ -367,7 +383,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        true
+        // In MCP mode the window is hidden on purpose and the server is the
+        // app, so hiding it mustn't be the end of the process.
+        if CommandLine.arguments.contains("--mcp") { return false }
+        return true
     }
 
     private func runSnapshot() {

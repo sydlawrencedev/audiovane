@@ -16,6 +16,9 @@ struct ShaderProblem: Error {
         case empty
         /// A real compile or link failure.
         case compileFailed
+        /// The graphics system wasn't ready yet. Not the mode's fault, and
+        /// not worth telling anybody about — it'll be tried again.
+        case notReady
     }
 
     var kind: Kind
@@ -34,6 +37,7 @@ struct ShaderProblem: Error {
         case .hasVersionDirective: return "Remove the #version line"
         case .empty: return "There's nothing to try"
         case .compileFailed: return line == nil ? "That didn't compile" : "Line \(line!) needs a fix"
+        case .notReady: return "Not ready yet"
         }
     }
 }
@@ -66,12 +70,12 @@ enum ShaderValidator {
         if trimmed.contains("#version") {
             return .failed(ShaderProblem(
                 kind: .hasVersionDirective,
-                message: "Delete the line starting with #version. AudioVane already says which version of graphics it uses — leaving yours in causes an error."))
+                message: "Delete the line starting with #version. Vibresia already says which version of graphics it uses — leaving yours in causes an error."))
         }
         if trimmed.contains("#include") {
             return .failed(ShaderProblem(
                 kind: .hasVersionDirective,
-                message: "Delete any line starting with #include. AudioVane already provides everything a mode needs."))
+                message: "Delete any line starting with #include. Vibresia already provides everything a mode needs."))
         }
         // main() is the standard entry point, so a first attempt very often
         // writes one. It's the single most likely mistake, so it's worth its
@@ -89,7 +93,7 @@ enum ShaderValidator {
             if withoutComments.range(of: ##"render\s*\("##, options: .regularExpression) != nil {
                 return .failed(ShaderProblem(
                     kind: .missingRenderFunction,
-                    message: "Found something called render, but not in the shape AudioVane expects. It needs to be exactly: vec3 render(vec2 p, float t)" ))
+                    message: "Found something called render, but not in the shape Vibresia expects. It needs to be exactly: vec3 render(vec2 p, float t)" ))
             }
             return .failed(ShaderProblem(
                 kind: .missingRenderFunction,
@@ -161,9 +165,9 @@ enum ShaderValidator {
         if lowered.contains("redefinition") || lowered.contains("already defined") {
             let name = quotedName(in: first) ?? "Something"
             if name == "main" {
-                return problem("You have a main() function, but AudioVane supplies its own. Delete yours and use render() instead.")
+                return problem("You have a main() function, but Vibresia supplies its own. Delete yours and use render() instead.")
             }
-            return problem("You declared \(name), which AudioVane already provides. Remove your line declaring it — using the existing one is usually all that's needed.")
+            return problem("You declared \(name), which Vibresia already provides. Remove your line declaring it — using the existing one is usually all that's needed.")
         }
         if lowered.contains("undeclared identifier") || lowered.contains("unknown identifier") {
             let name = quotedName(in: first) ?? "that name"
@@ -173,9 +177,9 @@ enum ShaderValidator {
                 return problem("Your render function isn't quite the right shape. It needs to be exactly: vec3 render(vec2 p, float t) — returning a vec3, taking a vec2 and a float, in that order.")
             }
             if let known = knownUniformName(name) {
-                return problem("\(name) isn't a thing AudioVane provides. The closest is \(known) — check the spelling.")
+                return problem("\(name) isn't a thing Vibresia provides. The closest is \(known) — check the spelling.")
             }
-            return problem("AudioVane doesn't recognise \(name). If it's a uniform or helper you expected, check the spelling against the list below. If it's your own variable, make sure you declare it before you use it.")
+            return problem("Vibresia doesn't recognise \(name). If it's a uniform or helper you expected, check the spelling against the list below. If it's your own variable, make sure you declare it before you use it.")
         }
         if lowered.contains("no matching overloaded function") {
             return problem("A function was called with the wrong number or type of arguments. Check any brackets you've just edited.")

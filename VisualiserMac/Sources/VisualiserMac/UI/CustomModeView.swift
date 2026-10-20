@@ -108,6 +108,48 @@ struct CustomModeView: View {
             }
             .padding(.horizontal, 22)
 
+            // The agent route needs no copying and pasting at all, so it's
+            // mentioned here as well as on the "ask an AI" page.
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Have an agent write it for you?")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(Color(white: 0.8))
+                Text("""
+                Vibresia has a local server that agents can talk to. Give it this command and the \
+                agent can write a mode, check it compiles, look at the result and try again — all \
+                without you copying a thing.
+                """)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color(white: 0.6))
+                .fixedSize(horizontal: false, vertical: true)
+                HStack {
+                    Text(MCPSetup.command)
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundStyle(Color(white: 0.85))
+                        .textSelection(.enabled)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Button {
+                        NSPasteboard.general.clearContents()
+                        NSPasteboard.general.setString(MCPSetup.command, forType: .string)
+                    } label: {
+                        Image(systemName: "doc.on.doc")
+                            .font(.system(size: 10))
+                            .foregroundStyle(Color(white: 0.85))
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy the setup command")
+                }
+                .padding(9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.white.opacity(0.05))
+                )
+            }
+            .padding(.horizontal, 22)
+            .padding(.top, 14)
+
             Spacer()
 
             Divider().overlay(Color.white.opacity(0.08))
@@ -484,22 +526,61 @@ struct CustomModeView: View {
 
     private var aiBody: some View {
         VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 5) {
-                Text("How this works")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("""
-                1. Copy the text below.
-                2. Paste it into ChatGPT, Claude, Gemini — any AI assistant — along with a \
-                description of the visual you want. Something like "slow-moving blue smoke that \
-                swirls to the bass" is plenty.
-                3. Copy the code it gives you back.
-                4. Press "Paste the code" below, then Test.
-                """)
-                .font(.system(size: 11))
-                .foregroundStyle(Color(white: 0.75))
-                .fixedSize(horizontal: false, vertical: true)
-            }
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("How this works")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.white)
+                        Text("""
+                        1. Copy the text below.
+                        2. Paste it into ChatGPT, Claude, Gemini — any AI assistant — along with a \
+                        description of the visual you want. Something like "slow-moving blue smoke that \
+                        swirls to the bass" is plenty.
+                        3. Copy the code it gives you back.
+                        4. Press "Paste the code" below, then Test.
+                        """)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(white: 0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    // The better way round: an agent that can call Vibresia
+                    // directly doesn't have to be handed the code by hand.
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("Or let the agent drive Vibresia itself")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(.white)
+                            Spacer()
+                            Button {
+                                NSPasteboard.general.clearContents()
+                                NSPasteboard.general.setString(MCPSetup.command, forType: .string)
+                            } label: {
+                                Label("Copy the setup command", systemImage: "doc.on.doc")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .foregroundStyle(Color(white: 0.85))
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        Text("""
+                        Vibresia has a local server that agents can talk to, so they can write a mode, \
+                        check it compiles, look at the result and fix it — without you copying any code.
+                        Add it to your agent with:
+                        """)
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(white: 0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                        Text(MCPSetup.command)
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundStyle(Color(white: 0.9))
+                            .textSelection(.enabled)
+                            .padding(9)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(
+                                RoundedRectangle(cornerRadius: 7)
+                                    .fill(Color.black.opacity(0.35))
+                            )
+                    }
+
 
             VStack(alignment: .leading, spacing: 7) {
                 HStack {
