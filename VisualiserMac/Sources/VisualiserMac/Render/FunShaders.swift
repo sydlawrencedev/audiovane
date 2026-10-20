@@ -1573,23 +1573,33 @@ extension FunShaders {
 extension FunShaders {
     // MARK: - Ribbons
 
-    /// Two sheaves of glowing silk strands, one hot pink and one cyan, weave
-    /// through clear glass polyhedra in a dark navy room above a glossy floor,
-    /// the look of the screens in the AudioVane film. The strands are round
-    /// tubes, hot in the middle and deep at the rim, with a soft bloom; the
-    /// glass is ray-traced exactly (each shape is a set of paired face planes,
-    /// so there is no raymarching loop): it reflects the ribbon lights,
-    /// refracts the ribbons behind it and burns cyan along its edges, and
-    /// shapes far from the lens's focus go soft. The floor mirrors it all and
-    /// pools pink and cyan light. Colours are chosen to land as pink and cyan
-    /// after the NEON grade. The whole scene slides right to left past the
-    /// camera, so near glass and near stretches of ribbon cross faster than
-    /// far ones (parallax), and each shape comes back in from the right once
-    /// it has left. The slide speeds up with uScroll. The bass bends the
-    /// ribbons and widens them, every beat turns the glass and reshapes the
-    /// ribbons a step, the spectrum shapes each ribbon along its length, and
-    /// the treble makes the edges and the dust sparkle.
-    /// In silence it dims but keeps a slow drift (on uClock), by design.
+    /// One braided sheaf of fine glowing silk strands (18 round strands, each a
+    /// few hairline fibres, around a luminous core) weaves through several
+    /// small clear glass polyhedra at different depths, in a dark navy room
+    /// above a glossy floor: the look of the screens in the AudioVane film.
+    /// The ribbon is hot pink at rest; every beat launches a band of bright
+    /// cyan that races right to left along the strands, some strands lighting
+    /// a moment before others so it shimmers through the sheaf, then shrinks
+    /// away strand by strand so the ribbon flows back to pink. Every band eases
+    /// in and out, with a soft head and tail. The glass is ray-traced
+    /// exactly (each shape is a set of paired face planes, so there is no
+    /// raymarching loop): solid clear faces that reflect the lights, refract
+    /// the ribbon behind them, catch pink light inside and burn cyan along
+    /// their edges, and shapes far from the lens's focus go soft. The floor
+    /// mirrors it all, pulses included. Colours are chosen to land as pink and
+    /// cyan after the NEON grade. The whole scene slides right to left past
+    /// the camera, so near glass and near stretches of ribbon cross faster
+    /// than far ones (parallax), and each shape comes back in from the right
+    /// once it has left. The slide speeds up with uScroll. Everything is
+    /// smoothed so nothing snaps from frame to frame: instead of the raw bass
+    /// and beat strength, a soft swell on the beat clock (easing in over about
+    /// a third of a beat, dying away over the next one or two) bends, widens
+    /// and brightens the ribbon and swells the glass; the glass turns and the
+    /// ribbon reshapes on an eased beat clock that never stops; the spectrum
+    /// shapes the ribbon gently along its length, and the treble makes the
+    /// edges and the dust sparkle a little.
+    /// In silence it dims and goes pink with no pulses, but keeps a slow drift
+    /// (on uClock), by design.
     static let ribbons = """
     // Glass polyhedra as pairs of parallel planes: the first 4 axes make an
     // octahedron, all 10 an icosahedron (face normals, unit length).
@@ -1602,7 +1612,7 @@ extension FunShaders {
 
     const float kFloorY = -0.62;
     const int kGems = 8;
-    const int kStrands = 8;
+    const int kStrands = 18;
 
     // The film's palette: hot pink and electric cyan light over a dark navy room.
     const vec3 ribbonPink = vec3(1.0, 0.12, 0.40);
@@ -1626,76 +1636,118 @@ extension FunShaders {
     // of ribbon cross the screen faster than far ones.
     float sceneShift() { return uClock * 0.15 + uScroll * 0.85; }
 
-    // The world turns a step on every beat: a whole number per beat that eases in
-    // over the first part of the beat. Forward-only, so it never runs backwards.
-    float beatTurn() { return floor(uBeats) + smoothstep(0.0, 0.45, fract(uBeats)); }
+    // The world turns with the beat: half at a steady pace on the beat clock and
+    // half in an eased step per beat, so it surges a little on each beat but
+    // never stops or snaps. Forward-only, so it never runs backwards.
+    float beatTurn() { return 0.5 * uBeats + 0.5 * (floor(uBeats) + smoothstep(0.0, 1.0, fract(uBeats))); }
 
-    // Light from the two ribbon bundles at point q on their plane.
-    // soft > 0 blurs them, for reflections in the floor.
+    // A soft swell on every beat, in place of the raw bass and beat-strength
+    // inputs (which jump from one frame to the next): it eases in over about a
+    // third of a beat and dies away over the next beat or two, and the swells
+    // of the last beats overlap, so it rises and falls like breathing. Zero in
+    // silence.
+    float swellAt(float x) { return smoothstep(0.0, 0.32, x) * exp(-x * 1.4); }
+    float beatSwell() {
+        float ph = fract(uBeats);
+        return (swellAt(ph) + swellAt(ph + 1.0) + swellAt(ph + 2.0) + swellAt(ph + 3.0)) * 1.2 * uActive;
+    }
+    float gSwell;   // beatSwell(), worked out once per pixel at the top of main()
+
+    // How cyan the ribbon is at x (position across its sheet) for a strand that
+    // lights `delay` beats late: every beat launches a band of bright cyan that
+    // races right to left along the strands. It's born off screen to the right,
+    // eases in, and fades out again over the next beat and a half, with a soft
+    // head (`sharp`) and a long soft tail, so the ribbon flows back to pink
+    // without a snap. The band from the beat before is still on its way out.
+    // In silence there are none.
+    float pulseAmp(float ph) { return smoothstep(0.0, 0.2, ph) * (1.0 - smoothstep(0.45, 1.5, ph)); }
+    float ribbonPulse(float x, float delay, float spd, float energy, float sharp) {
+        float ph = fract(uBeats) - delay;
+        float s0 = x - 4.4 + spd * ph;                      // behind this beat's front
+        float s1 = s0 + spd;                                // ... and the last beat's
+        float p0 = exp(-max(s0 - 1.1, 0.0) * 1.2 - max(-s0, 0.0) * sharp) * pulseAmp(ph);
+        float p1 = exp(-max(s1 - 1.1, 0.0) * 1.2 - max(-s1, 0.0) * sharp) * pulseAmp(ph + 1.0);
+        return max(p0, p1) * energy;
+    }
+
+    // Light from the ribbon at point q on its plane: one braided sheaf of fine
+    // glowing strands, hot pink, with cyan pulses racing through it on the beat.
+    // soft > 0 blurs it, for reflections in the floor.
     vec3 ribbonLight(vec2 q, float soft) {
-        vec3 acc = vec3(0.0);
         float turn = beatTurn();
         float X = q.x + sceneShift();                        // position along the ribbon, sliding left
         float x01 = clamp(q.x / 7.0 + 0.5, 0.0, 1.0);
         float edge = smoothstep(-4.8, -3.6, q.x) * smoothstep(4.8, 3.6, q.x);
-        for (int b = 0; b < 2; b++) {
-            float fb = float(b);
-            float sx = fb > 0.5 ? 0.3 + x01 * 0.5 : 0.05 + x01 * 0.35;
-            float base = fb > 0.5 ? 0.5 : 0.15;
-            float spec = 0.55 * (ribbonSpec(base - 0.1) + ribbonSpec(base) + ribbonSpec(base + 0.1)) / 3.0
-                       + 0.45 * (ribbonSpec(sx - 0.08) + ribbonSpec(sx) + ribbonSpec(sx + 0.08)) / 3.0;
-            // Broad waves; bass bends the bundle harder and each beat reshapes it a little.
-            float amp = (0.36 + 0.14 * spec + 0.24 * uBass) * mix(0.75, 1.0, uActive);
-            float ph = fb * 3.0 + turn * 0.45;
-            float k = 1.2 - fb * 0.3;
-            float s = uScroll * (0.3 - fb * 0.1);              // a gentle ripple along the ribbon on top of the slide
-            float a1 = X * k + s + ph;
-            float a2 = X * k * 1.9 - s * 0.6 + ph * 1.7 + fb;
-            float yc = (fb > 0.5 ? 0.02 : 0.36) + amp * sin(a1) + amp * 0.35 * sin(a2);   // close enough that they braid
-            float lo = kFloorY + 0.16;                       // skim the floor rather than sink into it
-            yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
-            float slope = amp * k * (cos(a1) + 0.665 * cos(a2));
-            float norm = inversesqrt(1.0 + slope * slope);
-            float dc = abs(q.y - yc) * norm;
-            // Each bundle is a sheaf of glowing silk strands that twists as it
-            // travels: fanned wide where it faces you, gathered where it turns,
-            // and each strand weaves a little on its own so they cross.
-            float width = (fb > 0.5 ? 0.21 : 0.24) * (1.0 + 0.35 * uBass + 0.2 * uBeatStrength)
-                        * (0.75 + 0.25 * sin(X * 0.6 + fb * 3.0));
-            float twist = X * (0.55 + 0.15 * fb) - uScroll * 0.25 + fb * 1.7 + turn * 0.2;
-            float face = cos(twist);
-            float sw = fb > 0.5 ? 0.048 : 0.09;            // strand radius
-            vec3 hot = fb > 0.5 ? ribbonCyan : ribbonPink;
-            vec3 deep = fb > 0.5 ? ribbonTeal : ribbonDeep;
-            vec3 bundle = vec3(0.0);
-            // Only pixels near the bundle pay for its strands.
-            if (dc < width * 1.6 + 0.12 + soft * 12.0) {
-                vec3 strands = vec3(0.0);
-                float halo = 0.0;
-                for (int i = 0; i < kStrands; i++) {
-                    float fi = float(i);
-                    float u = fi / float(kStrands - 1) * 2.0 - 1.0;
-                    float off = width * (u * (0.5 + 0.5 * abs(face)) + 0.45 * sin(X * (1.1 + 0.25 * hash11(fi * 3.1 + fb)) + fi * 2.4 + fb * 2.0 + turn * 0.3));
-                    float d = abs(q.y - yc - off) * norm;
-                    float w = sw * (0.45 + 0.9 * hash11(fi + fb * 9.0)) * (0.75 + 0.25 * sin(X * 0.8 + fi * 1.3));
-                    float aa = max(soft, 0.0025);
-                    float cov = 1.0 - smoothstep(w - aa, w + aa, d);     // the strand's outline, anti-aliased
-                    float x = min(d / (w + aa), 1.0);
-                    float tube = sqrt(1.0 - x * x);                       // round strand: hot in the middle, deep at the rim
-                    float shimmer = 0.75 + 0.25 * sin(X * 0.9 + fi * 2.3 - uScroll * 0.4);
-                    vec3 c = mix(deep, hot, tube) * (0.35 + 1.35 * tube) * (1.0 + 0.9 * fb)
-                           + vec3(1.0, 0.85, 0.95) * pow(tube, 40.0) * (0.8 - 0.8 * fb);
-                    strands = mix(strands, c * shimmer, cov * 0.8);      // later strands lie over earlier ones
-                    halo += exp(-max(d - w, 0.0) / (0.06 + soft * 3.0));
-                }
-                bundle = strands + hot * halo * (0.13 - 0.08 * fb);
+        float spec = 0.55 * (ribbonSpec(0.05) + ribbonSpec(0.15) + ribbonSpec(0.25)) / 3.0
+                   + 0.45 * (ribbonSpec(0.02 + x01 * 0.5) + ribbonSpec(0.1 + x01 * 0.5) + ribbonSpec(0.18 + x01 * 0.5)) / 3.0;
+        // Broad waves; bass bends the sheaf harder and each beat reshapes it a little.
+        float amp = (0.36 + 0.05 * spec + 0.2 * gSwell) * mix(0.75, 1.0, uActive);
+        float ph = turn * 0.45;
+        float s = uScroll * 0.3;                             // a gentle ripple along the ribbon on top of the slide
+        float a1 = X * 1.2 + s + ph;
+        float a2 = X * 2.28 - s * 0.6 + ph * 1.7;
+        float yc = 0.12 + amp * sin(a1) + amp * 0.35 * sin(a2);
+        float lo = kFloorY + 0.18;                           // skim the floor rather than sink into it
+        yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
+        float slope = amp * 1.2 * (cos(a1) + 0.665 * cos(a2));
+        float norm = inversesqrt(1.0 + slope * slope);
+        float dc = abs(q.y - yc) * norm;
+        // The sheaf twists as it travels: fanned wide where it faces you, gathered
+        // where it turns, and each strand weaves a little on its own so they cross.
+        float width = 0.3 * (1.0 + 0.3 * gSwell) * (0.75 + 0.25 * sin(X * 0.6));
+        float twist = X * 0.55 - uScroll * 0.25 + turn * 0.2;
+        float face = cos(twist);
+        const float sw = 0.036;                              // strand radius: fine silk
+        float energy = uActive;
+        const float spd = 7.5;                               // world units per beat
+        vec3 bundle = vec3(0.0);
+        float pc = smoothstep(0.15, 0.95, ribbonPulse(q.x, 0.06, spd, energy, 1.2));      // the wave through the sheaf as a whole
+        // Only pixels near the sheaf pay for its strands.
+        if (dc < width * 1.6 + 0.12 + soft * 12.0) {
+            vec3 strands = vec3(0.0);
+            // Per-strand phases advance by a fixed angle each strand (cheap rotations, not sin per strand).
+            vec2 pw = vec2(sin(X * 0.8), cos(X * 0.8));      // thickness wobble, steps 1.3 rad per strand
+            vec2 ps = vec2(sin(X * 0.9 - uScroll * 0.4), cos(X * 0.9 - uScroll * 0.4));   // shimmer, steps 2.3 rad
+            const mat2 stepW = mat2(0.2675, -0.9636, 0.9636, 0.2675);
+            const mat2 stepS = mat2(-0.6663, -0.7457, 0.7457, -0.6663);
+            float aa = max(soft, 0.0025);
+            for (int i = 0; i < kStrands; i++) {
+                float fi = float(i);
+                float h1 = fract(fi * 0.6180), h2 = fract(fi * 0.7549 + 0.31), h3 = fract(fi * 0.5698 + 0.17);
+                float u = fi / float(kStrands - 1) * 2.0 - 1.0;
+                float off = width * (u * (0.5 + 0.5 * abs(face)) + 0.45 * sin(X * (1.1 + 0.25 * h1) + fi * 2.4 + turn * 0.3));
+                float sd = (q.y - yc - off) * norm;
+                float d = abs(sd);
+                float w = sw * (0.45 + 0.9 * h2) * (0.75 + 0.25 * pw.x);
+                float cov = 1.0 - smoothstep(w - aa, w + aa, d);     // the strand's outline, anti-aliased
+                float x = min(d / (w + aa), 1.0);
+                float tube = sqrt(1.0 - x * x);                       // round strand: hot in the middle, deep at the rim
+                // each strand is itself a few hairline fibres, read where it's sharp enough
+                float fib = mix(0.55 + 0.45 * cos(sd / (w + aa) * 9.4 + fi * 1.7), 1.0, smoothstep(0.3, 0.8, aa / w));
+                // some strands catch the wave before others, so it shimmers through the sheaf
+                // as a band fades, its strands drop back to pink one by one rather than
+                // all turning pale together
+                float pulse = smoothstep(0.08 + 0.55 * h2, 0.28 + 0.55 * h2, ribbonPulse(q.x, h3 * 0.14, spd, energy, 3.0));
+                vec3 hot = mix(ribbonPink, ribbonCyan, pulse);
+                vec3 deep = mix(ribbonDeep, ribbonTeal, pulse);
+                float t2 = tube * tube, t8 = t2 * t2; t8 *= t8;
+                float t32 = t8 * t8; t32 *= t32;
+                vec3 c = mix(deep, hot, tube) * (0.35 + 1.35 * tube) * (1.0 - 0.25 * pulse) * fib
+                       + mix(vec3(1.0, 0.5, 0.75), vec3(0.3, 1.0, 1.0), pulse) * t32 * t8 * 0.6;
+                strands = mix(strands, c * (0.75 + 0.25 * ps.x), cov * 0.8);   // later strands lie over earlier ones
+                pw = stepW * pw;
+                ps = stepS * ps;
             }
-            // the glow the bundle throws on the air around it
-            bundle += hot * exp(-dc / (0.18 + soft * 4.0)) * (0.13 - 0.07 * fb);
-            acc += bundle * (fb > 0.5 ? 0.95 : 1.0);
+            vec3 hotC = mix(ribbonPink, ribbonCyan, pc);
+            // the strands' shared glow: bright through the sheaf, falling off outside it
+            float halo = 5.0 * exp(-max(dc - width * 0.9, 0.0) / (0.06 + soft * 3.0));
+            bundle = strands + hotC * halo * 0.15
+                   + hotC * mix(vec3(1.0, 0.55, 0.8), vec3(0.3, 1.0, 0.95), pc) * exp(-dc / (width * 0.45 + 0.02 + soft * 4.0)) * 0.55;   // thick luminous core
         }
-        float glow = (0.45 + 0.55 * uActive) * (0.9 + 0.35 * uLevel + 0.45 * uBeatStrength);
-        return acc * edge * glow / (1.0 + soft * 20.0);
+        // the glow the sheaf throws on the air around it
+        bundle += mix(ribbonPink, ribbonCyan, pc) * exp(-dc / (0.22 + soft * 4.0)) * 0.12;
+        float glow = (0.45 + 0.55 * uActive) * (0.95 + 0.3 * gSwell);
+        return bundle * 1.1 * edge * glow / (1.0 + soft * 20.0);
     }
 
     // The ribbons live on a curved sheet that slides left with the scene, so
@@ -1736,7 +1788,7 @@ extension FunShaders {
         vec2 off = vec2(hash21(cell + 7.1), hash21(cell + 3.3)) - 0.5;
         float star = smoothstep(0.12, 0.0, length(fract(sp) - 0.5 - off * 0.6)) * step(0.95, h);
         float tw = 0.4 + 0.6 * sin(h * 50.0 + uTime * 2.0);
-        col += vec3(0.5, 0.85, 1.0) * star * tw * (0.15 + 1.2 * uTreble) * (0.3 + 0.7 * uActive);
+        col += vec3(0.5, 0.85, 1.0) * star * tw * (0.15 + 0.4 * uTreble) * (0.3 + 0.7 * uActive);
         return col + horizonGlow(rd);
     }
 
@@ -1756,14 +1808,14 @@ extension FunShaders {
     // starting points are staggered so the shapes don't travel as one clump.
     void gemPose(int j, out vec3 c, out vec2 ang, out float r, out int faces) {
         float fj = float(j);
-        if (j == 0)      { c = vec3(0.0, -0.50, -0.95); r = 0.62; faces = 10; }
-        else if (j == 1) { c = vec3(0.0, 0.55, 3.00);   r = 0.55; faces = 10; }
-        else if (j == 2) { c = vec3(0.0, 1.05, 0.90);   r = 0.42; faces = 10; }
-        else if (j == 3) { c = vec3(0.0, -0.50, -1.30); r = 0.24; faces = 10; }
-        else if (j == 4) { c = vec3(0.0, -0.50, 1.60);  r = 0.48; faces = 4; }
-        else if (j == 5) { c = vec3(0.0, 0.85, -0.70);  r = 0.20; faces = 10; }
-        else if (j == 6) { c = vec3(0.0, 0.20, 0.95);   r = 0.80; faces = 10; }
-        else             { c = vec3(0.0, -0.50, 2.30);  r = 0.62; faces = 10; }
+        if (j == 0)      { c = vec3(0.0, -0.40, -1.10); r = 0.17; faces = 10; }
+        else if (j == 1) { c = vec3(0.0, 0.95, 2.60);   r = 0.34; faces = 10; }
+        else if (j == 2) { c = vec3(0.0, 0.70, 0.40);   r = 0.30; faces = 10; }
+        else if (j == 3) { c = vec3(0.0, -0.50, 1.20);  r = 0.22; faces = 4; }
+        else if (j == 4) { c = vec3(0.0, 0.30, -0.60);  r = 0.13; faces = 10; }
+        else if (j == 5) { c = vec3(0.0, 1.25, 1.60);   r = 0.24; faces = 10; }
+        else if (j == 6) { c = vec3(0.0, -0.40, 3.20);  r = 0.34; faces = 10; }
+        else             { c = vec3(0.0, 0.55, -1.50);  r = 0.10; faces = 10; }
         // Wrap span: wide enough that the jump happens off screen at this depth.
         float depth = c.z + 3.4;
         float span = 2.0 * (depth * 0.85 + r) + 0.4;
@@ -1776,7 +1828,7 @@ extension FunShaders {
         c.y += 0.05 * sin(uTime * 0.45 + fj * 1.9);
         ang = vec2(uTime * (0.10 + 0.03 * fj) + uClock * 0.02 + fj * 1.3 + lh * 6.28,
                    beatTurn() * 0.32 + fj * 2.1);
-        r *= 1.0 + 0.05 * uBeatStrength + 0.03 * uBass;
+        r *= 1.32 * (1.0 + 0.04 * gSwell);
     }
 
     vec3 toGem(vec3 v, vec2 ang) { v.xz = rot(ang.x) * v.xz; v.yz = rot(ang.y) * v.yz; return v; }
@@ -1842,7 +1894,7 @@ extension FunShaders {
             float d = max(length(ro + rd * t - c) - r * 0.85, 0.0);
             acc += glassCyan * exp(-d * 9.0) * 0.06 / (1.0 + t * 0.15);
         }
-        return acc * (0.4 + 0.6 * uActive + 0.8 * uBeatStrength);
+        return acc * (0.4 + 0.6 * uActive + 0.5 * gSwell);
     }
 
     // One glass shape: reflection, refraction of the ribbons behind it, and its
@@ -1866,8 +1918,20 @@ extension FunShaders {
         vec3 rr = reflect(rd, nW);
         vec3 col = envColour(rr) * fres * 0.8;
         float facet = hash11(dot(nn, vec3(12.9, 78.2, 37.7)));   // each face catches the light a little differently
-        col += mix(ribbonPink, ribbonCyan, step(0.6, facet)) * 0.12 * facet * facet * (0.5 + 0.5 * uActive);
-        float lit = (0.45 + 0.55 * uActive) * (0.9 + 0.6 * uTreble + 0.8 * uBeatStrength);
+        // Solid clear glass: every face catches the room's pink or cyan light a
+        // little differently, a cyan body that deepens with thickness, a hot
+        // glint where a face turns a light at you, and pink caught inside.
+        float faceLit = 0.5 + 0.5 * dot(nW, normalize(vec3(0.5, 0.6, -0.6)));
+        col += mix(ribbonPink, ribbonCyan, step(0.55, facet)) * (0.02 + 0.1 * facet * facet) * faceLit * (0.5 + 0.5 * uActive);
+        float thick = clamp((tf - tn) / r, 0.0, 2.0);
+        col += glassCyan * 0.045 * thick * (0.5 + 0.5 * uActive);
+        col += ribbonPink * 0.2 * smoothstep(h, -h, pIn.y) * thick * (0.4 + 0.6 * uActive);
+        float g1 = max(dot(rr, normalize(vec3(0.6, 0.25, -0.7))), 0.0);
+        float g2 = max(dot(rr, normalize(vec3(0.1, 1.0, -0.3))), 0.0);
+        g1 *= g1; g1 *= g1; g1 *= g1; g1 *= g1; g1 *= g1;      // ^32
+        g2 *= g2; g2 *= g2; g2 *= g2; g2 *= g2; g2 *= g2;
+        col += (vec3(1.0, 0.75, 0.9) * g1 + vec3(0.85, 1.0, 1.0) * g2) * 1.6;
+        float lit = (0.45 + 0.55 * uActive) * (0.9 + 0.2 * uTreble + 0.5 * gSwell);
 
         if (full) {
             // Through the glass: bend in, cross to the far face, bend out.
@@ -1883,9 +1947,9 @@ extension FunShaders {
                 behind = skyColour(fromGem(reflect(d1, -nf2), ang)) * 1.3;
             } else {
                 vec3 wd2 = fromGem(d2, ang);
-                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 30.0) * 0.45;
+                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 30.0) * 0.7;
             }
-            col += behind * vec3(0.85, 0.96, 1.0) * (1.0 - fres) * (0.9 + 0.2 * facet);
+            col += behind * vec3(0.8, 1.0, 1.05) * (1.0 - fres) * (1.0 + 0.5 * facet);
             vec2 edgeBack = gemEdge(pOut, faces, h, edgeW * 1.2);
             // A ribbon passing through the glass lights it from inside.
             float tz = ribbonT(ro, rd);
@@ -1894,12 +1958,13 @@ extension FunShaders {
         }
         vec2 edgeGlow = gemEdge(pIn, faces, h, min(edgeW * 3.0, h * 0.08));
         vec3 edgeHot = mix(glassCyan, vec3(0.75, 1.0, 1.0), 0.1);   // edges burn a little whiter than their glow
-        col += edgeHot * (edgeFront.x * 1.7 + edgeFront.y * 1.6) * (1.0 - 0.6 * blur) * lit;
-        col += glassCyan * edgeGlow.x * 0.9 * (1.0 - 0.6 * blur) * lit;
+        col += edgeHot * (edgeFront.x * 1.5 + edgeFront.y * 1.4) * (1.0 - 0.6 * blur) * lit;
+        col += glassCyan * edgeGlow.x * 0.75 * (1.0 - 0.6 * blur) * lit;
         return col;
     }
 
     void main() {
+        gSwell = beatSwell();
         vec2 p = screenP();
         // Camera sits low by the glossy floor and sways slowly (on the
         // sound-gated clock); it leans in a little on the bass.
@@ -1907,7 +1972,7 @@ extension FunShaders {
         float yaw = 0.12 * sin(uTime * 0.07);
         // The lens is shifted up rather than tilted, so the horizon sits low and
         // the glass stays upright.
-        vec3 ro = vec3(0.0, -0.40, -3.3 + 0.10 * uBass);
+        vec3 ro = vec3(0.0, -0.40, -3.3 + 0.06 * gSwell);
         ro.xz = rot(yaw) * ro.xz;
         vec3 fw = vec3(-sin(yaw), 0.0, cos(yaw));
         vec3 rt = vec3(cos(yaw), 0.0, sin(yaw));
@@ -1936,7 +2001,7 @@ extension FunShaders {
             col = vec3(0.002, 0.006, 0.014) + refl * fres * 0.75;
             // the ribbons' light pooling on the floor beneath them
             float pool = exp(-abs(fp.z - ribbonDepth(fp.x)) * 0.8) * smoothstep(-4.8, -2.5, fp.x) * smoothstep(4.8, 2.5, fp.x);
-            col += mix(ribbonCyan * 0.35, ribbonPink * 0.7, smoothstep(-2.0, 1.0, fp.x)) * pool * (0.4 + 0.6 * uActive) * (0.8 + 0.4 * uLevel);
+            col += ribbonPink * 0.6 * pool * (0.4 + 0.6 * uActive) * (0.85 + 0.25 * gSwell);
             col += glassPool * 0.8 * (0.4 + 0.6 * uActive);
             col = mix(col, skyColour(rd), smoothstep(8.0, 30.0, tFloor));
         }
@@ -1944,7 +2009,7 @@ extension FunShaders {
         col += ribbonsAlong(ro, rd, 0.0, tEnd);
         vec3 unused;
         col += gemHalo(ro, rd, tEnd, unused);
-        col += ribbonPink * uBeatStrength * 0.025 * uActive;
+        col += ribbonPink * gSwell * 0.015;
 
         col = 1.0 - exp(-col * 1.8);                   // soft highlight roll-off
         col *= 1.0 - 0.3 * dot(p, p);                   // vignette
