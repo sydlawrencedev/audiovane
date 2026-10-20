@@ -1,4 +1,30 @@
 import SwiftUI
+import AppKit
+
+/// A pointer cursor over a control that does something when clicked.
+///
+/// SwiftUI has no `.cursor()` modifier, so this is the usual way round it:
+/// the cursor is set when the pointer arrives and put back when it leaves.
+/// `set()` rather than `push()`/`pop()`, so a control that appears or
+/// disappears under the pointer can't leave the cursor stack unbalanced.
+private struct PointingHand: ViewModifier {
+    func body(content: Content) -> some View {
+        content.onHover { inside in
+            if inside {
+                NSCursor.pointingHand.set()
+            } else {
+                NSCursor.arrow.set()
+            }
+        }
+    }
+}
+
+extension View {
+    /// Shows a pointing hand over this view.
+    func pointingHand() -> some View {
+        modifier(PointingHand())
+    }
+}
 
 /// The View All panel: every mode the app has, with a picture of it, and a
 /// switch to say whether it appears in the mode list and takes part in Auto
@@ -167,13 +193,21 @@ private struct ModeRow: View {
             editor = .editing(mode)
         }, onCreate: {
             editor = .new
+        }, onSelect: { target in
+            if target.isNewModeCard {
+                editor = .new
+                return
+            }
+            // Picking a mode that was switched off would leave it chosen
+            // but missing from the list, so switch it back on.
+            if !target.isEnabled {
+                app.setModeEnabled(target.id, enabled: true)
+            }
+            app.viaPicker = true
+            app.activeMode = target.id
+            app.showAllModesSheet = false
         }, isDropTarget: isDropTarget(entry))
             .contentShape(Rectangle())
-            .onTapGesture {
-                if entry.isNewModeCard {
-                    editor = .new
-                }
-            }
         if entry.isNewModeCard {
             // The "make your own" card isn't a mode, so it isn't dragged
             // and nothing can be dropped onto it. Its placeholder id is
@@ -258,6 +292,8 @@ private struct ModeCard: View {
     /// instead of taking up room all the time.
     @State private var isHovering = false
 
+    /// Called when the picture is pressed: pick this mode.
+    var onSelect: ((ModeEntry) -> Void)?
     /// True when a dragged mode is over this card, so it can show where
     /// the mode would land.
     var isDropTarget = false
@@ -300,6 +336,7 @@ private struct ModeCard: View {
                             .foregroundStyle(Color(white: 0.55))
                     }
                     .buttonStyle(.plain)
+                    .pointingHand()
                     .help("Edit this mode")
                     Button {
                         pendingDelete = true
@@ -309,6 +346,7 @@ private struct ModeCard: View {
                             .foregroundStyle(Color(red: 1, green: 0.42, blue: 0.36))
                     }
                     .buttonStyle(.plain)
+                    .pointingHand()
                     .help("Delete this mode")
                     .confirmationDialog(
                         "Delete “\(entry.title)”?",
@@ -347,6 +385,7 @@ private struct ModeCard: View {
                             .foregroundStyle(Color(white: 0.5))
                         }
                         .buttonStyle(.plain)
+                        .pointingHand()
                         .help("Go to \(entry.author.isEmpty ? "the author's site" : entry.author)")
                         Link(destination: link) {
                             Image(systemName: "link")
@@ -354,6 +393,7 @@ private struct ModeCard: View {
                                 .foregroundStyle(Color(white: 0.5))
                         }
                         .buttonStyle(.plain)
+                        .pointingHand()
                         .help(link.absoluteString)
                     } else {
                         HStack(spacing: 4) {
@@ -438,27 +478,52 @@ private struct ModeCard: View {
 
     /// The picture. A user's own mode is drawn for real, so the panel shows
     /// what it looks like rather than a stand-in.
+    ///
+    /// Clicking it picks the mode: the panel closes and that mode is what
+    /// gets drawn.
     @ViewBuilder
     private var preview: some View {
-        if entry.isNewModeCard {
-            VStack(spacing: 6) {
-                Image(systemName: "wand.and.stars")
-                    .font(.system(size: 22, weight: .light))
-                    .foregroundStyle(Color(red: 1, green: 0.17, blue: 0.84))
-                Text("Make your own")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(Color(white: 0.7))
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color(red: 1, green: 0.17, blue: 0.84).opacity(0.08))
-            )
-            .frame(height: 96)
-            .clipped()
-            .clipShape(RoundedRectangle(cornerRadius: 5))
-        } else if entry.isCustom {
-            if let image = app.customModePreviews[entry.id.slug] {
+        Button {
+            onSelect?(entry)
+        } label: {
+            if entry.isNewModeCard {
+                VStack(spacing: 6) {
+                    Image(systemName: "wand.and.stars")
+                        .font(.system(size: 22, weight: .light))
+                        .foregroundStyle(Color(red: 1, green: 0.17, blue: 0.84))
+                    Text("Make your own")
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(Color(white: 0.7))
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color(red: 1, green: 0.17, blue: 0.84).opacity(0.08))
+                )
+                .frame(height: 96)
+                .clipped()
+                .clipShape(RoundedRectangle(cornerRadius: 5))
+            } else if entry.isCustom {
+                if let image = app.customModePreviews[entry.id.slug] {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 96)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                } else {
+                    // Nothing drawn yet — the picture is made the first time
+                    // the panel opens.
+                    RoundedRectangle(cornerRadius: 5)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            ProgressView().controlSize(.small)
+                        )
+                        .frame(height: 96)
+                        .clipped()
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                }
+            } else if let image = ModePreviewImage.builtIn(entry.id) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -466,29 +531,14 @@ private struct ModeCard: View {
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             } else {
-                // Nothing drawn yet — the picture is made the first time
-                // the panel opens.
-                RoundedRectangle(cornerRadius: 5)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        ProgressView().controlSize(.small)
-                    )
+                CustomModeCover(name: entry.title, seed: entry.id.slug)
                     .frame(height: 96)
-                    .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
-        } else if let image = ModePreviewImage.builtIn(entry.id) {
-            Image(nsImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(height: 96)
-                .clipped()
-                .clipShape(RoundedRectangle(cornerRadius: 5))
-        } else {
-            CustomModeCover(name: entry.title, seed: entry.id.slug)
-                .frame(height: 96)
-                .clipShape(RoundedRectangle(cornerRadius: 5))
         }
+        .buttonStyle(.plain)
+        .pointingHand()
+        .help(entry.isNewModeCard ? "Make a mode of your own" : "Switch to \(entry.title)")
     }
 }
 
@@ -518,6 +568,7 @@ struct ModeSwitch: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .pointingHand()
         .help(isOn ? "Switch off" : "Switch on")
     }
 }
