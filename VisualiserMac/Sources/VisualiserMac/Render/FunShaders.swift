@@ -34,9 +34,11 @@ enum FunShaders {
     uniform float uIdle;
     uniform float uBands[96];
     uniform float uActive;      // 0 in silence, eases to 1 with sound
-    uniform float uBeats;       // beat counter at the detected tempo
+    uniform float uBeats;       // beat counter at the detected tempo; continuous, never steps or runs back
     uniform float uScroll;      // forward-only distance, faster when louder
     uniform float uClock;       // wall-clock seconds; keeps running in silence (use sparingly)
+    uniform float uLevelSmooth; // slow loudness, 0..1: rises over ~0.3 s, falls over ~1.5 s
+    uniform float uBassSmooth;  // the same slow easing applied to uBass
     out vec4 fragColor;
 
     const float PI = 3.14159265;
