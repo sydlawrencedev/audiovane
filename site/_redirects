@@ -6,3 +6,10 @@
 # One canonical URL for the homepage. The sitemap, the canonical tag and the
 # og:url all say "https://vibresia.com/"; make the server agree.
 /index.html  /  301
+
+# /share is the landing page for custom vibescape shares — those arrive
+# with a base64 payload in ?d=... for the JS to decode. The static files
+# for built-in vibscapes live one level deeper at /share/<slug>.html.
+# Both /share and /share/ serve the same page.
+/share  /share.html  200
+/share/  /share.html  200

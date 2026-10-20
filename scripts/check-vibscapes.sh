@@ -33,4 +33,37 @@ if schema.group(1) != version:
     print(f'JSON-LD softwareVersion is {schema.group(1)}, but VisualiserMac/VERSION says {version}.')
     sys.exit(1)
 print(f"structured data matches VERSION {version}")
+
+# Each vibscape also needs its share page (with full og:* tags, so the
+# recipient's chat app renders the right title and per-vibescape image) and
+# its share graphic (the canvas the og:image points at). A vibscape is only
+# shareable when both are present — a missing HTML means the link 404s, a
+# missing JPG means crawlers see no preview.
+import os
+# Files that live in `site/share/` but aren't per-vibscape: the JS/CSS/JSON
+# share-page machinery and `index.html` (a copy of `site/share.html` that
+# serves `/share/` via Cloudflare's directory-index resolution). Skipping
+# those stops the check from flagging infra as a missing vibescape.
+NON_VIBSCAPE_BASENAMES = {"index", "share-page", "manifest", "share"}
+missing_share, extra_share = [], []
+for slug in sorted(site):
+    html_path = f"{root}/site/share/{slug}.html"
+    jpg_path  = f"{root}/site/share/{slug}.jpg"
+    if not os.path.exists(html_path): missing_share.append(f"{slug}.html")
+    if not os.path.exists(jpg_path):  missing_share.append(f"{slug}.jpg")
+share_dir = f"{root}/site/share"
+if os.path.isdir(share_dir):
+    for entry in os.listdir(share_dir):
+        if not entry.endswith((".html", ".jpg")):
+            continue
+        slug = entry.rsplit(".", 1)[0]
+        if slug in NON_VIBSCAPE_BASENAMES:
+            continue
+        if slug not in site:
+            extra_share.append(entry)
+if missing_share or extra_share:
+    if missing_share: print("Share files missing for some vibscapes:", ", ".join(sorted(missing_share)))
+    if extra_share:   print("site/share/ has files for vibscapes not on the homepage:", ", ".join(sorted(extra_share)))
+    sys.exit(1)
+print(f"site/share/ covers all {len(site)} vibscapes")
 PY

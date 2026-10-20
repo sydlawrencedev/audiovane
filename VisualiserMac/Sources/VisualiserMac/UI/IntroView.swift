@@ -59,6 +59,19 @@ struct IntroView: View {
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: 500)
                     .lineSpacing(2)
+
+                // Share feature: a vibscape someone sent you (a
+                // `vibresia://open?p=…` or `?d=…` link) opens straight in the
+                // app. The hint under the permission text nudges people who
+                // arrived via a deep link — they already tapped something
+                // that needed the app, so confirming "yes, it lands in here"
+                // is the missing piece.
+                Text("If someone sent you a Vibresia vibescape, it should already be opening now — Vibresia is the registered handler for vibresia:// links.")
+                    .font(.system(size: 11, weight: .regular))
+                    .foregroundStyle(Color(white: 0.55))
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: 500)
+                    .lineSpacing(2)
             }
             .padding(.horizontal, 40)
         }

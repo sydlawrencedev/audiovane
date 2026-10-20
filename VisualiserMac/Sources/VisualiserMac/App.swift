@@ -99,6 +99,37 @@ struct VisualiserApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     weak var appState: AppState?
 
+    /// macOS hands a `vibresia://` URL to whichever app owns the scheme. We
+    /// register for the Apple Event in `applicationWillFinishLaunching` so the
+    /// handler is in place before the runloop starts, whether the URL is the
+    /// reason the app was cold-launched or one a running app receives. The
+    /// handler is skipped in MCP vibscape — no window, no state — so a tool
+    /// invocation can't be mistaken for a share.
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        guard !CommandLine.arguments.contains("--mcp") else { return }
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleGetURLEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    /// Pulls the URL string out of the Apple Event and hands it to the
+    /// importer. Every failure mode is already classified by
+    /// `ShareImporter.decode` and reported through PostHog from there, so
+    /// this stays tiny.
+    @objc func handleGetURLEvent(_ event: NSAppleEventDescriptor, withReplyEvent: NSAppleEventDescriptor) {
+        guard
+            let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue,
+            let url = URL(string: urlString)
+        else { return }
+        let request = ShareImporter.decode(url)
+        Task { @MainActor in
+            ShareImporter.apply(request)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // MCP vibscape: this process is a tool server for an AI agent, not the
         // app. It has no window, no analytics, no update check and no audio
@@ -133,7 +164,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         // Look for a newer release on every launch (not in the test vibscapes).
-        let testVibscape = ["--snapshot", "--record"].contains { CommandLine.arguments.contains($0) }
+        let testVibscape = ["--snapshot", "--record", "--video"].contains { CommandLine.arguments.contains($0) }
         if !testVibscape { UpdateChecker.shared.check(userInitiated: false) }
 
         // Snapshot vibscape — render a few frames then exit. Used for verification.
@@ -147,6 +178,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--record") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 self.runRecord()
+            }
+        }
+
+        // Video vibscape — render every vibscape to a numbered PNG sequence for
+        // `scripts/make-demo-video.sh` to encode. Needs no audio source and no
+        // window, so it's grouped with the other offline renderers.
+        if CommandLine.arguments.contains("--video") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.runVideo()
             }
         }
 
@@ -490,6 +530,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Record whatever vibscape is active (the --vibscape flag can set it).
         app.renderer.setVibscape(app.activeVibscape)
+        NSLog("[REC] recording mode \(app.activeVibscape.rawValue)")
+
+        NSLog("[REC] writing \(frames) frames @ \(intervalMs)ms to \(outDir)")
+
+        // Drive frame capture via chained DispatchQueue.main.asyncAfter — simplest
+        // reliable way given how this run loop is set up.
+        var n = 0
+        let startedAt = Date()
+        func captureNext() {
+            n += 1
+            let elapsed = Date().timeIntervalSince(startedAt) * 1000
+            let path = "\(outDir)/frame_\(String(format: "%04d", n)).png"
+            NSLog("[REC] fire n=\(n) t=\(Int(elapsed))ms ready=\(app.renderer.isReady)")
+            app.renderer.captureScreen(to: path)
+            let exists = FileManager.default.fileExists(atPath: path)
+            NSLog("[REC] n=\(n) saved=\(exists) path=\(path)")
+            if n >= frames {
+                NSLog("[REC] done")
+                exit(0)
+            } else {
+                let interval = DispatchTimeInterval.milliseconds(intervalMs)
+                DispatchQueue.main.asyncAfter(deadline: .now() + interval, execute: captureNext)
+            }
+        }
+        let interval = DispatchTimeInterval.milliseconds(intervalMs)
+        DispatchQueue.main.asyncAfter(deadline: .now() + interval, execute: captureNext)
+    }
+
     /// Renders every built-in vibscape to a numbered sequence of PNG frames.
     ///
     /// This is the same draw the app does, into an offscreen target, through
@@ -560,33 +628,5 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NSLog("[VIDEO] done")
             exit(0)
         }
-    }
-
-        NSLog("[REC] recording mode \(app.activeVibscape.rawValue)")
-
-        NSLog("[REC] writing \(frames) frames @ \(intervalMs)ms to \(outDir)")
-
-        // Drive frame capture via chained DispatchQueue.main.asyncAfter — simplest
-        // reliable way given how this run loop is set up.
-        var n = 0
-        let startedAt = Date()
-        func captureNext() {
-            n += 1
-            let elapsed = Date().timeIntervalSince(startedAt) * 1000
-            let path = "\(outDir)/frame_\(String(format: "%04d", n)).png"
-            NSLog("[REC] fire n=\(n) t=\(Int(elapsed))ms ready=\(app.renderer.isReady)")
-            app.renderer.captureScreen(to: path)
-            let exists = FileManager.default.fileExists(atPath: path)
-            NSLog("[REC] n=\(n) saved=\(exists) path=\(path)")
-            if n >= frames {
-                NSLog("[REC] done")
-                exit(0)
-            } else {
-                let interval = DispatchTimeInterval.milliseconds(intervalMs)
-                DispatchQueue.main.asyncAfter(deadline: .now() + interval, execute: captureNext)
-            }
-        }
-        let interval = DispatchTimeInterval.milliseconds(intervalMs)
-        DispatchQueue.main.asyncAfter(deadline: .now() + interval, execute: captureNext)
-    }
+}
 }
