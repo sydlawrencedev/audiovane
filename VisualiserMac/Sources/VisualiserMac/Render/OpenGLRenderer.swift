@@ -91,7 +91,7 @@ final class OpenGLRenderer: NSObject {
         let time, bass, mid, treble, beat, beatStrength, level, resolution, idle, bands: GLint
         let eventKind, eventAge: GLint
         let active, beats, peaks, scroll, clock: GLint
-        let levelSmooth, bassSmooth: GLint
+        let levelSmooth, bassSmooth, presence: GLint
     }
     private var shaderModes: [VisualizerMode: ShaderMode] = [:]
 
@@ -793,7 +793,7 @@ final class OpenGLRenderer: NSObject {
             glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
             glEnable(GLbitfield(GL_BLEND))
             let snap = audio.snapshot
-            if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass) }
+            if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass); presence = 1; presenceVelocity = 0 }
             easeLevels(snap, dt: 1.0 / 60)
             let t = Float(k) / 60.0
             switch currentMode {
@@ -1225,6 +1225,13 @@ final class OpenGLRenderer: NSObject {
     /// the frame-to-frame flicker of uLevel / uBass.
     private var levelSmooth: Double = 0
     private var bassSmooth: Double = 0
+    /// Slow music presence for uPresence, 0 in silence and 1 with music: a
+    /// critically damped spring toward a smoothstep of the eased loudness,
+    /// so it eases in and out (~2.3 s either way) with no overshoot and no
+    /// chatter at quiet passages. For modes that morph between an idle state
+    /// and their playing look.
+    private var presence: Double = 0
+    private var presenceVelocity: Double = 0
     /// Spectrum peak caps: jump to the bar's level, then fall slowly.
     private var spectrumPeaks = [Float](repeating: 0, count: 48)
     private var lastFrameDT: Double = 1.0 / 60
@@ -1295,6 +1302,12 @@ final class OpenGLRenderer: NSObject {
         }
         ease(&levelSmooth, toward: Double(snap.level))
         ease(&bassSmooth, toward: Double(snap.bass))
+        let m = levelSmooth * (0.3 + 0.7 * danceActivity)
+        let x = min(1, max(0, (m - 0.004) / 0.031))
+        let target = x * x * (3 - 2 * x)
+        let omega = 2.5, h = min(dt, 0.1)
+        presenceVelocity += (omega * omega * (target - presence) - 2 * omega * presenceVelocity) * h
+        presence = min(1, max(0, presence + presenceVelocity * h))
     }
 
     private func drawShaderMode(_ mode: VisualizerMode, time: Float, snap: AudioSnapshot) {
@@ -1315,6 +1328,7 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.clock, Float(wallClock.truncatingRemainder(dividingBy: 3600)))
         glUniform1f(m.levelSmooth, Float(levelSmooth))
         glUniform1f(m.bassSmooth, Float(bassSmooth))
+        glUniform1f(m.presence, Float(presence))
         if mode == .spectrum {
             for i in 0..<spectrumPeaks.count {
                 let v = max(snap.bands[i * 2], snap.bands[i * 2 + 1])
@@ -1516,7 +1530,8 @@ final class OpenGLRenderer: NSObject {
                 bands: loc("uBands[0]"), eventKind: loc("uEventKind"), eventAge: loc("uEventAge"),
                 active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
                 scroll: loc("uScroll"), clock: loc("uClock"),
-                levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"))
+                levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
+                presence: loc("uPresence"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")
