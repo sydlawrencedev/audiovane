@@ -1,4 +1,4 @@
-# VIBRESSIA
+# VIBRESIA
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 

@@ -8,7 +8,7 @@ struct VisualiserApp: App {
     @StateObject private var app = AppState()
 
     var body: some Scene {
-        WindowGroup("VIBRESSIA") {
+        WindowGroup("VIBRESIA") {
             ContentView()
                 .environmentObject(app)
                 .frame(minWidth: AppState.minimumWindowSize.width,
@@ -17,7 +17,7 @@ struct VisualiserApp: App {
                 .background(Color.black)
         }
         .windowStyle(.hiddenTitleBar)
-        WindowGroup("VIBRESSIA") {
+        WindowGroup("VIBRESIA") {
             ContentView()
                 .environmentObject(app)
                 .frame(minWidth: AppState.minimumWindowSize.width,

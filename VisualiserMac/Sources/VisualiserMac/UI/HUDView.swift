@@ -15,7 +15,7 @@ struct HUDView: View {
             HStack(spacing: 12) {
                 BrandMark()
                 VStack(alignment: .leading, spacing: 3) {
-                    Text("VIBRESSIA")
+                    Text("VIBRESIA")
                         .font(.system(size: 17, weight: .bold, design: .default))
                         .tracking(3.5)
                         .foregroundStyle(Color.white)

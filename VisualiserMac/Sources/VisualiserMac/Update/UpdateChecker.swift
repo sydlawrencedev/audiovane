@@ -26,7 +26,7 @@ final class UpdateChecker {
 
     /// `userInitiated`: from the menu — also report "you're up to date" and errors.
     func check(userInitiated: Bool) {
-        if !userInitiated && ProcessInfo.processInfo.environment["VIBRESSIA_NO_UPDATE_CHECK"] != nil { return }
+        if !userInitiated && ProcessInfo.processInfo.environment["VIBRESIA_NO_UPDATE_CHECK"] != nil { return }
         if userInitiated {
             Task {
                 await Analytics.shared.track("update_check_requested")

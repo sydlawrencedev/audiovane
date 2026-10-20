@@ -613,7 +613,7 @@ enum ModePreviewImage {
         // insisting on one layout.
         let file = "modes/\(builtin.rawValue).jpg"
         var roots: [URL] = []
-        if let override = ProcessInfo.processInfo.environment["VIBRESSIA_PREVIEW_DIR"] {
+        if let override = ProcessInfo.processInfo.environment["VIBRESIA_PREVIEW_DIR"] {
             roots.append(URL(fileURLWithPath: override, isDirectory: true))
         }
         let here = URL(fileURLWithPath: Bundle.main.bundlePath)

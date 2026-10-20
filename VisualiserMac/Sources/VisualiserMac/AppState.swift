@@ -1005,11 +1005,11 @@ final class AppState: ObservableObject {
         genreIsAuto && genreConfidence >= Self.autoGenreMinConfidence
     }
 
-    /// Band evaluation log: with VIBRESSIA_EVAL_LOG set, append one JSON line a
+    /// Band evaluation log: with VIBRESIA_EVAL_LOG set, append one JSON line a
     /// second describing what the genre detector and the band make of the
     /// music. scripts/band-eval.py scores it against labelled videos.
     private lazy var evalLog: FileHandle? = {
-        guard let path = ProcessInfo.processInfo.environment["VIBRESSIA_EVAL_LOG"] else { return nil }
+        guard let path = ProcessInfo.processInfo.environment["VIBRESIA_EVAL_LOG"] else { return nil }
         FileManager.default.createFile(atPath: path, contents: nil)
         return FileHandle(forWritingAtPath: path)
     }()

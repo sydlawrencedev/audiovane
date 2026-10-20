@@ -215,9 +215,9 @@ struct ModeEntry: Identifiable, Hashable {
 /// answer in this app.
 enum CustomModeStore {
     static var folder: URL {
-        // VIBRESSIA_CUSTOM_DIR points somewhere else, for tests and for
+        // VIBRESIA_CUSTOM_DIR points somewhere else, for tests and for
         // demo runs that must never read a real person's modes.
-        if let dir = ProcessInfo.processInfo.environment["VIBRESSIA_CUSTOM_DIR"] {
+        if let dir = ProcessInfo.processInfo.environment["VIBRESIA_CUSTOM_DIR"] {
             return URL(fileURLWithPath: dir, isDirectory: true)
         }
         return SupportFolder.folder("CustomModes")
