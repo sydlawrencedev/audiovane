@@ -342,6 +342,10 @@ enum CustomVibscapeGuide {
 
     To fade out in silence, multiply by `uActive` near the end.
 
+    If you want to know what the music is actually doing right now — the
+    suspected genre and instruments, the tempo, the levels — ask with
+    `what_i_hear`, and write something that suits it.
+
     One more thing: the app tints every mode with the colour palette you pick
     in the header, so your colours come out shifted a little. That's the same
     as the built-in modes — pick a different palette in the header if you want

@@ -15,6 +15,8 @@ struct CustomVibscapeView: View {
         case choose
         case write
         case ai
+        /// Setting an agent up to talk to Vibresia.
+        case mcp
     }
 
     @EnvironmentObject var app: AppState
@@ -60,6 +62,7 @@ struct CustomVibscapeView: View {
             case .choose: chooseStep
             case .write: writeStep
             case .ai: aiStep
+            case .mcp: mcpStep
             }
         }
         .frame(width: 640, height: 560)
@@ -89,10 +92,7 @@ struct CustomVibscapeView: View {
                     title: "Vibe with your AI of choice",
                     detail: "Point any AI assistant at Vibresia and it can write a vibscape, check it works and show you the result."
                 ) {
-                    // The page works for every agent, not just one.
-                    if let url = URL(string: MCPSetup.pageURL) {
-                        NSWorkspace.shared.open(url)
-                    }
+                    step = .mcp
                 }
                 RouteButton(
                     glyph: "wand.and.stars",
@@ -188,7 +188,10 @@ struct CustomVibscapeView: View {
             .buttonStyle(.plain)
             .help(isEditing ? "Close" : "Back to the options")
 
-            Text(isEditing ? "Edit your vibscape" : step == .ai ? "Ask an AI to write it" : "Paste your vibscape")
+            Text(isEditing ? "Edit your vibscape"
+                 : step == .ai ? "Ask an AI to write it"
+                 : step == .mcp ? "Set up your agent"
+                 : "Paste your vibscape")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
@@ -471,6 +474,128 @@ struct CustomVibscapeView: View {
 
     // MARK: - Step two: the AI route
 
+    /// Setting an agent up.
+    ///
+    /// The instructions live here rather than only on the website because
+    /// the path is the part that goes wrong: the agent has to launch this
+    /// app, wherever it happens to be installed, and a fixed example
+    /// doesn't survive the app being moved.
+    private var mcpStep: some View {
+        VStack(spacing: 0) {
+            bar
+            if scrollable {
+                ScrollView { mcpBody }
+            } else {
+                mcpBody
+            }
+            Divider().overlay(Color.white.opacity(0.08))
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(white: 0.7))
+            }
+            .padding(.horizontal, 22)
+            .padding(.vertical, 14)
+        }
+    }
+
+    private var mcpBody: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Let your agent write it")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("""
+                Vibresia has a small local server that AI assistants can talk to. \
+                Point an agent at it and it can write a vibscape, check that it \
+                compiles, look at what it drew and try again — no copying code \
+                back and forth.
+                """)
+                .font(.system(size: 11))
+                .foregroundStyle(Color(white: 0.75))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Vibresia is here")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(Color(white: 0.5))
+                CopyableRow(text: MCPSetup.appPath, monospaced: true,
+                           help: "Copy the app's location")
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text("Give your agent this")
+                    .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    .tracking(1.0)
+                    .foregroundStyle(Color(white: 0.5))
+                CopyableRow(text: MCPSetup.command, monospaced: true,
+                           help: "Copy the setup command")
+                Text("""
+                The name, the program to run and the argument to run it with. \
+                Every agent that speaks MCP wants those three, just spelled its \
+                own way.
+                """)
+                .font(.system(size: 10.5))
+                .foregroundStyle(Color(white: 0.6))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            VStack(alignment: .leading, spacing: 7) {
+                Text("Then just ask it for what you want")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.white)
+                Text("""
+                "Make a vibscape of slow blue smoke that swirls to the bass."
+                """)
+                .font(.system(size: 10.5, design: .monospaced))
+                .foregroundStyle(Color(white: 0.8))
+                .padding(9)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.black.opacity(0.35))
+                )
+                Text("""
+                It can also ask what you're hearing right now — the suspected \
+                genre and instruments, the tempo, the levels — so it can write \
+                something that suits the music you're actually playing.
+                """)
+                .font(.system(size: 11))
+                .foregroundStyle(Color(white: 0.75))
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                if let url = URL(string: MCPSetup.pageURL) {
+                    NSWorkspace.shared.open(url)
+                }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 10))
+                    Text("Setup for each agent, in full")
+                    Spacer()
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(Color(white: 0.85))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(
+                    RoundedRectangle(cornerRadius: 7)
+                        .fill(Color.white.opacity(0.06))
+                )
+            }
+            .buttonStyle(.plain)
+            .pointingHand()
+        }
+        .padding(.horizontal, 22)
+        .padding(.vertical, 16)
+    }
+
     private var aiStep: some View {
         VStack(spacing: 0) {
             bar
@@ -522,9 +647,7 @@ struct CustomVibscapeView: View {
                                 .foregroundStyle(.white)
                             Spacer()
                             Button {
-                                if let url = URL(string: MCPSetup.pageURL) {
-                                    NSWorkspace.shared.open(url)
-                                }
+                                step = .mcp
                             } label: {
                                 Label("How to set it up", systemImage: "arrow.up.right.square")
                                     .font(.system(size: 10, weight: .medium))
@@ -720,5 +843,56 @@ private struct RouteButton: View {
             )
         }
         .buttonStyle(.plain)
+    }
+}
+
+/// A line of text with a button that copies it.
+///
+/// The paths and commands here are long and easy to mistype, so copying
+/// them is the point.
+private struct CopyableRow: View {
+    let text: String
+    var monospaced: Bool = true
+    var help: String = "Copy"
+
+    @State private var copied = false
+
+    var body: some View {
+        // The button is laid over the text rather than beside it. A long
+        // path and a long command both want more room than the panel has,
+        // and side by side the button ends up past the edge.
+        ZStack(alignment: .trailing) {
+            Text(text)
+                .font(.system(size: 10, design: monospaced ? .monospaced : .default))
+                .foregroundStyle(Color(white: 0.9))
+                .textSelection(.enabled)
+                .lineLimit(2)
+                .truncationMode(.middle)
+                .multilineTextAlignment(.leading)
+                // A definite width, so a long path truncates instead of
+                // making the row wider than the panel and pushing the
+                // button off the end.
+                .frame(maxWidth: 500, alignment: .leading)
+                .padding(.trailing, 26)
+            Button {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(text, forType: .string)
+                copied = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+            } label: {
+                Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    .font(.system(size: 10))
+                    .foregroundStyle(copied ? Color(red: 0.4, green: 0.9, blue: 0.5) : Color(white: 0.8))
+            }
+            .buttonStyle(.plain)
+            .pointingHand()
+            .help(help)
+        }
+        .padding(9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 7)
+                .fill(Color.black.opacity(0.35))
+        )
     }
 }

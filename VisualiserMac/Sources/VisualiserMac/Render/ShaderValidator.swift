@@ -16,10 +16,14 @@ struct ShaderProblem: Error {
         case empty
         /// A real compile or link failure.
         case compileFailed
-        /// The graphics system wasn't ready yet. Not the vibscape's fault, and
+        /// The shader is written in a way that compiles but doesn't do what
+        /// the author thinks. Nothing would be wrong on screen.
+        case wrongOutput
+        /// The graphics system wasn't ready yet. Not the mode's fault, and
         /// not worth telling anybody about — it'll be tried again.
         case notReady
     }
+
 
     var kind: Kind
     /// What to do about it, in one sentence.
@@ -37,6 +41,7 @@ struct ShaderProblem: Error {
         case .hasVersionDirective: return "Remove the #version line"
         case .empty: return "There's nothing to try"
         case .compileFailed: return line == nil ? "That didn't compile" : "Line \(line!) needs a fix"
+        case .wrongOutput: return "The colour has to come back from render()"
         case .notReady: return "Not ready yet"
         }
     }
@@ -87,6 +92,18 @@ enum ShaderValidator {
         }
 
         let withoutComments = stripComments(trimmed)
+
+        // Writing to fragColor looks like it should work — the shader really
+        // does have one — but the app draws the colour that render()
+        // returns, so the write is thrown away and the screen shows
+        // whatever render() gave back. Nothing would look broken and
+        // nothing would be right, so it's caught here.
+        if withoutComments.contains("fragColor") || withoutComments.contains("gl_FragColor") {
+            return .failed(ShaderProblem(
+                kind: .wrongOutput,
+                message: "You wrote to fragColor, but a vibscape's colour is what render() returns. Take the fragColor line out and return the colour instead — `return vec3(1.0, 0.0, 0.5);` for red, green and blue."))
+        }
+
         if withoutComments.range(of: renderSignature, options: .regularExpression) == nil {
             // Distinguish "no function at all" from "close but misspelled" —
             // a typo'd name otherwise produces a baffling "undeclared" error.
@@ -180,6 +197,9 @@ enum ShaderValidator {
                 return problem("\(name) isn't a thing Vibresia provides. The closest is \(known) — check the spelling.")
             }
             return problem("Vibresia doesn't recognise \(name). If it's a uniform or helper you expected, check the spelling against the list below. If it's your own variable, make sure you declare it before you use it.")
+        }
+        if lowered.contains("must match return type") || lowered.contains("no available implicit conversion") {
+            return problem("The type is wrong. render() has to give back a vec3 — one number each for red, green and blue, like `return vec3(1.0, 0.0, 0.5);`. A single number won't do.")
         }
         if lowered.contains("no matching overloaded function") {
             return problem("A function was called with the wrong number or type of arguments. Check any brackets you've just edited.")

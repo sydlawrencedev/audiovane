@@ -7,7 +7,17 @@ import Foundation
 /// than written down in a README that goes stale the first time somebody
 /// moves the app.
 enum MCPSetup {
-    /// The path to the app's binary, which is what the agent launches.
+    /// Where the app is on this Mac — "/Applications/Vibresia.app", or
+    /// wherever the user put it.
+    ///
+    /// The path has to be right, because it's the thing the agent launches.
+    /// Showing it rather than a fixed example means it works wherever the
+    /// app was installed.
+    static var appPath: String {
+        Bundle.main.bundlePath
+    }
+
+    /// The program to run: the binary inside the app bundle.
     static var serverPath: String {
         Bundle.main.bundlePath + "/Contents/MacOS/Vibresia"
     }

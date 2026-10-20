@@ -338,7 +338,12 @@ enum MCPTools {
 
     /// A compiler failure, written for whoever asked for the code.
     private static func failure(_ problem: ShaderProblem, name: String) -> String {
-        var text = "\(name) doesn't compile.\n\n\(problem.message)"
+        // A shader that writes to fragColor compiles fine and then does
+        // nothing useful, so calling it a compile failure would be a lie.
+        let headline = problem.kind == .wrongOutput
+            ? "\(name) wouldn't work the way it's written."
+            : "\(name) doesn't compile."
+        var text = "\(headline)\n\n\(problem.message)"
         if let line = problem.line {
             text += "\n\nLook at line \(line) of the code you wrote."
         }

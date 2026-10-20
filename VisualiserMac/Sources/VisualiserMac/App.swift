@@ -363,7 +363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                              ("custom-mode", AnyView(CustomVibscapeView())),
                              ("custom-mode-write", AnyView(CustomVibscapeView(initialStep: .write))),
                              ("custom-mode-ai", AnyView(CustomVibscapeView(initialStep: .ai, scrollable: false))),
-                             ("custom-mode-edit", AnyView(CustomVibscapeView(editing: sampleVibscape)))] {
+                             ("custom-mode-edit", AnyView(CustomVibscapeView(editing: sampleVibscape))),
+                             ("custom-mode-mcp", AnyView(CustomVibscapeView(initialStep: .mcp, scrollable: false)))] {
             let renderer = ImageRenderer(content: view
                 .environmentObject(app)
                 .frame(width: 720, height: name.hasPrefix("all-modes") ? 1400 : 560)

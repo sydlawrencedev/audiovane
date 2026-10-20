@@ -554,7 +554,7 @@ private struct VibscapeCard: View {
         }
         .buttonStyle(.plain)
         .pointingHand()
-        .help(entry.isNewVibscapeCard ? "Make a mode of your own" : "Switch to \(entry.title)")
+        .help(entry.isNewVibscapeCard ? "Make a vibscape of your own" : "Switch to \(entry.title)")
     }
 }
 
