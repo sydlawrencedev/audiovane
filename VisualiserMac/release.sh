@@ -2,7 +2,8 @@
 # Publishes a release of Vibresia:
 #   1. checks the landing page lists every visualiser mode,
 #   2. checks the landing page and the app report to the same PostHog project,
-#   3. checks no Discord webhook URL has been committed,
+#   3. checks no Discord webhook URL has been committed, and that the share
+#      page's copy of the shaders hasn't drifted from the app's,
 #   4. builds the release app and zips it as Vibresia.zip,
 #   5. creates GitHub release v$VERSION with the zip attached.
 # The installer and the in-app update checker always fetch the latest
@@ -25,6 +26,9 @@ TAG="v$VERSION"
 ../scripts/check-vibscapes.sh
 ../scripts/check-posthog.sh
 ../scripts/check-no-webhook-leak.sh
+# The share page embeds a copy of the app's shaders, because a browser can't
+# reach the app to ask for them. That copy has to move with the original.
+../scripts/check-preview-glsl.py
 
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
     echo "Release $TAG already exists — build again to get a new one." >&2

@@ -55,6 +55,41 @@ float hash21(vec2 p) {
     p += dot(p, p + 45.32);
     return fract(p.x * p.y);
 }
+
+// Smooth noise, and four octaves of it. This is what anything that looks
+// like a cloud, a flame or smoke is built from — and it wasn't here, so
+// everyone was writing their own, or reaching for sin() and wondering why
+// the result looked like a gradient.
+//
+// The trap: scale matters more than anything else. Sampled at about the
+// screen's scale these are too smooth to see — across a shape a few tenths
+// wide you'd be looking at a single slow ramp. Multiply by something like
+// 7.0 so several cells land inside the shape.
+float vnoise(vec2 p) {
+    vec2 i = floor(p), f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);              // smooth, so no grid
+    return mix(mix(hash21(i),                hash21(i + vec2(1.0, 0.0)), f.x),
+               mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), f.x),
+               f.y);
+}
+
+// Roughly 0..1, averaging a shade under half. Layering two of these and
+// pushing the result is usually what turns noise into something with
+// structure rather than grain.
+//
+// The rotation matrix is written out rather than using rot(), which is
+// declared further down: GLSL has no forward declarations, and this block
+// sits above it.
+float fbm(vec2 p) {
+    float sum = 0.0, amp = 0.5;
+    for (int i = 0; i < 4; i++) {
+        sum += amp * vnoise(p);
+        // Rotate as well as scale, so the octaves don't stack into a grid.
+        p = mat2(0.8, -0.6, 0.6, 0.8) * p * 2.03 + vec2(1.7, 9.2);
+        amp *= 0.5;
+    }
+    return sum;
+}
 float bandAt(float x) { return uBands[int(clamp(x, 0.0, 0.999) * 96.0)]; }
 mat2 rot(float a) { float c = cos(a), s = sin(a); return mat2(c, -s, s, c); }
 
