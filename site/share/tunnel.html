@@ -39,13 +39,22 @@
   </a>
 
   <section class="hero">
-    <p class="eyebrow">VIBESCAPE 06 · KEY 6</p>
     <h1>Tunnel.</h1>
     <p class="lede">Fly through rings of spectrum bars that pulse with the bass.</p>
   </section>
 
   <div class="shot">
-    <img src="/share/tunnel.jpg" alt="Tunnel, a Vibresia vibescape by Minith Labs" width="1200" height="630">
+    <!-- Moving rather than still: the app renders these, so the clip is the
+         vibscape rather than a picture of it. The poster is the same render as
+         a JPEG, so there is a frame there from the first paint and for anyone
+         whose browser won't play it — and it stays the og:image, because a
+         crawler that fetches a link has no video and no JavaScript. -->
+    <video autoplay muted loop playsinline preload="metadata"
+           poster="/share/tunnel.jpg"
+           width="1200" height="630"
+           aria-label="Tunnel, a Vibresia vibescape by Minith Labs">
+      <source src="/share/tunnel.mp4" type="video/mp4">
+    </video>
   </div>
 
   <div class="cta-row">

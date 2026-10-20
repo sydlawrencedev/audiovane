@@ -50,6 +50,7 @@
 
 <script src="/analytics.js" defer></script>
 <script src="/share/share-page.js"></script>
+<script src="/share/preview.js"></script>
 <script>
   /* Render the page once we know the URL. Two cases:
    *
@@ -93,6 +94,10 @@
     if (payload.author) worldOwner.textContent = possessive(payload.author) + " world.";
 
     content.innerHTML =
+      '<div class="shot" id="shot" hidden>' +
+        '<canvas id="shot-canvas" width="1200" height="630" ' +
+          'role="img" aria-label="This vibescape, drawn"></canvas>' +
+      '</div>' +
       '<div class="cta-row">' +
         '<a class="btn primary" href="#" data-share-open data-share-custom>Open in Vibresia</a>' +
         '<a class="btn coffee" href="/download?src=share_fallback" data-share-download hidden>Download for Mac</a>' +
@@ -110,7 +115,38 @@
 
     content.querySelector("code").textContent = payload.shader;
     wireCopyButton(content.querySelector("[data-copy-shader]"));
+    drawShot(payload);
   })();
+
+  /* Draws the vibescape into the picture slot.
+   *
+   * The still is drawn first either way — that's the image the page has even
+   * if it never moves, and the one that ends up in a screenshot. Animation is
+   * then added on top, unless the visitor has asked for reduced motion.
+   *
+   * Best effort by design. No WebGL, a shader the browser's driver dislikes, a
+   * canvas the browser refuses to give us — any of those and the picture is
+   * simply absent, because someone opened a link to see a vibescape and not to
+   * debug one. The link, the name and the source are all still there.
+   */
+  function drawShot(payload) {
+    var wrap = document.getElementById("shot");
+    var canvas = document.getElementById("shot-canvas");
+    if (!wrap || !canvas || !window.vibresiaPreview) return;
+    // The canvas carries the vibscape's name, which is from the URL.
+    canvas.setAttribute("aria-label", "“" + payload.name + "”, drawn by Vibresia");
+
+    var reduce = window.matchMedia
+      && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var result;
+    try {
+      result = window.vibresiaPreview.animate(payload.shader, canvas,
+                                             { animate: !reduce });
+    } catch (e) {
+      return; // a thrown preview is still just a missing picture
+    }
+    if (result && result.ok) wrap.hidden = false;
+  }
 
   /* Copies the shader, and says so.
    *
