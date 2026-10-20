@@ -105,10 +105,11 @@
     }
     return fetch(ENDPOINT, {
       method: "POST",
-      // text/plain rather than application/json: PostHog reads the raw body
-      // either way, and a "simple" request skips the CORS preflight round trip
-      // on every flush. One less thing to break behind a CDN.
-      headers: { "Content-Type": "text/plain;charset=UTF-8" },
+      // application/json because that is the only body shape /batch/ reads as
+      // a batch. text/plain was here to skip the CORS preflight, and PostHog
+      // does answer that preflight (allow-origin echoes, allow-headers
+      // content-type), so the saving was small next to sending nothing.
+      headers: { "Content-Type": "application/json" },
       body: body,
       keepalive: !!keepalive,
       mode: "cors"
@@ -120,7 +121,12 @@
     if (!queue.length) return;
     var batch = queue;
     queue = [];
-    send({ api_key: KEY, batch: batch }, keepalive);
+    // `/batch/` takes a JSON array of events, one per element. It used to be
+    // sent as a wrapper object — {"api_key": …, "batch": [ … ]} — which
+    // PostHog accepts and answers with {"status":"Ok"} while recording
+    // nothing, because the object it looks at has no `event` field. That's the
+    // worst kind of failure to debug: a 200 forever and an empty project.
+    send(batch, keepalive);
   }
 
   function schedule() {

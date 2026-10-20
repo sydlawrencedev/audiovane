@@ -252,7 +252,11 @@ actor Analytics {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.timeoutInterval = 15
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["api_key": apiKey, "batch": batch])
+        // The body is the array of events itself. Wrapping it as
+        // `["api_key": …, "batch": batch]` posts an object with no `event`
+        // field, which PostHog answers with `{"status":"Ok"}` while recording
+        // nothing — so the 200 below was never evidence that anything arrived.
+        request.httpBody = try? JSONSerialization.data(withJSONObject: batch)
 
         do {
             let (_, response) = try await URLSession.shared.data(for: request)
