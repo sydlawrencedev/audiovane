@@ -102,8 +102,8 @@ final class MCPServer {
     /// Clients show this to the user, so it says the useful thing: what this
     /// is for, and that a vibscape is a shader.
     private static let instructions = """
-    This server writes vibscapes for Vibresia, a macOS music visualiser. A \
-    vibscape is a fragment shader: a single function
+    This server writes vibscapes for Vibresia, a macOS app for visual worlds \
+    that move with your music. A vibscape is a fragment shader: a single function
 
         vec3 render(vec2 p, float t)
 

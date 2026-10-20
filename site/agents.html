@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe with your AI — Vibresia</title>
+<meta name="description" content="Point any AI assistant at Vibresia and it can write a vibscape, check it compiles, look at the result and try again. Setup for Claude Code, Claude Desktop, Cursor, Windsurf, Zed, VS Code, Continue, Aider, Gemini CLI and anything else that speaks MCP.">
+<link rel="canonical" href="https://vibresia.com/agents">
+<meta name="robots" content="index, follow, max-image-preview:large">
+<meta name="theme-color" content="#06010d">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Vibresia">
+<meta property="og:url" content="https://vibresia.com/agents">
+<meta property="og:title" content="Vibe with your AI — Vibresia">
+<meta property="og:description" content="Point any AI assistant at Vibresia and it can write a vibscape, check it compiles, look at the result and try again.">
+<meta property="og:image" content="https://vibresia.com/media/share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Vibe with your AI — Vibresia">
+<meta name="twitter:description" content="Point any AI assistant at Vibresia and it can write a vibscape, check it compiles, look at the result and try again.">
+<meta name="twitter:image" content="https://vibresia.com/media/share.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/media/share.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #06010d; --panel: #0d0519; --line: #241038; --text: #efe7f5;
+    --muted: #a08fb4; --magenta: #ff2bd6; --cyan: #2bf2ff; --gold: #ffc35a;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 400 16px/1.65 "Space Grotesk", system-ui, sans-serif; }
+  a { color: var(--cyan); }
+  code { font-family: "JetBrains Mono", ui-monospace, monospace; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+  header { display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    padding: 22px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 3px;
+    font-size: 15px; color: var(--text); text-decoration: none; }
+  .brand svg { width: 26px; height: 26px; }
+  nav { display: flex; gap: 22px; flex-wrap: wrap; }
+  nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  nav a:hover { color: var(--text); }
+
+  main { padding: 48px 0 40px; }
+  .eyebrow { font: 700 12px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 3.4px;
+    text-transform: uppercase; color: var(--magenta); margin: 0 0 16px; }
+  h1 { font-size: clamp(34px, 5vw, 56px); line-height: 1.05; margin: 0 0 18px; letter-spacing: -0.02em; }
+  h1 span { background: linear-gradient(90deg, var(--magenta), var(--cyan));
+    -webkit-background-clip: text; background-clip: text; color: transparent; }
+  h2 { font-size: clamp(24px, 3vw, 32px); margin: 46px 0 12px; letter-spacing: -0.01em; }
+  h3 { font-size: 18px; margin: 0 0 6px; }
+  p { margin: 0 0 14px; }
+  .lede { color: var(--muted); font-size: 18px; max-width: 720px; }
+  .small { color: var(--muted); font-size: 14px; margin-top: 12px; }
+  section > p.sub { color: var(--muted); margin: 0 0 26px; }
+
+  .cmd { display: flex; align-items: center; gap: 10px; background: #000; border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px 14px; margin: 8px 0; overflow-x: auto; }
+  .cmd code { white-space: nowrap; color: var(--cyan); font-size: 14px; flex: 1; }
+  .cmd button { flex: none; background: var(--line); color: var(--text); border: 0; border-radius: 8px;
+    padding: 6px 10px; font: 600 12px "JetBrains Mono", monospace; cursor: pointer; }
+  .cmd button:hover { background: var(--magenta); color: #fff; }
+
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px; }
+  .fact { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .fact p { margin: 0; color: var(--muted); font-size: 15px; }
+  .fact code { color: var(--cyan); font-size: 14px; }
+
+  .setup { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 4px 22px 20px; }
+  .setup h3 { margin: 22px 0 4px; }
+  .setup p { color: var(--muted); font-size: 15px; margin-bottom: 8px; }
+  .setup pre { background: #000; border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px;
+    overflow-x: auto; font-size: 13.5px; line-height: 1.6; margin: 0 0 6px; }
+  .setup pre code { color: var(--cyan); }
+  .setup .note { color: var(--muted); font-size: 14px; }
+
+  table { width: 100%; border-collapse: collapse; margin: 6px 0 4px; }
+  th, td { text-align: left; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 15px; vertical-align: top; }
+  th { color: var(--muted); font: 600 12px "JetBrains Mono", monospace; letter-spacing: 1px; text-transform: uppercase; }
+  td code { color: var(--cyan); font-size: 13.5px; }
+
+  footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 26px 0 40px; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      VIBRESIA
+    </a>
+    <nav>
+      <a href="/#vibscapes">Vibscapes</a>
+      <a href="/#make">Make your own</a>
+      <a href="/#install">Install</a>
+      <a href="/">Home</a>
+    </nav>
+  </header>
+
+  <main>
+    <p class="eyebrow">Vibe with your AI</p>
+    <h1>Let your agent<br><span>build the visuals.</span></h1>
+    <p class="lede">Vibresia comes with a small local server that AI assistants can talk to. Point an agent at it and it can write a vibscape, check that it compiles, look at what it drew and try again — without you copying a line of code back and forth.</p>
+
+    <h2>Set it up</h2>
+    <p class="sub">It works with any assistant that speaks <a href="https://modelcontextprotocol.io">MCP</a>. Pick yours below.</p>
+
+    <div class="setup">
+      <h3>The one thing to know</h3>
+      <p>Vibresia is the server. The command names the app on <em>your</em> Mac, so if you moved it, use where it actually is — usually <code>/Applications/Vibresia.app</code>.</p>
+      <div class="cmd"><code id="cmd">claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy>Copy</button></div>
+      <p class="note">That's the server. The other clients want the same two things: the path to that binary, and <code>--mcp</code> as its argument.</p>
+    </div>
+
+    <h2>Per assistant</h2>
+    <div class="setup">
+      <table>
+        <tr><th>Assistant</th><th>How to add it</th></tr>
+        <tr>
+          <td><b>Claude Code</b></td>
+          <td><code>claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><br><span class="note">Or put the same thing in <code>.mcp.json</code> in your project.</span></td>
+        </tr>
+        <tr>
+          <td><b>Claude Desktop</b></td>
+          <td>Settings → Developer → Edit Config, and add:<br><pre><code>{
+  "mcpServers": {
+    "vibresia": {
+      "command": "/Applications/Vibresia.app/Contents/MacOS/Vibresia",
+      "args": ["--mcp"]
+    }
+  }
+}</code></pre></td>
+        </tr>
+        <tr>
+          <td><b>Cursor</b></td>
+          <td>Cursor → Settings → MCP & Integrations → Add Server, or the same JSON in <code>.cursor/mcp.json</code>.</td>
+        </tr>
+        <tr>
+          <td><b>Windsurf</b></td>
+          <td>Windsurf → Settings → Cascade → MCP Servers, and add the same JSON.</td>
+        </tr>
+        <tr>
+          <td><b>Zed</b></td>
+          <td>Add to <code>~/.config/zed/settings.json</code>:<br><pre><code>{
+  "context_servers": {
+    "vibresia": {
+      "command": "/Applications/Vibresia.app/Contents/MacOS/Vibresia",
+      "args": ["--mcp"]
+    }
+  }
+}</code></pre></td>
+        </tr>
+        <tr>
+          <td><b>VS Code</b></td>
+          <td>Add to <code>.vscode/mcp.json</code> in your project:<br><pre><code>{
+  "servers": {
+    "vibresia": {
+      "type": "stdio",
+      "command": "/Applications/Vibresia.app/Contents/MacOS/Vibresia",
+      "args": ["--mcp"]
+    }
+  }
+}</code></pre></td>
+        </tr>
+        <tr>
+          <td><b>Continue</b></td>
+          <td>Continue → Config → Add a model → <b>Use an MCP server</b>, with the same JSON.</td>
+        </tr>
+        <tr>
+          <td><b>Aider</b></td>
+          <td>Add to <code>~/.aider.conf.yml</code>:<br><pre><code>enable-mcp-server: true
+mcp-server-config:
+  vibresia:
+    command: /Applications/Vibresia.app/Contents/MacOS/Vibresia
+    args: ["--mcp"]
+    env: {}</code></pre></td>
+        </tr>
+        <tr>
+          <td><b>Gemini CLI</b></td>
+          <td>Add to <code>~/.gemini/settings.json</code>:<br><pre><code>{
+  "mcpServers": {
+    "vibresia": {
+      "command": "/Applications/Vibresia.app/Contents/MacOS/Vibresia",
+      "args": ["--mcp"]
+    }
+  }
+}</code></pre></td>
+        </tr>
+        <tr>
+          <td><b>Anything else</b></td>
+          <td>Any client that launches a local program over stdio will do. Give it the path to the binary, with <code>--mcp</code> as its argument.</td>
+        </tr>
+      </table>
+    </div>
+
+    <h2>What the agent can do</h2>
+    <div class="facts">
+      <div class="fact"><h3>List and read</h3><p>See every vibscape there is, and the full source of yours.</p></div>
+      <div class="fact"><h3>Test</h3><p>Compile a shader and draw it. The agent gets the picture back, so it can see what it made and judge it.</p></div>
+      <div class="fact"><h3>Create and edit</h3><p>Write a new vibscape, or change one that already exists. Nothing is saved unless it compiles, so the folder never fills with broken worlds.</p></div>
+      <div class="fact"><h3>Delete</h3><p>Remove one you don't want any more.</p></div>
+    </div>
+
+    <h2>What a vibscape is</h2>
+    <p>One function, returning a colour. The music arrives as uniforms, so a vibscape draws with the track rather than redrawing it every frame.</p>
+    <div class="setup">
+      <h3>The shape</h3>
+      <pre><code>vec3 render(vec2 p, float t)
+{
+    // p is the position on screen, centred on 0,0 and about -0.5 to 0.5
+    // vertically. t is time in seconds.
+    float d = length(p);
+    float ring = smoothstep(0.05, 0.0, abs(d - 0.25));
+    vec3 colour = vec3(1.0, 0.3, 0.8) * ring;
+    colour += vec3(0.2, 0.9, 1.0) * uTreble;   // sparkles on the highs
+    return colour * uActive;                   // fades out in silence
+}</code></pre>
+      <h3>What it can use</h3>
+      <p>The music, as numbers: <code>uBass</code>, <code>uMid</code>, <code>uTreble</code>, <code>uLevel</code>, <code>uBeat</code>, <code>uBeatStrength</code>, <code>uBands[96]</code> (the whole spectrum), <code>uBeats</code> (a beat counter), <code>uActive</code> (how much is playing), <code>uTime</code>, <code>uClock</code>. Plus helpers for shapes, colour and noise.</p>
+      <p class="note">Your agent can ask for the full list — it doesn't have to guess.</p>
+    </div>
+
+    <h2>Without an agent</h2>
+    <p>Prefer to write it yourself? In the app, <b>View All → + Custom Vibscape</b> takes the same route: paste the code, press <b>Test</b>, and you'll see the picture before you keep it.</p>
+  </main>
+
+  <footer>
+    <a href="/">Vibresia</a> — your music, your world. Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a>
+  </footer>
+</div>
+<script>
+  document.querySelectorAll("[data-copy]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var text = b.parentElement.querySelector("code").textContent;
+      navigator.clipboard.writeText(text).then(function () {
+        b.textContent = "Copied";
+        setTimeout(function () { b.textContent = "Copy"; }, 1500);
+      });
+    });
+  });
+</script>
+</body>
+</html>

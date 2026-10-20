@@ -61,7 +61,7 @@ struct VibscapePicker: View {
         ))
         items.append(DropdownEntry(
             value: .builtin(.autoScan),
-            title: "+ CUSTOM MODE",
+            title: "+ CUSTOM VIBSCAPE",
             glyph: "+",
             action: {
                 app.openDropdown = nil

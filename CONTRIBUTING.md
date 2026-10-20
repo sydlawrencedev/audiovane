@@ -1,6 +1,6 @@
 # Contributing to Vibresia
 
-Thanks for helping! Bug reports, ideas and pull requests are all welcome, and **new visualisations are especially welcome**.
+Thanks for helping! Bug reports, ideas and pull requests are all welcome, and **new vibscapes are especially welcome**.
 
 - **Bugs and ideas:** [open an issue](https://github.com/sydlawrencedev/vibresia/issues). For bugs, include your macOS version, the vibscape you were in and what was playing.
 - **Pull requests:** fork, branch, and open a PR against `main`. Small, focused PRs are easiest to review. Screenshots or a short screen recording help a lot for anything visual.
@@ -17,7 +17,7 @@ open build/Vibresia.app
 
 Pick **Use Demo Tone** on the intro screen to test without sharing system audio.
 
-## Adding a visualisation
+## Adding a vibscape
 
 Most vibscapes are a single full-screen fragment shader, which is the quickest way in.
 

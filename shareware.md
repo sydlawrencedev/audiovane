@@ -21,7 +21,7 @@ AI is lowering the cost of creating software. We believe this opens the door to 
 
 ## What this means for Vibresia
 
-Vibresia is a music visualiser for Mac, created by Minith Labs.
+Vibresia is a Mac app for visual worlds that move with your music, created by Minith Labs.
 
 Its promise is:
 

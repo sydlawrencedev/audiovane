@@ -1,6 +1,6 @@
 # VIBRESIA
 
-A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
+A native macOS app for visual worlds that move with your music, in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
 The vibscapes, plus Auto Scan:
 

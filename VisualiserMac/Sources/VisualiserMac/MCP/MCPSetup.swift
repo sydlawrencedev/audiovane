@@ -17,6 +17,11 @@ enum MCPSetup {
         "claude mcp add vibresia -- \"\(serverPath)\" --mcp"
     }
 
+    /// Where the setup instructions live — a page of their own, because
+    /// there's more than one kind of agent to set up and the instructions
+    /// differ for each.
+    static let pageURL = "https://vibresia.com/agents"
+
     /// The same thing for clients that read a JSON file rather than a
     /// command line.
     static var jsonEntry: String {

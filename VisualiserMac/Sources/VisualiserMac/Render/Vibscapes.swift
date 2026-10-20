@@ -350,8 +350,9 @@ enum CustomVibscapeGuide {
 
     /// Ready-to-paste prompt for someone using an AI coding assistant.
     static let agentPrompt = """
-    Write a music visualiser mode for Vibresia, a macOS app. The output is \
-    one GLSL function, pasted into the app and compiled as a fragment shader.
+    Write a vibscape for Vibresia, a macOS app for visual worlds that move \
+    with music. The output is one GLSL function, pasted into the app and \
+    compiled as a fragment shader.
 
     Your entire answer must be a single GLSL code block containing exactly:
 

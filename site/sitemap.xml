@@ -1,15 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- Single-page site. Kept deliberately small: only URLs that are meant to be
-     in search results belong here, and that is the homepage and the two
-     plain-text pages an assistant reads (install.md, llms.txt). Submit to
-     Google Search Console at
+<!-- Small on purpose: only URLs that are meant to be in search results
+     belong here, and that is the homepage, the page about setting up an AI
+     assistant, and the two plain-text pages an assistant reads (install.md,
+     llms.txt). Submit to Google Search Console at
      https://search.google.com/search-console/sitemaps/submit
      after each `npx wrangler deploy`. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://vibresia.com/</loc>
-    <lastmod>2026-10-19</lastmod>
+    <lastmod>2026-10-20</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
+  </url>
+  <url>
+    <loc>https://vibresia.com/agents</loc>
+    <lastmod>2026-10-20</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
   </url>
 </urlset>

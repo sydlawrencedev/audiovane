@@ -74,7 +74,7 @@ struct CustomVibscapeView: View {
                 Text("Make your own vibscape")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("A vibscape is a small piece of code that draws to the music. Pick whichever way suits you.")
+                Text("A world of your own, drawn by your music. Write it yourself, or let an AI write it for you.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(white: 0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -84,6 +84,16 @@ struct CustomVibscapeView: View {
             .padding(.bottom, 18)
 
             VStack(spacing: 10) {
+                RouteButton(
+                    glyph: "cpu",
+                    title: "Vibe with your AI of choice",
+                    detail: "Point any AI assistant at Vibresia and it can write a vibscape, check it works and show you the result."
+                ) {
+                    // The page works for every agent, not just one.
+                    if let url = URL(string: MCPSetup.pageURL) {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
                 RouteButton(
                     glyph: "wand.and.stars",
                     title: "Ask an AI to write it",
@@ -107,48 +117,6 @@ struct CustomVibscapeView: View {
                 }
             }
             .padding(.horizontal, 22)
-
-            // The agent route needs no copying and pasting at all, so it's
-            // mentioned here as well as on the "ask an AI" page.
-            VStack(alignment: .leading, spacing: 5) {
-                Text("Have an agent write it for you?")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(Color(white: 0.8))
-                Text("""
-                Vibresia has a local server that agents can talk to. Give it this command and the \
-                agent can write a vibscape, check it compiles, look at the result and try again — all \
-                without you copying a thing.
-                """)
-                .font(.system(size: 10.5))
-                .foregroundStyle(Color(white: 0.6))
-                .fixedSize(horizontal: false, vertical: true)
-                HStack {
-                    Text(MCPSetup.command)
-                        .font(.system(size: 9.5, design: .monospaced))
-                        .foregroundStyle(Color(white: 0.85))
-                        .textSelection(.enabled)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                    Button {
-                        NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(MCPSetup.command, forType: .string)
-                    } label: {
-                        Image(systemName: "doc.on.doc")
-                            .font(.system(size: 10))
-                            .foregroundStyle(Color(white: 0.85))
-                    }
-                    .buttonStyle(.plain)
-                    .help("Copy the setup command")
-                }
-                .padding(9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color.white.opacity(0.05))
-                )
-            }
-            .padding(.horizontal, 22)
-            .padding(.top, 14)
 
             Spacer()
 
@@ -545,6 +513,8 @@ struct CustomVibscapeView: View {
 
                     // The better way round: an agent that can call Vibresia
                     // directly doesn't have to be handed the code by hand.
+                    // The instructions live on a page of their own, because
+                    // there's more than one kind of agent to set up.
                     VStack(alignment: .leading, spacing: 6) {
                         HStack {
                             Text("Or let the agent drive Vibresia itself")
@@ -552,33 +522,24 @@ struct CustomVibscapeView: View {
                                 .foregroundStyle(.white)
                             Spacer()
                             Button {
-                                NSPasteboard.general.clearContents()
-                                NSPasteboard.general.setString(MCPSetup.command, forType: .string)
+                                if let url = URL(string: MCPSetup.pageURL) {
+                                    NSWorkspace.shared.open(url)
+                                }
                             } label: {
-                                Label("Copy the setup command", systemImage: "doc.on.doc")
+                                Label("How to set it up", systemImage: "arrow.up.right.square")
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundStyle(Color(white: 0.85))
                             }
                             .buttonStyle(.plain)
                         }
                         Text("""
-                        Vibresia has a local server that agents can talk to, so they can write a mode, \
-                        check it compiles, look at the result and fix it — without you copying any code.
-                        Add it to your agent with:
+                        Vibresia has a local server that agents can talk to, so they can write a \
+                        vibscape, check it works, look at the result and fix it — without you \
+                        copying any code. It works with any agent that speaks MCP.
                         """)
                         .font(.system(size: 11))
                         .foregroundStyle(Color(white: 0.75))
                         .fixedSize(horizontal: false, vertical: true)
-                        Text(MCPSetup.command)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(Color(white: 0.9))
-                            .textSelection(.enabled)
-                            .padding(9)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .background(
-                                RoundedRectangle(cornerRadius: 7)
-                                    .fill(Color.black.opacity(0.35))
-                            )
                     }
 
 

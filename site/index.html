@@ -3,23 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vibresia — a music visualiser for your Mac</title>
-<meta name="description" content="Vibresia turns whatever your Mac is playing into live scenes. Proudly shareware, free to use and yours to share.">
+<title>Vibresia — your music, your world</title>
+<meta name="description" content="Create, explore and share visual worlds that move with your music. Vibresia turns whatever your Mac is playing into live scenes — or you write your own. Proudly shareware, free to use and yours to share.">
 <link rel="canonical" href="https://vibresia.com/">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <meta name="theme-color" content="#06010d">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Vibresia">
 <meta property="og:url" content="https://vibresia.com/">
-<meta property="og:title" content="Vibresia — a music visualiser for your Mac">
-<meta property="og:description" content="Live scenes driven by whatever your Mac is playing. Proudly shareware, free to use and yours to share.">
+<meta property="og:title" content="Vibresia — your music, your world">
+<meta property="og:description" content="Visual worlds that move with your music — watch them, or write your own. Proudly shareware, free to use and yours to share.">
 <meta property="og:image" content="https://vibresia.com/media/share.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="Vibresia turning a song into neon spectrum bars">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Vibresia — a music visualiser for your Mac">
-<meta name="twitter:description" content="Live scenes driven by whatever your Mac is playing. Proudly shareware, free to use and yours to share.">
+<meta name="twitter:title" content="Vibresia — your music, your world">
+<meta name="twitter:description" content="Visual worlds that move with your music — watch them, or write your own. Proudly shareware, free to use and yours to share.">
 <meta name="twitter:image" content="https://vibresia.com/media/share.jpg">
 <!-- PostHog project key: public by design, write-only (the same key the Mac
      app carries in its Info.plist). Keep in sync with VisualiserMac/.env —
@@ -48,10 +48,10 @@
       "@id": "https://vibresia.com/#app",
       "name": "Vibresia",
       "alternateName": "Vibresia, AudioVane",
-      "description": "A music visualiser for Mac. Turns whatever is playing into live scenes, from neon waveforms to a pixel-art band. Free to use and yours to share.",
+      "description": "Visual worlds that move with your music. Watch them, or write your own and share it. Free to use and yours to share.",
       "url": "https://vibresia.com/",
       "applicationCategory": "MultimediaApplication",
-      "applicationSubCategory": "Music visualisers",
+      "applicationSubCategory": "Music visual worlds",
       "operatingSystem": "macOS 14.2 or later, Apple silicon",
       "softwareVersion": "0.10.2081",
       "downloadUrl": "https://github.com/sydlawrencedev/vibresia/releases/latest/download/Vibresia.zip",
@@ -188,6 +188,7 @@
     </a>
     <nav>
       <a href="#vibscapes">Vibscapes</a>
+      <a href="#make">Make your own</a>
       <a href="#install">Install</a>
       <a href="#changelog">Changelog</a>
       <a href="#shareware">Shareware</a>
@@ -199,7 +200,7 @@
     <p class="eyebrow">Meet Vibresia</p>
     <h1>Your music. <span>Your world.</span></h1>
     <p class="lede">Create, explore and share your own visual experiences. Every track has a world waiting to be discovered.</p>
-    <p class="small">Vibresia is a music visualiser for your Mac. It listens to whatever's playing (Spotify, Apple Music, YouTube, anything) and turns it into live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.</p>
+    <p class="small">Vibresia listens to whatever's playing — Spotify, Apple Music, YouTube, anything — and turns it into live scenes that move with the track. Or write a world of your own and share it with everyone else.</p>
     <p class="proclaim">Proudly shareware: free to use, and yours to share.</p>
     <div class="ctas">
       <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
@@ -250,15 +251,27 @@
       <article class="vibscape" data-vibscape="band"><img src="media/modes/band.jpg" alt="The Band: a pixel-art band walking on stage when their instrument is heard" loading="lazy"><div class="body"><div class="num">18 · KEY .</div><h3>The Band</h3><p>A pixel-art band in ten genre sets, from a concert hall to a jazz club. Musicians walk on when Vibresia hears their instrument, and the singer matches the voice.</p></div></article>
       <article class="vibscape scan"><div class="body"><div class="num">KEY =</div><h3>Auto Scan</h3><p>Cycles through every vibscape, a few bars at a time.</p></div></article>
     </div>
+    <p class="small">These ship with the app. Yours sit alongside them, in the same list, and can be shared the same way.</p>
+  </section>
+
+  <section id="make">
+    <h2>Make your own</h2>
+    <p class="sub">A vibscape is a world of your own that moves with the music — and you don't have to write it yourself.</p>
+    <div class="facts">
+      <div class="fact"><h3>Vibe with your AI</h3><p>Point any AI assistant at Vibresia and it can write a vibscape, check it compiles, look at the result and try again — all on its own. No copying code back and forth. <a href="/agents">Set it up in a minute</a>.</p></div>
+      <div class="fact"><h3>Or write it yourself</h3><p>A vibscape is a single function: <code>vec3 render(vec2 p, float t)</code>, returning a colour. The music arrives as uniforms — bass, mids, treble, the beat, the whole spectrum — so you draw with it rather than redraw it every frame.</p></div>
+      <div class="fact"><h3>See it before you keep it</h3><p>Nothing is saved until it works. Vibresia compiles what you wrote, draws it, and shows you the picture. If something's wrong, it says so in words rather than in a compiler log.</p></div>
+      <div class="fact"><h3>Share it</h3><p>Vibscapes are small text files. Send one to a friend, publish one, keep a collection. Yours are yours — use them wherever you like.</p></div>
+    </div>
   </section>
 
   <section>
     <h2>How it works</h2>
     <div class="facts">
       <div class="fact"><h3>Hears everything</h3><p>Uses macOS system-audio capture, so it reacts to any app. No plug-ins, no browser tab, no microphone needed.</p></div>
+      <div class="fact"><h3>Knows the song</h3><p>It finds the tempo, the beats and the instruments, and notices track changes in Apple Music and Spotify. That's what your vibscape draws with.</p></div>
+      <div class="fact"><h3>Moves on the beat</h3><p>Auto Scan hands over a few bars at a time, so the scene changes where the music does — on a beat, not on a timer.</p></div>
       <div class="fact"><h3>Stays on your Mac</h3><p>Audio is analysed on-device and never recorded or uploaded; instrument detection uses Apple's built-in sound classifier. Optional anonymous usage stats (which vibscapes get used, and crash reports if it goes wrong) never include track names, and you can switch them off in the app. This website counts visits and clicks anonymously, with a one-click opt-out in the footer.</p></div>
-      <div class="fact"><h3>Knows the song</h3><p>It finds the tempo, the beats and the instruments, and notices track changes in Apple Music and Spotify.</p></div>
-      <div class="fact"><h3>Keeps itself current</h3><p>Checks for a new version each time it opens, and installs it in one click.</p></div>
     </div>
   </section>
 
@@ -300,7 +313,7 @@
     <div class="shareware">
       <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click. Every vibscape you have now keeps working, and every one added later comes with the same download.</p></div>
       <div class="fact"><h3>Your audio stays on your Mac</h3><p>Audio never leaves your Mac. Usage stats are anonymous, and you can switch them off in the app.</p></div>
-      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone. The source is on GitHub under the MIT licence, so read it, fork it or send a patch. New visualisations are welcome, and most are a single shader.</p></div>
+      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone. The source is on GitHub under the MIT licence, so read it, fork it or send a patch. New vibscapes are welcome, and most are a single shader.</p></div>
     </div>
     <p class="small" style="text-align:center;max-width:560px;margin:22px auto 0">If it has made your music look better, <a href="https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01">buy me a coffee</a>. It pays for the next visualiser.</p>
   </section>
@@ -312,7 +325,7 @@
   </div>
 
   <footer>
-    Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md">Add a visualisation</a> · Machine vibscape after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
+    Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a> · <a href="https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md">Add a vibscape</a> · Machine vibscape after <a href="https://github.com/mrdoob/midemhackday">mrdoob &amp; plamere's MIDEM Hack Day</a><br>
     <span class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></span>
   </footer>
 </div>

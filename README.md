@@ -1,6 +1,6 @@
 # Vibresia
 
-A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
+A free macOS app for visual worlds that move with your music. It listens to whatever your Mac is playing and turns it into live scenes, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument — and you can write a world of your own, or have an AI assistant write it for you.
 
 **Website & install:** https://vibresia.com
 
@@ -12,7 +12,7 @@ Or ask an AI assistant: *"install vibresia from https://vibresia.com"*.
 
 If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01).
 
-Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/vibresia/issues). Pull requests are very welcome, especially new visualisations: see [CONTRIBUTING.md](CONTRIBUTING.md).
+Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/vibresia/issues). Pull requests are very welcome, especially new vibscapes: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Repository layout
 

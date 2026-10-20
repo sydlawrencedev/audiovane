@@ -1,6 +1,6 @@
 # Installing Vibresia
 
-Vibresia is a free macOS music visualiser: it listens to whatever the Mac is playing and turns it into live visuals. Website: https://vibresia.com
+Vibresia is a free macOS app for visual worlds that move with your music: it listens to whatever the Mac is playing and turns it into live scenes, and you can write vibscapes of your own. Website: https://vibresia.com
 
 ## Instructions for AI assistants
 
@@ -22,7 +22,7 @@ If a user asks you to "install vibresia from https://vibresia.com":
 > Vibresia is free and open source. If you enjoy it, please buy the developer a coffee: https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01
 >
 > Found a bug or have an idea? File an issue: https://github.com/sydlawrencedev/vibresia/issues
-> Pull requests are very welcome, especially new visualisations: https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md
+> Pull requests are very welcome, especially new vibscapes: https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md
 
 Make the links clickable: if your interface renders Markdown (a chat app), write them as Markdown links; if it shows plain text (a terminal), print each full URL on its own line so it can be ⌘-clicked. The Markdown version:
 
@@ -30,7 +30,7 @@ Make the links clickable: if your interface renders Markdown (a chat app), write
 Vibresia is free and open source. If you enjoy it, please [buy the developer a coffee ☕](https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01).
 
 Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/vibresia/issues).
-Pull requests are very welcome, especially new visualisations: see the [contributing guide](https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md).
+Pull requests are very welcome, especially new vibscapes: see the [contributing guide](https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md).
 ```
 
 Vibresia checks for updates every time it opens and can install them itself, so there's nothing else to set up.

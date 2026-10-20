@@ -23,7 +23,7 @@ struct IntroView: View {
                         )
                         .shadow(color: Color(red: 1, green: 0.17, blue: 0.84).opacity(0.3), radius: 30)
 
-                    Text("Pick any audio source. The visualizer reacts to bass, mids, treble, and beats in real time.")
+                    Text("Pick any audio source. Vibresia reacts to bass, mids, treble, and beats in real time.")
                         .font(.system(size: 15, weight: .regular))
                         .foregroundStyle(Color(white: 0.75))
                         .multilineTextAlignment(.center)
