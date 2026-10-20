@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 
-/// Watches for Apple Music and Spotify starting, and opens AudioVane when they
+/// Watches for Apple Music and Spotify starting, and opens Vibresia when they
 /// do. Runs as a launchd agent installed by `WatcherControl` (or by hand — see
 /// the README); the app itself can't do this job, because an app that isn't
 /// running has no way to hear about anything.
@@ -12,7 +12,7 @@ import Foundation
 /// can't catch the launch that would start the app.
 ///
 /// Usage:
-///     AudioVaneWatcher [--check] [path/to/AudioVane.app]
+///     VibresiaWatcher [--check] [path/to/Vibresia.app]
 ///
 /// `--check` prints what it would do and exits, which is how you tell a
 /// working agent from one whose binary path has gone stale.
@@ -31,10 +31,10 @@ func log(_ message: String) {
     NSLog("[watcher] %@", message)
 }
 
-/// Where AudioVane lives. Ask Launch Services first — it survives the app being
+/// Where Vibresia lives. Ask Launch Services first — it survives the app being
 /// moved or installed somewhere unusual — and fall back to the path the
 /// installer recorded in the plist.
-func locateAudioVane(fallback: String?) -> URL? {
+func locateVibresia(fallback: String?) -> URL? {
     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: targetBundleID) {
         return url
     }
@@ -44,17 +44,17 @@ func locateAudioVane(fallback: String?) -> URL? {
     return nil
 }
 
-func openAudioVane(fallback: String?) {
+func openVibresia(fallback: String?) {
     if NSRunningApplication.runningApplications(withBundleIdentifier: targetBundleID).isEmpty {
-        guard let app = locateAudioVane(fallback: fallback) else {
-            log("can't find AudioVane to open (bundle id \(targetBundleID))")
+        guard let app = locateVibresia(fallback: fallback) else {
+            log("can't find Vibresia to open (bundle id \(targetBundleID))")
             return
         }
         let config = NSWorkspace.OpenConfiguration()
         config.activates = true
         NSWorkspace.shared.openApplication(at: app, configuration: config) { _, error in
             if let error { log("open failed: \(error.localizedDescription)") }
-            else { log("opened AudioVane") }
+            else { log("opened Vibresia") }
         }
     }
 }
@@ -65,9 +65,9 @@ let arguments = Array(CommandLine.arguments.dropFirst())
 
 if arguments.contains("--check") {
     let running = NSRunningApplication.runningApplications(withBundleIdentifier: targetBundleID)
-    let app = locateAudioVane(fallback: arguments.first)
-    print("AudioVane at: \(app?.path ?? "not found")")
-    print("AudioVane running: \(running.isEmpty ? "no" : "yes")")
+    let app = locateVibresia(fallback: arguments.first)
+    print("Vibresia at: \(app?.path ?? "not found")")
+    print("Vibresia running: \(running.isEmpty ? "no" : "yes")")
     print("watching: \(watched.keys.sorted().joined(separator: ", "))")
     exit(0)
 }
@@ -92,8 +92,8 @@ center.addObserver(
     guard isWatched else { return }
 
     let name = app.localizedName ?? bundleID
-    log("\(name) launched — opening AudioVane")
-    openAudioVane(fallback: arguments.first)
+    log("\(name) launched — opening Vibresia")
+    openVibresia(fallback: arguments.first)
 }
 
 log("watching for Apple Music and Spotify (pid \(ProcessInfo.processInfo.processIdentifier))")

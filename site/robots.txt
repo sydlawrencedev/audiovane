@@ -6,4 +6,4 @@ Allow: /
 # instructions the page shows. Neither is listed in sitemap.xml — the sitemap
 # carries the one URL we actually want ranked.
 
-Sitemap: https://audiovane.minithlabs.com/sitemap.xml
+Sitemap: https://vibresia.com/sitemap.xml

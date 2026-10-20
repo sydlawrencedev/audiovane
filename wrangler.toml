@@ -1,11 +1,11 @@
-# Landing page for https://audiovane.minithlabs.com — static files in ./site,
-# served by a Cloudflare Worker on the custom domain.
+# Landing page for https://vibresia.com — static files in ./site, served by
+# a Cloudflare Worker on the custom domain.
 #   npx wrangler deploy
 #
 # The Worker exists for one route: /download, which redirects to the latest
 # GitHub release and tells Discord about it (see worker/index.js). Everything
 # else is served straight from ./site, including its _headers and _redirects.
-name = "audiovane"
+name = "vibresia"
 main = "worker/index.js"
 compatibility_date = "2026-10-01"
 
@@ -17,7 +17,21 @@ binding = "ASSETS"
 # Plain settings; the webhook URL is a secret, never a var:
 #   npx wrangler secret put DISCORD_WEBHOOK_URL
 DISCORD_NOTIFICATIONS_ENABLED = "true"
-DISCORD_BOT_USERNAME = "AudioVane"
+DISCORD_BOT_USERNAME = "Vibresia"
+
+# Both names are attached to this Worker. The old one isn't there to be
+# served — it's there so the Worker can answer it with a permanent redirect
+# to the new one. Without it, every old link and the old install command
+# would just fail.
+#
+# The old hostname's DNS still has to point here for that to work.
+[[routes]]
+pattern = "vibresia.com"
+custom_domain = true
+
+[[routes]]
+pattern = "www.vibresia.com"
+custom_domain = true
 
 [[routes]]
 pattern = "audiovane.minithlabs.com"

@@ -10,7 +10,7 @@ import Foundation
 ///
 ///   1. `install()` puts a handler on the fatal signals (and on
 ///      `NSSetUncaughtExceptionHandler`). When one fires it writes a report to
-///      `~/Library/Application Support/AudioVane/Crashes/` and then re-raises
+///      `~/Library/Application Support/Vibresia/Crashes/` and then re-raises
 ///      with the default disposition, so macOS still writes its own `.ips` into
 ///      `~/Library/Logs/DiagnosticReports` exactly as it would have. Ours has
 ///      the app state and breadcrumbs; the system's has registers and images.
@@ -37,10 +37,7 @@ final class CrashReporter {
     /// Where reports land. Also the folder "Reveal Crash Reports" opens, so it
     /// has to be somewhere a user can find without this file.
     static var reportsDirectory: URL {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-            ?? URL(fileURLWithPath: NSHomeDirectory())
-                .appendingPathComponent("Library/Application Support", isDirectory: true)
-        return base.appendingPathComponent("AudioVane/Crashes", isDirectory: true)
+        return SupportFolder.folder("Crashes")
     }
 
     private static let maxBreadcrumbs = 200
@@ -53,6 +50,7 @@ final class CrashReporter {
     /// minute talking to PostHog about it.
     private static let uploadsPerLaunch = 3
 
+    // Still filed under the old name, so reports already sent aren't sent again.
     private static let uploadedKey = "audiovane.crashes.uploaded"
 
     /// Guards `breadcrumbs` and `state`. Also reached from a signal handler, so
@@ -218,7 +216,7 @@ final class CrashReporter {
         return CrashReport(
             schema: CrashReport.currentSchema,
             id: UUID().uuidString,
-            appName: (info["CFBundleName"] as? String) ?? "AudioVane",
+            appName: (info["CFBundleName"] as? String) ?? "Vibresia",
             date: Date(),
             appVersion: info["CFBundleShortVersionString"] as? String ?? "0",
             appBuild: info["CFBundleVersion"] as? String ?? "0",
@@ -287,7 +285,7 @@ final class CrashReporter {
         let dir = Self.reportsDirectory
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         let url = dir.appendingPathComponent(
-            "AudioVane-\(CrashReport.stamp(report.date))-\(report.id.prefix(8)).crash.json")
+            "Vibresia-\(CrashReport.stamp(report.date))-\(report.id.prefix(8)).crash.json")
         try? data.write(to: url, options: .atomic)
         NSLog("[crash] report written to %@", url.path)
         pruneOldReports()
@@ -404,7 +402,7 @@ final class CrashReporter {
         let ask = "\n\n---\nWhat were you doing when it happened? What did you expect, and what happened instead?\n"
 
         if let (url, report) = latestReport() {
-            let subject = "AudioVane crash — \(report.reason)"
+            let subject = "Vibresia crash — \(report.reason)"
             let body = report.summary + ask
             // The compose service attaches the file and pastes the body, so the
             // user can see exactly what's being sent before sending it.
@@ -418,7 +416,7 @@ final class CrashReporter {
         }
 
         let snap = currentSnapshot()
-        openMail(subject: "AudioVane \(version) problem report",
+        openMail(subject: "Vibresia \(version) problem report",
                  body: CrashReport.stateOnlySummary(
                         appVersion: version,
                         osVersion: ProcessInfo.processInfo.operatingSystemVersionString,

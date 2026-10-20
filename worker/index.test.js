@@ -11,14 +11,14 @@ import assert from "node:assert/strict";
 import worker, { buildDownloadEmbed, buildErrorEmbed, isDiscordEnabled, resetRateLimiter } from "./index.js";
 
 const RELEASE_ZIP =
-  "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip";
+  "https://github.com/sydlawrencedev/vibresia/releases/latest/download/Vibresia.zip";
 
 function makeEnv(overrides = {}) {
   return {
     ASSETS: { fetch: async () => new Response("asset", { status: 200 }) },
     DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token",
     DISCORD_NOTIFICATIONS_ENABLED: "true",
-    DISCORD_BOT_USERNAME: "AudioVane",
+    DISCORD_BOT_USERNAME: "Vibresia",
     ...overrides,
   };
 }
@@ -53,8 +53,8 @@ const BROWSER_UA =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15";
 
 test("download redirects to the latest release", async () => {
-  const { response, posts } = await run("https://audiovane.minithlabs.com/download?src=hero&seen=0", {
-    headers: { "user-agent": BROWSER_UA, referer: "https://audiovane.minithlabs.com/" },
+  const { response, posts } = await run("https://vibresia.com/download?src=hero&seen=0", {
+    headers: { "user-agent": BROWSER_UA, referer: "https://vibresia.com/" },
   });
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), RELEASE_ZIP);
@@ -62,14 +62,14 @@ test("download redirects to the latest release", async () => {
 });
 
 test("the notification says who, where and whether it is a repeat", async () => {
-  const { posts } = await run("https://audiovane.minithlabs.com/download?src=hero&seen=1", {
-    headers: { "user-agent": BROWSER_UA, referer: "https://audiovane.minithlabs.com/?x=1" },
+  const { posts } = await run("https://vibresia.com/download?src=hero&seen=1", {
+    headers: { "user-agent": BROWSER_UA, referer: "https://vibresia.com/?x=1" },
     cf: { country: "GB", city: "Alton" },
   });
   const embed = posts[0].body.embeds[0];
   const fields = Object.fromEntries(embed.fields.map((f) => [f.name, f.value]));
-  assert.match(embed.title, /downloaded AudioVane/);
-  assert.equal(posts[0].body.username, "AudioVane");
+  assert.match(embed.title, /downloaded Vibresia/);
+  assert.equal(posts[0].body.username, "Vibresia");
   assert.equal(fields.Source, "hero");
   assert.equal(fields.Where, "Alton, GB");
   assert.match(fields["Seen before"], /has downloaded before/);
@@ -77,7 +77,7 @@ test("the notification says who, where and whether it is a repeat", async () => 
 });
 
 test("a first download says so, and a missing src is not invented", async () => {
-  const { posts } = await run("https://audiovane.minithlabs.com/download", {
+  const { posts } = await run("https://vibresia.com/download", {
     headers: { "user-agent": BROWSER_UA },
   });
   const embed = posts[0].body.embeds[0];
@@ -90,10 +90,10 @@ test("a first download says so, and a missing src is not invented", async () => 
 });
 
 test("a double-clicked button only notifies once", async () => {
-  const first = await run("https://audiovane.minithlabs.com/download?src=hero&seen=0", {
+  const first = await run("https://vibresia.com/download?src=hero&seen=0", {
     headers: { "user-agent": BROWSER_UA },
   });
-  const second = await run("https://audiovane.minithlabs.com/download?src=hero&seen=0", {
+  const second = await run("https://vibresia.com/download?src=hero&seen=0", {
     headers: { "user-agent": BROWSER_UA },
   });
   assert.equal(first.posts.length, 1);
@@ -108,7 +108,7 @@ test("crawlers and link previewers don't generate notifications", async () => {
     "Slackbot-LinkExpanding 1.0",
     "WhatsApp/2.23.20",
   ]) {
-    const { response, posts } = await run("https://audiovane.minithlabs.com/download", {
+    const { response, posts } = await run("https://vibresia.com/download", {
       headers: { "user-agent": agent },
     });
     assert.equal(response.status, 302, `${agent} still gets the file`);
@@ -117,7 +117,7 @@ test("crawlers and link previewers don't generate notifications", async () => {
 });
 
 test("no webhook configured means a silent download, not an error", async () => {
-  const { response, posts } = await run("https://audiovane.minithlabs.com/download", {
+  const { response, posts } = await run("https://vibresia.com/download", {
     env: makeEnv({ DISCORD_WEBHOOK_URL: "", DISCORD_NOTIFICATIONS_ENABLED: "true" }),
     headers: { "user-agent": BROWSER_UA },
   });
@@ -128,7 +128,7 @@ test("no webhook configured means a silent download, not an error", async () => 
 test("the switch really is off when it says it is", async () => {
   const env = makeEnv({ DISCORD_NOTIFICATIONS_ENABLED: "false" });
   assert.equal(isDiscordEnabled(env), false);
-  const { response, posts } = await run("https://audiovane.minithlabs.com/download", {
+  const { response, posts } = await run("https://vibresia.com/download", {
     env,
     headers: { "user-agent": BROWSER_UA },
   });
@@ -143,7 +143,7 @@ test("a Discord outage never breaks the download", async () => {
     calls += 1;
     throw new Error("ECONNREFUSED");
   };
-  const request = new Request("https://audiovane.minithlabs.com/download", {
+  const request = new Request("https://vibresia.com/download", {
     headers: { "user-agent": BROWSER_UA },
   });
   const waits = [];
@@ -159,20 +159,44 @@ test("a Discord outage never breaks the download", async () => {
 });
 
 test("http and www are redirected to the canonical URL", async () => {
-  const http = await run("http://audiovane.minithlabs.com/");
+  const http = await run("http://vibresia.com/");
   assert.equal(http.response.status, 301);
-  assert.equal(http.response.headers.get("location"), "https://audiovane.minithlabs.com/");
+  assert.equal(http.response.headers.get("location"), "https://vibresia.com/");
 
-  const www = await run("https://www.audiovane.minithlabs.com/download?src=hero");
+  const www = await run("https://www.vibresia.com/download?src=hero");
   assert.equal(www.response.status, 301);
-  assert.equal(www.response.headers.get("location"), "https://audiovane.minithlabs.com/download?src=hero");
+  assert.equal(www.response.headers.get("location"), "https://vibresia.com/download?src=hero");
+});
+
+test("the old hostname redirects to the new one, keeping the path", async () => {
+  // The old install command and any old link in someone's post have to
+  // keep working, and land on the page they asked for rather than the
+  // homepage.
+  const install = await run("https://audiovane.minithlabs.com/install.sh");
+  assert.equal(install.response.status, 301);
+  assert.equal(
+    install.response.headers.get("location"),
+    "https://vibresia.com/install.sh"
+  );
+
+  const download = await run("https://audiovane.minithlabs.com/download?src=hero");
+  assert.equal(download.response.status, 301);
+  assert.equal(
+    download.response.headers.get("location"),
+    "https://vibresia.com/download?src=hero"
+  );
+
+  // An old plain-http link goes straight to the new address, in one hop.
+  const plain = await run("http://audiovane.minithlabs.com/");
+  assert.equal(plain.response.status, 301);
+  assert.equal(plain.response.headers.get("location"), "https://vibresia.com/");
 });
 
 test("local dev is left alone", async () => {
   // `wrangler dev` rewrites Host to the production hostname over plain http.
   // Redirecting there would loop /download back onto itself forever, so the
   // miniflare proxy's header is what marks a request as local.
-  const { response, posts } = await run("http://audiovane.minithlabs.com/download?src=hero&seen=0", {
+  const { response, posts } = await run("http://vibresia.com/download?src=hero&seen=0", {
     headers: { "user-agent": BROWSER_UA, "mf-original-hostname": "127.0.0.1:8787" },
   });
   assert.equal(response.status, 302);
@@ -184,7 +208,7 @@ test("local dev is left alone", async () => {
 });
 
 test("everything else falls through to the static assets", async () => {
-  const { response, posts } = await run("https://audiovane.minithlabs.com/index.html");
+  const { response, posts } = await run("https://vibresia.com/index.html");
   assert.equal(response.status, 200);
   assert.equal(await response.text(), "asset");
   assert.equal(posts.length, 0);
@@ -200,7 +224,7 @@ test("the app can report a problem, but only with the token", async () => {
   };
   const env = makeEnv({ NOTIFY_TOKEN: "s3cret" });
 
-  const wrong = await run("https://audiovane.minithlabs.com/api/notify", {
+  const wrong = await run("https://vibresia.com/api/notify", {
     env,
     method: "POST",
     body: JSON.stringify(body),
@@ -209,7 +233,7 @@ test("the app can report a problem, but only with the token", async () => {
   assert.equal(wrong.response.status, 401, "a bad token gets nothing");
   assert.equal(wrong.posts.length, 0);
 
-  const ok = await run("https://audiovane.minithlabs.com/api/notify", {
+  const ok = await run("https://vibresia.com/api/notify", {
     env,
     method: "POST",
     body: JSON.stringify(body),
@@ -232,7 +256,7 @@ test("an error report reaches Discord shaped like an error", async () => {
     posts.push({ url: String(target), body: JSON.parse(init.body) });
     return new Response(null, { status: 204 });
   };
-  const request = new Request("https://audiovane.minithlabs.com/api/notify", {
+  const request = new Request("https://vibresia.com/api/notify", {
     method: "POST",
     headers: { "content-type": "application/json", "x-av-token": "s3cret" },
     body,
@@ -257,7 +281,7 @@ test("reports stop at one a minute, so a broken install can't flood the channel"
   const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
   const body = JSON.stringify({ kind: "audio_error", title: "still broken", message: "again" });
   const env = makeEnv({ NOTIFY_TOKEN: "s3cret" });
-  const send = () => run("https://audiovane.minithlabs.com/api/notify", { env, method: "POST", headers, body });
+  const send = () => run("https://vibresia.com/api/notify", { env, method: "POST", headers, body });
 
   const first = await send();
   assert.equal(first.posts.length, 1);
@@ -268,7 +292,7 @@ test("reports stop at one a minute, so a broken install can't flood the channel"
 
 test("a bot filling in the honeypot gets a polite nothing", async () => {
   const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
-  const request = new Request("https://audiovane.minithlabs.com/api/notify", {
+  const request = new Request("https://vibresia.com/api/notify", {
     method: "POST",
     headers,
     body: JSON.stringify({ title: "buy followers", message: "cheap links", website: "http://spam" }),
@@ -289,7 +313,7 @@ test("a bot filling in the honeypot gets a polite nothing", async () => {
 
 test("errors can be switched off without taking downloads with them", async () => {
   const headers = { "content-type": "application/json", "x-av-token": "s3cret" };
-  const { response, posts } = await run("https://audiovane.minithlabs.com/api/notify", {
+  const { response, posts } = await run("https://vibresia.com/api/notify", {
     env: makeEnv({ NOTIFY_TOKEN: "s3cret", DISCORD_ERRORS_ENABLED: "false" }),
     method: "POST",
     headers,
@@ -298,7 +322,7 @@ test("errors can be switched off without taking downloads with them", async () =
   assert.equal(response.status, 200);
   assert.equal(posts.length, 0);
 
-  const dl = await run("https://audiovane.minithlabs.com/download?src=hero&seen=0", {
+  const dl = await run("https://vibresia.com/download?src=hero&seen=0", {
     env: makeEnv({ DISCORD_ERRORS_ENABLED: "false" }),
     headers: { "user-agent": BROWSER_UA },
   });
@@ -318,7 +342,7 @@ test("a long report is trimmed to what Discord accepts", () => {
 });
 
 test("health reports which state the webhook is in", async () => {
-  const ok = await run("https://audiovane.minithlabs.com/api/health", {
+  const ok = await run("https://vibresia.com/api/health", {
     env: makeEnv({ NOTIFY_TOKEN: "s3cret" }),
   });
   assert.deepEqual(await ok.response.json(), {
@@ -327,15 +351,15 @@ test("health reports which state the webhook is in", async () => {
     discord: "configured",
   });
 
-  const noToken = await run("https://audiovane.minithlabs.com/api/health");
+  const noToken = await run("https://vibresia.com/api/health");
   assert.match((await noToken.response.json()).notify, /NOTIFY_TOKEN/);
 
-  const off = await run("https://audiovane.minithlabs.com/api/health", {
+  const off = await run("https://vibresia.com/api/health", {
     env: makeEnv({ DISCORD_NOTIFICATIONS_ENABLED: "false" }),
   });
   assert.match((await off.response.json()).discord, /disabled/);
 
-  const missing = await run("https://audiovane.minithlabs.com/api/health", {
+  const missing = await run("https://vibresia.com/api/health", {
     env: makeEnv({ DISCORD_WEBHOOK_URL: "" }),
   });
   assert.match((await missing.response.json()).discord, /wrangler secret put/);

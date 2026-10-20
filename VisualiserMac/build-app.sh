@@ -12,7 +12,7 @@ CONFIG="${1:-debug}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-APP_NAME="AudioVane"
+APP_NAME="Vibresia"
 BUNDLE_ID="com.minithlabs.visualiser"
 # Build version, computed from today's date — see version.sh. A release
 # pins the version it decided on with VERSION_OVERRIDE, so the app and the
@@ -43,7 +43,7 @@ POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 #   REPORT_TOKEN=…            (the same value as the NOTIFY_TOKEN secret)
 #   REPORT_ENDPOINT=https://…  (defaults to the live site)
 REPORT_TOKEN="${REPORT_TOKEN:-}"
-REPORT_ENDPOINT="${REPORT_ENDPOINT:-https://audiovane.minithlabs.com/api/notify}"
+REPORT_ENDPOINT="${REPORT_ENDPOINT:-https://vibresia.com/api/notify}"
 if [ -z "$REPORT_TOKEN" ]; then
     echo "NOTE: no REPORT_TOKEN set — this build won't report crashes to Discord."
 fi
@@ -51,11 +51,11 @@ fi
 if [ "$CONFIG" = "release" ]; then
     swift build -c release
     BIN_PATH=".build/release/$APP_NAME"
-    WATCHER_PATH=".build/release/AudioVaneWatcher"
+    WATCHER_PATH=".build/release/VibresiaWatcher"
 else
     swift build
     BIN_PATH=".build/debug/$APP_NAME"
-    WATCHER_PATH=".build/debug/AudioVaneWatcher"
+    WATCHER_PATH=".build/debug/VibresiaWatcher"
 fi
 
 if [ ! -f "$BIN_PATH" ]; then
@@ -73,10 +73,10 @@ mkdir -p "$APP_BUNDLE/Contents/Helpers"
 
 cp "$BIN_PATH" "$APP_BUNDLE/Contents/MacOS/$APP_NAME"
 if [ -f "$WATCHER_PATH" ]; then
-    cp "$WATCHER_PATH" "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher"
-    chmod +x "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher"
+    cp "$WATCHER_PATH" "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher"
+    chmod +x "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher"
 else
-    echo "WARNING: no AudioVaneWatcher binary — 'Open with Music or Spotify' will be unavailable." >&2
+    echo "WARNING: no VibresiaWatcher binary — 'Open with Music or Spotify' will be unavailable." >&2
 fi
 # Regenerate with: swift scripts/make-icon.swift (from the repo root)
 cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
@@ -87,9 +87,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <plist version="1.0">
 <dict>
     <key>CFBundleName</key>
-    <string>AUDIOVANE</string>
+    <string>Vibresia</string>
     <key>CFBundleDisplayName</key>
-    <string>AUDIOVANE</string>
+    <string>Vibresia</string>
     <key>CFBundleIdentifier</key>
     <string>$BUNDLE_ID</string>
     <key>CFBundleVersion</key>
@@ -113,9 +113,9 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>NSHighResolutionCapable</key>
     <true/>
     <key>NSMicrophoneUsageDescription</key>
-    <string>AUDIOVANE listens to the microphone so it can visualize ambient sound. No audio is stored or transmitted.</string>
+    <string>Vibresia listens to the microphone so it can visualize ambient sound. No audio is stored or transmitted.</string>
     <key>NSAudioCaptureUsageDescription</key>
-    <string>AUDIOVANE listens to system audio so it can visualize whatever is playing on your Mac. No audio is stored or transmitted.</string>
+    <string>Vibresia listens to system audio so it can visualize whatever is playing on your Mac. No audio is stored or transmitted.</string>
     <key>PostHogKey</key>
     <string>${POSTHOG_KEY}</string>
     <key>PostHogHost</key>
@@ -168,7 +168,7 @@ if [ ! -x "$APP_BUNDLE/Contents/MacOS/$PLIST_EXEC" ]; then
 fi
 # The watcher is referenced by absolute path in a LaunchAgent the app writes at
 # runtime, so a missing helper is a silent feature failure unless it's checked.
-if [ "$REQUIRE_WATCHER" = "1" ] && [ ! -x "$APP_BUNDLE/Contents/Helpers/AudioVaneWatcher" ]; then
+if [ "$REQUIRE_WATCHER" = "1" ] && [ ! -x "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher" ]; then
     echo "ERROR: the startup watcher helper is missing from the bundle." >&2
     exit 1
 fi

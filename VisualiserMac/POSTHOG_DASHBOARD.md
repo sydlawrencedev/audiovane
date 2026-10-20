@@ -1,4 +1,4 @@
-# PostHog dashboard — AudioVane
+# PostHog dashboard — Vibresia
 
 Everything here is copy-paste. Project **673583**.
 
@@ -37,7 +37,7 @@ Everything here is copy-paste. Project **673583**.
    `$current_url` — only relevant if you ever load that page in an in-app
    webview again.
 
-## Dashboard 1 — "AudioVane — usage"
+## Dashboard 1 — "Vibresia — usage"
 
 ### Row 1 — the headline numbers
 
@@ -67,7 +67,7 @@ Everything here is copy-paste. Project **673583**.
 | Session length | Trends | `avg(properties.session_seconds / 60.0)` where event = `session_summary` |
 | Per-mode dwell (histogram) | Bar chart | `properties.session_seconds` on `session_summary`, breakdown by `properties.mode` |
 
-## Dashboard 2 — "AudioVane — support & revenue"
+## Dashboard 2 — "Vibresia — support & revenue"
 
 Small and Stripe-backed, so keep it separate:
 
@@ -174,7 +174,7 @@ never match, and that is deliberate — there is no join key between a visitor
 and an install, and adding one would mean putting an identifier in a download
 link.
 
-## Dashboard 3 — "AudioVane — landing page"
+## Dashboard 3 — "Vibresia — landing page"
 
 | Insight | Type | Query |
 |---|---|---|
@@ -192,7 +192,7 @@ card but downloads aren't, the cards aren't selling what the page is; and if
 `page_view` climbs while `download_clicked` flattens, the CTA or the install
 instructions are where the drop is.
 
-## Dashboard 4 — "AudioVane — crashes"
+## Dashboard 4 — "Vibresia — crashes"
 
 | Insight | Type | Query |
 |---|---|---|
@@ -210,5 +210,5 @@ across installs.
 
 Crashes only upload when the user has anonymous usage switched on in the app —
 a crash report is usage data by another name, and the switch is theirs. Reports
-stay on disk either way, and the app's **AudioVane → Report a Problem…** menu
+stay on disk either way, and the app's **Vibresia → Report a Problem…** menu
 item emails one to us directly.

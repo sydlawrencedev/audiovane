@@ -98,7 +98,7 @@ enum ProblemReporter {
         static func from(_ report: CrashReport) -> Problem {
             Problem(
                 kind: "app_crash",
-                title: "AudioVane crashed: \(report.reason)",
+                title: "Vibresia crashed: \(report.reason)",
                 message: report.summary,
                 priority: "urgent",
                 appVersion: "\(report.appVersion) (\(report.appBuild))",

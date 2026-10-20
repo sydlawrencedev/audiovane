@@ -8,7 +8,7 @@ import Foundation
 /// the bundle can't say "next to me" — the app lands in `/Applications` or
 /// `~/Applications` depending on permissions, so the path is only knowable at
 /// runtime. And `SMAppService` refuses to register an ad-hoc-signed app at all
-/// ("Operation not permitted"), which is what AudioVane ships as today.
+/// ("Operation not permitted"), which is what Vibresia ships as today.
 ///
 /// That second reason means `StartupManager` tries `SMAppService` first and
 /// falls back to this — the supported API is preferred in case the app ever
@@ -54,7 +54,7 @@ struct LaunchAgentControl {
     }
 
     var logURL: URL {
-        let dir = Self.library.appendingPathComponent("Logs/AudioVane", isDirectory: true)
+        let dir = Self.library.appendingPathComponent("Logs/Vibresia", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         return dir.appendingPathComponent("\(label).log")
     }
@@ -192,10 +192,11 @@ struct LaunchAgentControl {
     }
 }
 
-/// The agent that opens AudioVane when Apple Music or Spotify starts.
+/// The agent that opens Vibresia when Apple Music or Spotify starts.
 enum WatcherControl {
     static let agent = LaunchAgentControl(
         label: "com.minithlabs.visualiser.music-watch",
+        // Still filed under the old name, so the setting survives the rename.
         enabledKey: "audiovane.musicWatch.enabled",
         executable: { helperPath },
         arguments: [Bundle.main.bundleURL.path]
@@ -206,7 +207,7 @@ enum WatcherControl {
 
     /// Path of the bundled helper, or nil in a build that doesn't have it.
     static var helperPath: String? {
-        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/AudioVaneWatcher")
+        let url = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/VibresiaWatcher")
         return FileManager.default.isExecutableFile(atPath: url.path) ? url.path : nil
     }
 }
@@ -215,8 +216,9 @@ enum WatcherControl {
 enum LoginItem {
     static let agent = LaunchAgentControl(
         label: "com.minithlabs.visualiser.login",
+        // Still filed under the old name, so the setting survives the rename.
         enabledKey: "audiovane.launchAtLogin.enabled",
-        executable: { Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/AudioVane").path },
+        executable: { Bundle.main.bundleURL.appendingPathComponent("Contents/MacOS/Vibresia").path },
         arguments: []
     )
 }

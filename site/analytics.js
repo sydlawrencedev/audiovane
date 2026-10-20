@@ -25,8 +25,8 @@
 
   var KEY = meta("posthog-key");
   var HOST = (meta("posthog-host") || "https://us.i.posthog.com").replace(/\/+$/, "");
-  var OPT_OUT_KEY = "audiovane.site.optOut";
-  var ID_KEY = "audiovane.site.distinctId";
+  var OPT_OUT_KEY = "vibresia.site.optOut";
+  var ID_KEY = "vibresia.site.distinctId";
 
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -72,7 +72,7 @@
   function baseProperties() {
     return {
       surface: "web",
-      $lib: "audiovane-web",
+      $lib: "vibresia-web",
       path: location.pathname,
       title: document.title,
       language: navigator.language || "",
@@ -137,7 +137,7 @@
   // The Discord notification itself is fired by the server when it hands over
   // the download, not from here: a webhook URL in the page would be public,
   // and a click that never completes isn't a download.
-  var DOWNLOADED_KEY = "audiovane.site.downloaded";
+  var DOWNLOADED_KEY = "vibresia.site.downloaded";
 
   function tagDownloadLinks() {
     var seen = "0";

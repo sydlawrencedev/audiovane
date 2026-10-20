@@ -67,7 +67,7 @@ actor Analytics {
         if !Self.disabledAtBuild, let apiKey, let host {
             let config = PostHogConfig(projectToken: apiKey, host: host)
             config.errorTrackingConfig.autoCapture = true
-            config.logs.serviceName = "audiovane-macos"
+            config.logs.serviceName = "vibresia-macos"
             config.logs.environment = Self.logEnvironment
             PostHogSDK.shared.setup(config)
             if defaults.bool(forKey: Self.enabledKey) {
@@ -143,7 +143,7 @@ actor Analytics {
             "event": event,
             "distinct_id": distinctId,
             "properties": properties,
-            "$lib": "audiovane",
+            "$lib": "vibresia",
             "timestamp": ISO8601DateFormatter().string(from: Date()),
         ]
         payload["properties"] = properties.merging(defaultProperties()) { a, _ in a }
@@ -226,7 +226,7 @@ actor Analytics {
                 "event": "session_summary",
                 "distinct_id": distinctId,
                 "properties": props,
-                "$lib": "audiovane",
+                "$lib": "vibresia",
             ])
         }
 

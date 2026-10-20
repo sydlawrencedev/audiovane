@@ -148,6 +148,9 @@ final class AppState: ObservableObject {
     private var cancellables: Set<AnyCancellable> = []
 
     init() {
+        // Before anything reads the user's folder: it was called AUDIOVANE
+        // when the app was called AudioVane.
+        SupportFolder.migrateIfNeeded()
         Self.primeDefaults()
         let audio = AudioEngine()
         self.audio = audio
@@ -345,6 +348,9 @@ final class AppState: ObservableObject {
 
     static private(set) var shared: AppState?
 
+    // The "audiovane." prefix in these keys is left over from when the
+    // app was called AudioVane. Renaming them would quietly reset
+    // everyone's settings — the key is what the value is filed under.
     private static let genreDefaultsKey = "audiovane.genre"
     private static let genreAutoDefaultsKey = "audiovane.genreAuto"
     private static let modeDefaultsKey = "audiovane.mode"
@@ -999,11 +1005,11 @@ final class AppState: ObservableObject {
         genreIsAuto && genreConfidence >= Self.autoGenreMinConfidence
     }
 
-    /// Band evaluation log: with AUDIOVANE_EVAL_LOG set, append one JSON line a
+    /// Band evaluation log: with VIBRESSIA_EVAL_LOG set, append one JSON line a
     /// second describing what the genre detector and the band make of the
     /// music. scripts/band-eval.py scores it against labelled videos.
     private lazy var evalLog: FileHandle? = {
-        guard let path = ProcessInfo.processInfo.environment["AUDIOVANE_EVAL_LOG"] else { return nil }
+        guard let path = ProcessInfo.processInfo.environment["VIBRESSIA_EVAL_LOG"] else { return nil }
         FileManager.default.createFile(atPath: path, contents: nil)
         return FileHandle(forWritingAtPath: path)
     }()

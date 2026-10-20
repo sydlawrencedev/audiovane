@@ -1,18 +1,18 @@
-# AudioVane
+# Vibresia
 
 A free music visualiser for macOS. It listens to whatever your Mac is playing and turns it into live visuals, from neon waveforms to a pixel-art band that walks on stage when it hears their instrument.
 
-**Website & install:** https://audiovane.minithlabs.com
+**Website & install:** https://vibresia.com
 
 ```bash
-curl -fsSL https://audiovane.minithlabs.com/install.sh | bash
+curl -fsSL https://vibresia.com/install.sh | bash
 ```
 
-Or ask an AI assistant: *"install audiovane from https://audiovane.minithlabs.com"*.
+Or ask an AI assistant: *"install vibresia from https://vibresia.com"*.
 
 If you enjoy it, you can [buy me a coffee](https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01).
 
-Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/audiovane/issues). Pull requests are very welcome, especially new visualisations: see [CONTRIBUTING.md](CONTRIBUTING.md).
+Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/vibresia/issues). Pull requests are very welcome, especially new visualisations: see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Repository layout
 
@@ -34,8 +34,8 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/a
 
 ```bash
 cd VisualiserMac
-./build-app.sh debug      # build/AudioVane.app
-open build/AudioVane.app
+./build-app.sh debug      # build/Vibresia.app
+open build/Vibresia.app
 ```
 
 ### Version numbers
@@ -87,7 +87,7 @@ browser, and whether that browser has downloaded before.
 ```bash
 npx wrangler secret put DISCORD_WEBHOOK_URL     # once; the webhook URL in Discord
 npx wrangler deploy
-curl https://audiovane.minithlabs.com/api/health   # {"discord":"configured"}
+curl https://vibresia.com/api/health   # {"discord":"configured"}
 ```
 
 **Errors from the app.** The app can't hold the webhook (it's in the app
@@ -152,15 +152,16 @@ that honest:
 
 ## SEO
 
-- **Submit the sitemap** once in [Search Console](https://search.google.com/search-console/sitemaps/submit) — `https://audiovane.minithlabs.com/sitemap.xml`. Re-submit after site deploys; it also carries `lastmod`.
+- **Submit the sitemap** once in [Search Console](https://search.google.com/search-console/sitemaps/submit) — `https://vibresia.com/sitemap.xml`. Re-submit after site deploys; it also carries `lastmod`.
 - **Structured data** is `SoftwareApplication` + `Organization` JSON-LD in `index.html`. The version is the build's date, so there's nothing to bump by hand — `VisualiserMac/version.sh --write` puts it in both `index.html` and `VisualiserMac/VERSION`, and `scripts/check-modes.sh` fails the release if they drift apart.
-- **Turn on "Always Use HTTPS"** in the Cloudflare zone for `minithlabs.com`. As of the last audit, `http://audiovane.minithlabs.com/` served a 200 instead of redirecting; `site/_redirects` covers the same ground but the zone setting is the real fix.
+- **Turn on "Always Use HTTPS"** in the Cloudflare zone for `vibresia.com` (and in `minithlabs.com` if `vibresia.com` is served as a subdomain of it rather than its own zone). The zone setting is the real fix; the Worker's own `http:` → `https:` redirect and `site/_redirects` cover the same ground but the zone setting is what stops a duplicate being served at all. The old `audiovane.minithlabs.com` name is still attached to the Worker so it can redirect — see the note below.
+- **The old domain is a redirect, not a second site.** `audiovane.minithlabs.com` is attached to the same Worker, which answers it with a 301 to `vibresia.com` keeping the path — so the old install command and any old link still work. Its DNS has to keep pointing at Cloudflare for that to happen. One thing a domain change can't carry over: the analytics opt-out is in the browser's `localStorage`, which is per-origin, so anyone who opted out of analytics on the old site has to do it again on the new one.
 - **Caching** is Cloudflare's default (`max-age=0, must-revalidate`), and a `Cache-Control` rule in `site/_headers` *appends* to that rather than replacing it, so it can't be changed that way. Repeat visits revalidate with a 304 from the ETag instead of re-downloading 5.9MB, which is the part that matters.
 - Page is a single static file: one H1, 16 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
 
 ## Tuning The Band
 
-`VisualiserMac/Tests/band-fixtures.yaml` lists YouTube videos labelled with their genre and who's playing. `scripts/band-eval.py` plays each one in Chrome while AudioVane listens, then prints a scorecard (genre right? right musicians on stage?) and saves the detector's features and per-genre scores to `VisualiserMac/Tests/eval-results/` for tuning. AudioVane needs system audio permission first; keep other audio off while it runs.
+`VisualiserMac/Tests/band-fixtures.yaml` lists YouTube videos labelled with their genre and who's playing. `scripts/band-eval.py` plays each one in Chrome while Vibresia listens, then prints a scorecard (genre right? right musicians on stage?) and saves the detector's features and per-genre scores to `VisualiserMac/Tests/eval-results/` for tuning. Vibresia needs system audio permission first; keep other audio off while it runs.
 
 ```bash
 scripts/band-eval.py --check     # validate the fixtures file
@@ -171,5 +172,5 @@ scripts/band-eval.py --only jazz
 ## Releasing
 
 1. Add any new mode to `site/index.html` (a card with `data-mode="<case name>"`).
-2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `AudioVane.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
+2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `Vibresia.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
 3. `npx wrangler deploy` if the site or worker changed, then re-submit the sitemap. First deploy after cloning needs `npx wrangler secret put DISCORD_WEBHOOK_URL` (see [Download notifications](#download-notifications-discord)).

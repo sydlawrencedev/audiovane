@@ -1,4 +1,4 @@
-// AudioVane's landing-page Worker.
+// Vibresia's landing-page Worker.
 //
 // The site is static, but downloads need a server: that's where we can say
 // *someone* downloaded, not just *someone clicked*, and it's where the Discord
@@ -13,10 +13,19 @@
 // because they run inline in a request: a timeout, one retry, and
 // `ctx.waitUntil` so Discord can never delay a download.
 
-const CANONICAL_HOST = "audiovane.minithlabs.com";
+const CANONICAL_HOST = "vibresia.com";
 const CANONICAL_SITE = `https://${CANONICAL_HOST}/`;
+
+// The host the app used to live on. It's still attached to this Worker, so
+// requests to it are answered — with a permanent redirect to the new name,
+// keeping the path and the query string. That's what makes the old install
+// command, the old links in other people's posts and the old bookmark keep
+// working: `curl -fsSL https://audiovane.minithlabs.com/install.sh | bash`
+// still finds the installer, now at the new address.
+const LEGACY_HOSTS = ["audiovane.minithlabs.com"];
+
 const RELEASE_ZIP =
-  "https://github.com/sydlawrencedev/audiovane/releases/latest/download/AudioVane.zip";
+  "https://github.com/sydlawrencedev/vibresia/releases/latest/download/Vibresia.zip";
 
 // Same table as delphina's PRIORITY_STYLE, so a download and a signup look
 // like the same family of message.
@@ -141,13 +150,13 @@ export function buildDownloadEmbed({ source, referer, country, city, agent, firs
     username: undefined, // filled in from env at send time
     embeds: [
       {
-        author: { name: "AudioVane" },
-        title: `${style.emoji} Somebody downloaded AudioVane`,
+        author: { name: "Vibresia" },
+        title: `${style.emoji} Somebody downloaded Vibresia`,
         description: "The 302 is about to hand them the latest release.",
         url: RELEASE_ZIP,
         color: style.color,
         fields,
-        footer: { text: "audiovane.minithlabs.com" },
+        footer: { text: "vibresia.com" },
         timestamp: new Date().toISOString(),
       },
     ],
@@ -216,7 +225,7 @@ function handleDownload(request, url, env, ctx) {
       agent,
       firstSeen: seen === null ? false : seen === "1",
     });
-    payload.username = env.DISCORD_BOT_USERNAME || "AudioVane";
+    payload.username = env.DISCORD_BOT_USERNAME || "Vibresia";
     // waitUntil, not await: the redirect goes out whether or not Discord ever
     // answers, and a Discord outage can't turn into a broken download.
     ctx.waitUntil(postDiscord(env, payload));
@@ -233,7 +242,7 @@ export function buildErrorEmbed({ title, message, priority = "high", fields = []
     username: undefined, // filled in from env at send time
     embeds: [
       {
-        author: { name: "AudioVane app" },
+        author: { name: "Vibresia app" },
         title: truncate(`${style.emoji} ${title}`, DISCORD_TITLE_LIMIT),
         description: truncate(message ?? "", DISCORD_DESC_LIMIT),
         url: CANONICAL_SITE,
@@ -246,7 +255,7 @@ export function buildErrorEmbed({ title, message, priority = "high", fields = []
             value: truncate(f.value, DISCORD_FIELD_LIMIT),
             inline: f.inline !== false,
           })),
-        footer: { text: "audiovane.minithlabs.com" },
+        footer: { text: "vibresia.com" },
         timestamp: new Date().toISOString(),
       },
     ],
@@ -290,7 +299,7 @@ async function handleNotify(request, env, ctx) {
     priority: body.priority || "high",
     fields: Array.isArray(body.fields) ? body.fields : [],
   });
-  payload.username = env.DISCORD_BOT_USERNAME || "AudioVane";
+  payload.username = env.DISCORD_BOT_USERNAME || "Vibresia";
   // Fire and forget: the app is waiting on this, and Discord is not on the
   // critical path of anything it is trying to do. Logged anyway, because
   // "we didn't hear about that crash" needs an answer you can grep for.
@@ -333,6 +342,16 @@ export default {
     const isLocal =
       proxiedLocally || /^(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(request.headers.get("host") || "");
     if (!isLocal) {
+      // The old name goes to the new one first, before anything else, so an
+      // old http:// link is answered with a single hop to the new https://
+      // address rather than a chain through the old one. Path and query
+      // are kept, so an old link to a specific page still lands on that
+      // page rather than the homepage.
+      if (LEGACY_HOSTS.includes(url.hostname)) {
+        url.hostname = CANONICAL_HOST;
+        url.protocol = "https:";
+        return Response.redirect(url.toString(), 301);
+      }
       if (url.protocol === "http:") {
         url.protocol = "https:";
         return Response.redirect(url.toString(), 301);

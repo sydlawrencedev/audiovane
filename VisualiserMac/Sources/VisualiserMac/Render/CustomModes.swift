@@ -206,7 +206,7 @@ struct ModeEntry: Identifiable, Hashable {
 // MARK: - On-disk store
 
 /// Custom modes live as one JSON file each under
-/// `~/Library/Application Support/AUDIOVANE/CustomModes/`.
+/// `~/Library/Application Support/Vibresia/CustomModes/`.
 ///
 /// A folder rather than one blob in `UserDefaults` because these are the one
 /// thing a user is expected to hand to someone else: the files can be copied,
@@ -215,13 +215,12 @@ struct ModeEntry: Identifiable, Hashable {
 /// answer in this app.
 enum CustomModeStore {
     static var folder: URL {
-        // AUDIOVANE_CUSTOM_DIR points somewhere else, for tests and for
+        // VIBRESSIA_CUSTOM_DIR points somewhere else, for tests and for
         // demo runs that must never read a real person's modes.
-        if let dir = ProcessInfo.processInfo.environment["AUDIOVANE_CUSTOM_DIR"] {
+        if let dir = ProcessInfo.processInfo.environment["VIBRESSIA_CUSTOM_DIR"] {
             return URL(fileURLWithPath: dir, isDirectory: true)
         }
-        return FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("AUDIOVANE/CustomModes", isDirectory: true)
+        return SupportFolder.folder("CustomModes")
     }
 
     static func ensureFolder() {
@@ -351,7 +350,7 @@ enum CustomModeGuide {
 
     /// Ready-to-paste prompt for someone using an AI coding assistant.
     static let agentPrompt = """
-    Write a music visualiser mode for AudioVane, a macOS app. The output is \
+    Write a music visualiser mode for Vibresia, a macOS app. The output is \
     one GLSL function, pasted into the app and compiled as a fragment shader.
 
     Your entire answer must be a single GLSL code block containing exactly:

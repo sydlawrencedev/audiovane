@@ -4,5 +4,5 @@
 # express a scheme or a hostname change.
 
 # One canonical URL for the homepage. The sitemap, the canonical tag and the
-# og:url all say "https://audiovane.minithlabs.com/"; make the server agree.
+# og:url all say "https://vibresia.com/"; make the server agree.
 /index.html  /  301

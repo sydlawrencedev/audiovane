@@ -19,25 +19,25 @@ AI is lowering the cost of creating software. We believe this opens the door to 
 - **Make sharing legitimate.** State redistribution rights clearly. Encourage sharing within the boundaries of the licence.
 - **Supporters deserve thanks, not pressure.** We can thank donors and recognise supporters, but donations should not secretly become a required subscription or gate to the essential experience.
 
-## What this means for AudioVane
+## What this means for Vibresia
 
-AudioVane is a music visualiser for Mac, created by Minith Labs.
+Vibresia is a music visualiser for Mac, created by Minith Labs.
 
 Its promise is:
 
 > **Proudly shareware. Free to use. Yours to share.**
 
-AudioVane is free to use. People who enjoy it can choose to make a voluntary donation to support its development. There is no subscription and no pressure to pay.
+Vibresia is free to use. People who enjoy it can choose to make a voluntary donation to support its development. There is no subscription and no pressure to pay.
 
 The product should make it easy to:
-- Understand what AudioVane does before downloading it.
+- Understand what Vibresia does before downloading it.
 - Download and use it without an unnecessary account or payment barrier.
 - See a compelling demonstration of the visual experience.
 - Share it with someone who loves music.
 - Offer feedback or report a problem.
 - Donate voluntarily, with a clear explanation of how support helps.
 
-Do not claim that AudioVane is open source unless its source code and licence genuinely make it so. Shareware describes the distribution and payment philosophy; redistribution and modification rights must be defined separately and clearly.
+Do not claim that Vibresia is open source unless its source code and licence genuinely make it so. Shareware describes the distribution and payment philosophy; redistribution and modification rights must be defined separately and clearly.
 
 ## How we make decisions
 
@@ -55,7 +55,7 @@ We still want to build sustainable products. Donations, sponsorship, paid extras
 
 ## The bigger ambition
 
-AudioVane is one product. The principle extends across Minith Labs.
+Vibresia is one product. The principle extends across Minith Labs.
 
 We want to make software that people recommend because they genuinely like it. We want to create things that might never have been built under a conventional venture-backed business model. We want AI to enable more independent creators to make and share useful software.
 

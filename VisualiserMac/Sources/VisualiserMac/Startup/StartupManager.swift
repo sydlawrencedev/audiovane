@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-/// The two things that decide when AudioVane is running: whether it opens at
+/// The two things that decide when Vibresia is running: whether it opens at
 /// login, and whether it opens when a music app does.
 ///
 /// Both are off until asked for. A visualiser that appears uninvited — at
@@ -11,7 +11,7 @@ import SwiftUI
 /// Both are ordinary login items in `~/Library/LaunchAgents`, and both are
 /// switched off from here and nowhere else. macOS's own `SMAppService` is the
 /// tidier API, but it refuses to register an app that isn't properly signed —
-/// which AudioVane isn't — so using it would mean two code paths and, worse,
+/// which Vibresia isn't — so using it would mean two code paths and, worse,
 /// the possibility of the same thing being registered twice. One mechanism,
 /// one switch, one place to look.
 @MainActor
@@ -25,8 +25,8 @@ final class StartupManager: ObservableObject {
     @Published private(set) var errorMessage: String?
 
     /// Captions under each toggle.
-    private(set) var launchAtLoginDetail = "Open AudioVane when you log in"
-    private(set) var watchMusicAppsDetail = "Open AudioVane when Music or Spotify starts"
+    private(set) var launchAtLoginDetail = "Open Vibresia when you log in"
+    private(set) var watchMusicAppsDetail = "Open Vibresia when Music or Spotify starts"
 
     private init() {}
 
@@ -39,9 +39,9 @@ final class StartupManager: ObservableObject {
         launchAtLogin = LoginItem.agent.isOn
         watchMusicApps = WatcherControl.agent.isOn
         launchAtLoginDetail = Self.detail(for: LoginItem.agent,
-                                          describing: "Open AudioVane when you log in")
+                                          describing: "Open Vibresia when you log in")
         watchMusicAppsDetail = Self.detail(for: WatcherControl.agent,
-                                          describing: "Open AudioVane when Music or Spotify starts")
+                                          describing: "Open Vibresia when Music or Spotify starts")
     }
 
     /// The caption is the same sentence either way — the switch says on or off.

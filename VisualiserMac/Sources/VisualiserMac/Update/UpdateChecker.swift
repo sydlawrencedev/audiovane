@@ -5,13 +5,13 @@ import Foundation
 /// installs it in place: download the release zip, unpack it, swap it for the
 /// running app once we've quit, and relaunch.
 ///
-/// Releases are published by `release.sh` as `AudioVane.zip` on
-/// github.com/sydlawrencedev/audiovane. Builds are ad-hoc signed, so the
+/// Releases are published by `release.sh` as `Vibresia.zip` on
+/// github.com/sydlawrencedev/vibresia. Builds are ad-hoc signed, so the
 /// downloaded copy has its quarantine flag cleared before relaunching.
 final class UpdateChecker {
     static let shared = UpdateChecker()
-    static let repo = "sydlawrencedev/audiovane"
-    private static let assetName = "AudioVane.zip"
+    static let repo = "sydlawrencedev/vibresia"
+    private static let assetName = "Vibresia.zip"
 
     private struct Release: Decodable {
         let tag_name: String
@@ -26,7 +26,7 @@ final class UpdateChecker {
 
     /// `userInitiated`: from the menu — also report "you're up to date" and errors.
     func check(userInitiated: Bool) {
-        if !userInitiated && ProcessInfo.processInfo.environment["AUDIOVANE_NO_UPDATE_CHECK"] != nil { return }
+        if !userInitiated && ProcessInfo.processInfo.environment["VIBRESSIA_NO_UPDATE_CHECK"] != nil { return }
         if userInitiated {
             Task {
                 await Analytics.shared.track("update_check_requested")
@@ -58,7 +58,7 @@ final class UpdateChecker {
                                 "manual update check completed",
                                 attributes: ["update_available": false])
                         }
-                        self.alert("You're up to date", "AudioVane \(self.currentVersion) is the latest version.")
+                        self.alert("You're up to date", "Vibresia \(self.currentVersion) is the latest version.")
                     }
                     return
                 }
@@ -93,8 +93,8 @@ final class UpdateChecker {
 
     private func offer(_ version: String, release: Release) {
         let a = NSAlert()
-        a.messageText = "AudioVane \(version) is available"
-        a.informativeText = "You have \(currentVersion). Install the update now? AudioVane will restart."
+        a.messageText = "Vibresia \(version) is available"
+        a.informativeText = "You have \(currentVersion). Install the update now? Vibresia will restart."
         a.addButton(withTitle: "Install & Relaunch")
         a.addButton(withTitle: "Later")
         a.addButton(withTitle: "What's New")
@@ -124,7 +124,7 @@ final class UpdateChecker {
         URLSession.shared.downloadTask(with: url) { file, _, error in
             do {
                 guard let file else { throw error ?? URLError(.badServerResponse) }
-                let work = FileManager.default.temporaryDirectory.appendingPathComponent("audiovane-update-\(UUID().uuidString)")
+                let work = FileManager.default.temporaryDirectory.appendingPathComponent("vibresia-update-\(UUID().uuidString)")
                 try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
                 let zip = work.appendingPathComponent(Self.assetName)
                 try FileManager.default.moveItem(at: file, to: zip)

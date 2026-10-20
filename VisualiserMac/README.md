@@ -1,4 +1,4 @@
-# AUDIOVANE
+# VIBRESSIA
 
 A native macOS audio visualizer in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
@@ -17,7 +17,7 @@ The modes, plus Auto Scan:
 11. **Warp**: hyperspace star streaks.
 12. **Constellation**: 4,000 bass-pumping particles around you.
 13. **Nyan Cat**: pixel cat on a rainbow trail through the stars.
-14. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/AUDIOVANE/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
+14. **Hamster Dance**: a scrolling wall of dancing hamsters. Drop your own animated GIFs (or APNG/PNG) into `~/Library/Application Support/Vibresia/Hamsters/` (**Visualizer → Open Hamster Folder…**) and they replace the drawn hamsters: tiled edge to edge at native pixels (integer-scaled), animating at their own frame timing and bouncing on the beat. Up to 16 images; the folder is re-checked every couple of seconds.
 15. **Badger Badger**: rows of badgers dancing to the beat; big drops bring out the mushroom (or, every third, the snake).
 16. **Whooping Llama**: dancing llamas in blankets, whooping on every beat.
 17. **Dance Floor**: a Rubik's-cube floor in perspective. The camera pans, rolls and travels up and down the floor, all on the beat clock, and the tiles keep re-solving themselves. A fragment shader, themed by the active palette rather than being graded after the fact.
@@ -29,16 +29,16 @@ Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
 ## Running
 
-The bundle is self-contained at `build/AudioVane.app`. To open it:
+The bundle is self-contained at `build/Vibresia.app`. To open it:
 
 ```
-open build/AudioVane.app
+open build/Vibresia.app
 ```
 
 Or to rebuild first:
 
 ```
-./build-app.sh debug      # debug build at build/AudioVane.app
+./build-app.sh debug      # debug build at build/Vibresia.app
 ./build-app.sh release    # release build
 ```
 
@@ -53,15 +53,15 @@ Other sources:
 Two optional switches, both **off until asked for** and both in the credits
 popover (bottom right, "Made with ❤️"):
 
-- **Start at login** — AudioVane opens by itself when you log in.
-- **Open with Music or Spotify** — a small background watcher opens AudioVane
+- **Start at login** — Vibresia opens by itself when you log in.
+- **Open with Music or Spotify** — a small background watcher opens Vibresia
   when Apple Music or Spotify starts.
 
 Both are ordinary user login items in `~/Library/LaunchAgents`:
 
 ```
 com.minithlabs.visualiser.login          the app itself, at login
-com.minithlabs.visualiser.music-watch     Contents/Helpers/AudioVaneWatcher
+com.minithlabs.visualiser.music-watch     Contents/Helpers/VibresiaWatcher
 ```
 
 Each plist points at a binary inside the app bundle, so it's rewritten on every
@@ -77,16 +77,16 @@ Two deliberate choices worth knowing about:
   possibility of the same item being registered twice. One plist, one switch.
 - **Not listed in System Settings.** Login items registered this way don't
   appear under General → Login Items, so switch them off from the popover (or
-  `AudioVane --login-off` / `--watch-off`).
+  `Vibresia --login-off` / `--watch-off`).
 
 The watcher sees only which apps launch — no window titles, no audio, no
 playback state. From support, without a window to click in:
 
 ```
-AudioVane --startup-status     # what both switches currently believe
-AudioVane --login-on / --login-off
-AudioVane --watch-on / --watch-off
-~/Library/Logs/AudioVane/music-watch.log    # the watcher's own log
+Vibresia --startup-status     # what both switches currently believe
+Vibresia --login-on / --login-off
+Vibresia --watch-on / --watch-off
+~/Library/Logs/Vibresia/music-watch.log    # the watcher's own log
 ```
 
 ## A window that gets out of the way
@@ -147,7 +147,7 @@ band, the machine, all of them.
 A small **"Made with ❤️ by Minith Labs"** button sits in the bottom-right
 corner. It opens a popover with a link to [minithlabs.com](https://minithlabs.com)
 and a **"Buy us a coffee"** button that opens Stripe's hosted checkout in the
-default browser. No card details ever touch AudioVane.
+default browser. No card details ever touch Vibresia.
 
 > This started life as Stripe's embedded Buy Button (the `<stripe-buy-button>`
 > custom element in a `WKWebView`). It doesn't survive contact with a real app:
@@ -198,7 +198,7 @@ trace from a friend three timezones away. So the app catches its own.
 
 **On crash.** A handler on the fatal signals (and on uncaught Objective-C
 exceptions) writes a report to
-`~/Library/Application Support/AudioVane/Crashes/AudioVane-<stamp>-<id>.crash.json`,
+`~/Library/Application Support/Vibresia/Crashes/Vibresia-<stamp>-<id>.crash.json`,
 then re-raises with the default disposition so macOS still writes its own `.ips`
 into `~/Library/Logs/DiagnosticReports` exactly as before. Ours carries what the
 system's can't: the mode and genre on screen, the band lineup, the audio source,
@@ -225,7 +225,7 @@ not a person").
 
 **The switch.** Uploads ride on the same "Share anonymous usage" toggle as
 everything else, because a crash report is usage data by another name. Reports
-stay on disk either way, and **AudioVane → Report a Problem…** emails the latest
+stay on disk either way, and **Vibresia → Report a Problem…** emails the latest
 one to you as a readable summary plus the JSON attachment — user-initiated, so it
 works with the toggle off. **Reveal Crash Reports…** opens the folder.
 
@@ -233,8 +233,8 @@ works with the toggle off. **Reveal Crash Reports…** opens the folder.
 report-and-upload path can be checked without waiting for a real one:
 
 ```
-open build/AudioVane.app --args --simulate-crash   # writes a report
-open build/AudioVane.app                            # uploads it, deletes it
+open build/Vibresia.app --args --simulate-crash   # writes a report
+open build/Vibresia.app                            # uploads it, deletes it
 ```
 
 ## Header controls
@@ -350,7 +350,7 @@ Metal needs Xcode's `metalc` toolchain. This repo uses Swift Package Manager wit
 For visual regression / sanity checks:
 
 ```
-SNAPSHOT_DIR=/tmp/viz_snapshots ./build/AudioVane.app/Contents/MacOS/AudioVane --snapshot
+SNAPSHOT_DIR=/tmp/viz_snapshots ./build/Vibresia.app/Contents/MacOS/Vibresia --snapshot
 ```
 
 This renders one frame of each mode to PNG and exits.

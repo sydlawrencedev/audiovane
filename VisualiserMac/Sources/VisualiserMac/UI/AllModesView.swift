@@ -613,13 +613,13 @@ enum ModePreviewImage {
         // insisting on one layout.
         let file = "modes/\(builtin.rawValue).jpg"
         var roots: [URL] = []
-        if let override = ProcessInfo.processInfo.environment["AUDIOVANE_PREVIEW_DIR"] {
+        if let override = ProcessInfo.processInfo.environment["VIBRESSIA_PREVIEW_DIR"] {
             roots.append(URL(fileURLWithPath: override, isDirectory: true))
         }
         let here = URL(fileURLWithPath: Bundle.main.bundlePath)
         roots.append(here.appendingPathComponent("Resources"))
         roots.append(here.deletingLastPathComponent())
-        // Up two levels from the built .app: <checkout>/VisualiserMac/build/AudioVane.app
+        // Up two levels from the built .app: <checkout>/VisualiserMac/build/Vibresia.app
         roots.append(here.deletingLastPathComponent().deletingLastPathComponent()
             .deletingLastPathComponent().appendingPathComponent("site/media"))
         for root in roots {

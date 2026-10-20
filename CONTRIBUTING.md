@@ -1,8 +1,8 @@
-# Contributing to AudioVane
+# Contributing to Vibresia
 
 Thanks for helping! Bug reports, ideas and pull requests are all welcome, and **new visualisations are especially welcome**.
 
-- **Bugs and ideas:** [open an issue](https://github.com/sydlawrencedev/audiovane/issues). For bugs, include your macOS version, the mode you were in and what was playing.
+- **Bugs and ideas:** [open an issue](https://github.com/sydlawrencedev/vibresia/issues). For bugs, include your macOS version, the mode you were in and what was playing.
 - **Pull requests:** fork, branch, and open a PR against `main`. Small, focused PRs are easiest to review. Screenshots or a short screen recording help a lot for anything visual.
 
 ## Building
@@ -12,7 +12,7 @@ You need macOS 14.2+ and the Swift toolchain (Xcode or the command-line tools).
 ```bash
 cd VisualiserMac
 ./build-app.sh debug
-open build/AudioVane.app
+open build/Vibresia.app
 ```
 
 Pick **Use Demo Tone** on the intro screen to test without sharing system audio.
@@ -41,9 +41,9 @@ Most modes are a single full-screen fragment shader, which is the quickest way i
 4. **Check it renders:**
    ```bash
    ./build-app.sh debug
-   SNAPSHOT_DIR=/tmp/av ./build/AudioVane.app/Contents/MacOS/AudioVane --snapshot
+   SNAPSHOT_DIR=/tmp/av ./build/Vibresia.app/Contents/MacOS/Vibresia --snapshot
    ```
-   This writes a PNG of every mode to `/tmp/av` and logs any shader compile errors. To watch it live: `./build/AudioVane.app/Contents/MacOS/AudioVane --mode yourMode`.
+   This writes a PNG of every mode to `/tmp/av` and logs any shader compile errors. To watch it live: `./build/Vibresia.app/Contents/MacOS/Vibresia --mode yourMode`.
 5. **Add it to the website:** in `site/index.html`, add a card to the modes grid with `data-mode="yourMode"` (the `case` name) and a 640×360 thumbnail in `site/media/modes/`. `scripts/check-modes.sh` fails until every mode has a card, and releases run it.
 
 Modes that need more than a shader (3D geometry, per-frame state) live in their own renderer. See `Render/MachineMode.swift` and `Render/MachineRenderer.swift` for an example.

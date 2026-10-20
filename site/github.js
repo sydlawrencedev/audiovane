@@ -17,9 +17,9 @@
 (function () {
   "use strict";
 
-  var REPO = "sydlawrencedev/audiovane";
+  var REPO = "sydlawrencedev/vibresia";
   var API = "https://api.github.com/repos/" + REPO;
-  var CACHE_KEY = "audiovane.github";
+  var CACHE_KEY = "vibresia.github";
   var CACHE_TTL = 15 * 60 * 1000;
   var MAX_RELEASES = 6;
   var MAX_ISSUES = 8;

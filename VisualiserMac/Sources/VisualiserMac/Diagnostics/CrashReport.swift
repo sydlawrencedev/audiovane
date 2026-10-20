@@ -138,7 +138,7 @@ struct CrashReport: Codable {
     static func stateOnlySummary(appVersion: String, osVersion: String,
                                  state: [String: String], breadcrumbs: [String]) -> String {
         var out = """
-        AudioVane \(appVersion)
+        Vibresia \(appVersion)
         os: \(osVersion) (\(CrashReport.arch))
 
         """

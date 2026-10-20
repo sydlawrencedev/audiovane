@@ -2,13 +2,13 @@
 """Score The Band's genre and line-up detection against labelled videos.
 
 Plays each video in VisualiserMac/Tests/band-fixtures.yaml in its own Google
-Chrome tab, lets AudioVane (in The Band, auto genre on) listen through system
+Chrome tab, lets Vibresia (in The Band, auto genre on) listen through system
 audio, and compares what it decided with the labels:
 
   * genre: the genre the detector settled on most over the listening window
   * band:  who was on stage at the end of the window
 
-Before running: AudioVane must already have system audio permission (start it
+Before running: Vibresia must already have system audio permission (start it
 once and click Share System Audio), Chrome must be installed, and nothing else
 should be playing. Ads at the start of a video skew the result; YouTube
 Premium or a later `start` helps.
@@ -35,7 +35,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAC = os.path.join(ROOT, "VisualiserMac")
 FIXTURES = os.path.join(MAC, "Tests", "band-fixtures.yaml")
 RESULTS = os.path.join(MAC, "Tests", "eval-results")
-APP = os.path.join(MAC, "build", "AudioVane.app")
+APP = os.path.join(MAC, "build", "Vibresia.app")
 BUNDLE_ID = "com.minithlabs.visualiser"
 
 GENRES = ["classical", "electronic", "rock", "pop", "hip-hop", "jazz", "blues", "country", "r&b", "ambient"]
@@ -97,13 +97,13 @@ def close_tab(tab_id):
 
 def start_app(log_path, build):
     if build:
-        print("Building AudioVane…")
+        print("Building Vibresia…")
         subprocess.run([os.path.join(MAC, "build-app.sh"), "debug"], check=True, stdout=subprocess.DEVNULL)
     subprocess.run(["osascript", "-e", f'tell application id "{BUNDLE_ID}" to quit'], capture_output=True)
     time.sleep(2)
     subprocess.run(["open", "-n", "-a", APP,
-                    "--env", f"AUDIOVANE_EVAL_LOG={log_path}",
-                    "--env", "AUDIOVANE_NO_UPDATE_CHECK=1",
+                    "--env", f"VIBRESSIA_EVAL_LOG={log_path}",
+                    "--env", "VIBRESSIA_NO_UPDATE_CHECK=1",
                     "--args", "--mode", "band", "--system-audio", "--genre-auto"], check=True)
     time.sleep(8)
 
@@ -130,7 +130,7 @@ def score(fixture, lines, t0, settle, seconds):
         "samples": len(window),
     }
     if not window:
-        result.update(error="no log lines in the listening window (was AudioVane hearing system audio?)")
+        result.update(error="no log lines in the listening window (was Vibresia hearing system audio?)")
         return result
     votes = collections.Counter(l["detected"] for l in window)
     genre, n = votes.most_common(1)[0]
@@ -199,7 +199,7 @@ def main():
     ap.add_argument("--seconds", type=float, default=45, help="listening time per video (default 45)")
     ap.add_argument("--settle", type=float, default=15, help="ignore the first N seconds of each (default 15)")
     ap.add_argument("--gap", type=float, default=6, help="silence between videos (default 6)")
-    ap.add_argument("--no-build", action="store_true", help="use the existing build/AudioVane.app")
+    ap.add_argument("--no-build", action="store_true", help="use the existing build/Vibresia.app")
     ap.add_argument("--check", action="store_true", help="only validate the fixtures file")
     args = ap.parse_args()
 

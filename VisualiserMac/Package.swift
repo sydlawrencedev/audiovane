@@ -6,9 +6,11 @@ let package = Package(
     platforms: [
         .macOS("14.2")
     ],
+    // The products are named for the app; the targets keep their old names
+    // so the Swift module — and everything in it — doesn't have to change.
     products: [
-        .executable(name: "AudioVane", targets: ["AudioVane"]),
-        .executable(name: "AudioVaneWatcher", targets: ["AudioVaneWatcher"])
+        .executable(name: "Vibresia", targets: ["AudioVane"]),
+        .executable(name: "VibresiaWatcher", targets: ["AudioVaneWatcher"])
     ],
     dependencies: [
         .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.58.0")
@@ -35,7 +37,7 @@ let package = Package(
             ]
         ),
         // Launched by launchd, not by the user: sits in the bundle as
-        // Contents/Helpers and opens AudioVane when Apple Music or Spotify
+        // Contents/Helpers and opens Vibresia when Apple Music or Spotify
         // starts. Plain AppKit so it stays tiny.
         .executableTarget(
             name: "AudioVaneWatcher",

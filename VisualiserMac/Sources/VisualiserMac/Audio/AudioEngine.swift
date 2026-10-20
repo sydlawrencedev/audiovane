@@ -65,6 +65,7 @@ final class AudioEngine: ObservableObject {
 
     // MARK: - Source switching
 
+    // Still filed under the old name, so the chosen source survives the rename.
     private static let sourceDefaultsKey = "audiovane.source"
 
     /// The source to pick next time. System audio is the default because the

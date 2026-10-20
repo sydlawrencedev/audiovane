@@ -119,14 +119,14 @@ private struct StartupToggles: View {
             toggle("Start at login",
                    detail: manager.launchAtLoginDetail,
                    isOn: manager.launchAtLogin,
-                   help: "AudioVane opens by itself when you log in.") {
+                   help: "Vibresia opens by itself when you log in.") {
                 manager.setLaunchAtLogin($0)
             }
 
             toggle("Open with Music or Spotify",
                    detail: manager.watchMusicAppsDetail,
                    isOn: manager.watchMusicApps,
-                   help: "A small background watcher opens AudioVane when Apple Music or Spotify starts. No audio, no window titles — it just watches which apps launch.") {
+                   help: "A small background watcher opens Vibresia when Apple Music or Spotify starts. No audio, no window titles — it just watches which apps launch.") {
                 manager.setWatchMusicApps($0)
             }
 
@@ -180,11 +180,11 @@ private struct WindowToggles: View {
                 }
                 .toggleStyle(.switch)
                 .controlSize(.mini)
-                .help("Keeps AudioVane above other apps' windows. Full screen apps and the menu bar still cover it.")
+                .help("Keeps Vibresia above other apps' windows. Full screen apps and the menu bar still cover it.")
 
                 Text(app.alwaysOnTop
-                     ? "AudioVane stays above other windows"
-                     : "AudioVane goes behind other apps")
+                     ? "Vibresia stays above other windows"
+                     : "Vibresia goes behind other apps")
                     .font(.system(size: 9))
                     .foregroundStyle(Color(white: 0.45))
                     .fixedSize(horizontal: false, vertical: true)
@@ -240,7 +240,7 @@ private struct AnalyticsToggle: View {
 /// message is already a link.
 struct SharewareLink: View {
     private static let site = URL(string: "https://audiovane.minithlabs.com")!
-    private static let pitch = "I think you'll love AudioVane, it's free and proudly shareware"
+    private static let pitch = "I think you'll love Vibresia, it's free and proudly shareware"
     @State private var hovering = false
     @State private var isSharing = false
 
@@ -263,7 +263,7 @@ struct SharewareLink: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .background(SharePickerAnchor(isPresented: $isSharing, items: Self.shareItems))
-        .help("Share AudioVane with someone")
+        .help("Share Vibresia with someone")
         .task {
             // `--about --share` opens the share sheet without a click, for
             // checking it still behaves on this version of macOS (Apple moves
