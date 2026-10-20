@@ -27,9 +27,11 @@ Most modes are a single full-screen fragment shader, which is the quickest way i
    - `uBass`, `uMid`, `uTreble`, `uLevel`: smoothed energy, 0 to 1
    - `uBands[96]`: the spectrum, 40Hz–16kHz on a log scale (`bandAt(x)` reads it with x from 0 to 1)
    - `uBeat`, `uBeatStrength`: a beat this frame, and a decaying pulse
-   - `uBeats`: a beat counter locked to the detected tempo (`fract(uBeats)` is the phase within a beat)
+   - `uBeats`: a beat counter locked to the detected tempo (`fract(uBeats)` is the phase within a beat). It's continuous: the renderer eases each beat's phase correction in over ~0.4 s, so it never steps or runs backwards
    - `uScroll`: forward-only distance that moves faster when louder
    - `uActive`: 0 in silence, easing to 1 with sound
+   - `uLevelSmooth`, `uBassSmooth`: slow versions of `uLevel` and `uBass` (rise over ~0.3 s, fall over ~1.5 s). Use them for swells, brightness and size that should breathe with the music rather than flicker
+   - `uClock`: wall-clock seconds that keep running in silence. Only for a mode that should never stop completely (Ribbons keeps a slow drift); everything else follows the house rule below
    - helpers: `screenP()`, `sdCircle`, `sdBox`, `sdSeg`, `fill`, `rot`, `hash21`, …
 3. **Follow the house rules:**
    - In silence the mode should be still: scale motion and colour by `uActive`, and drive time from `uTime`, `uBeats` or `uScroll`.

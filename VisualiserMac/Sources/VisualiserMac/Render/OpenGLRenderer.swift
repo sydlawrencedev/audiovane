@@ -90,7 +90,8 @@ final class OpenGLRenderer: NSObject {
         let program: GLuint
         let time, bass, mid, treble, beat, beatStrength, level, resolution, idle, bands: GLint
         let eventKind, eventAge: GLint
-        let active, beats, peaks, scroll: GLint
+        let active, beats, peaks, scroll, clock: GLint
+        let levelSmooth, bassSmooth: GLint
     }
     private var shaderModes: [VisualizerMode: ShaderMode] = [:]
 
@@ -792,6 +793,8 @@ final class OpenGLRenderer: NSObject {
             glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
             glEnable(GLbitfield(GL_BLEND))
             let snap = audio.snapshot
+            if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass) }
+            easeLevels(snap, dt: 1.0 / 60)
             let t = Float(k) / 60.0
             switch currentMode {
             case .tunnel: drawTunnel(time: t, snap: snap)
@@ -1205,16 +1208,33 @@ final class OpenGLRenderer: NSObject {
     private var danceClock: Double = 0
     private var danceActivity: Double = 0
     private var danceClockLast: CFTimeInterval = CACurrentMediaTime()
-    /// Counts beats at the detected tempo (120 until one is detected), nudged
+    /// Counts beats at the detected tempo (120 until one is detected), pulled
     /// toward a whole number on each detected beat so moves land on the beat.
-    /// Like danceClock it only runs while there's sound.
+    /// Like danceClock it only runs while there's sound. It never jumps: see
+    /// advanceBeatClock for how the pull is eased in.
     private var beatClock: Double = 0
+    /// Phase correction still to be worked into beatClock (beats), and how
+    /// fast that remainder is shrinking (beats per second).
+    private var beatCorrectionLeft: Double = 0
+    private var beatCorrectionRate: Double = 0
+    /// The tempo beatClock actually runs at: eases toward the detected bpm so
+    /// a tempo change (or the first detection) doesn't change speed in one frame.
+    private var beatClockBPM: Double = 120
+    /// Slow, time-filtered loudness for uLevelSmooth / uBassSmooth: rises over
+    /// ~0.3 s, falls over ~1.5 s, so a mode can swell with the music without
+    /// the frame-to-frame flicker of uLevel / uBass.
+    private var levelSmooth: Double = 0
+    private var bassSmooth: Double = 0
     /// Spectrum peak caps: jump to the bar's level, then fall slowly.
     private var spectrumPeaks = [Float](repeating: 0, count: 48)
     private var lastFrameDT: Double = 1.0 / 60
     /// Distance travelled, for things that should move faster when louder.
     /// Accumulated (never time × speed) so a drop in speed can't run it backwards.
     private var scrollClock: Double = 0
+    /// Plain wall-clock seconds that keep running in silence. Only for modes
+    /// that should never stop completely (Ribbons keeps a slow, dim drift);
+    /// everything else should stay on the sound-gated clocks above.
+    private var wallClock: Double = 0
 
     private func advanceDanceClock(_ snap: AudioSnapshot) {
         let now = CACurrentMediaTime()
@@ -1225,10 +1245,56 @@ final class OpenGLRenderer: NSObject {
         danceActivity += (target - danceActivity) * min(1, dt * 6)
         danceClock += dt * danceActivity
         scrollClock += dt * danceActivity * (0.4 + Double(snap.level) * 0.6)
-        let bpm = snap.bpm > 0 ? snap.bpm : 120
-        beatClock += dt * danceActivity * bpm / 60
-        if snap.beat { beatClock += (beatClock.rounded() - beatClock) * 0.35 }
+        wallClock += dt
+        advanceBeatClock(snap, dt: dt)
+        easeLevels(snap, dt: dt)
         lastFrameDT = dt
+    }
+
+    /// Advances beatClock (uBeats) and keeps it phase-locked to the music
+    /// without ever stepping. Each detected beat measures how far the clock is
+    /// from the nearest whole beat and sets 35% of that as the correction
+    /// still to make (replacing any left over: the new measurement already
+    /// includes it). The correction is then worked in by a critically damped
+    /// spring, so the clock speeds up or slows down smoothly and is ~95% of
+    /// the way there after 0.4 s. The extra is capped at 45% of the normal
+    /// advance, so the clock never runs backwards or lurches forward, and in
+    /// silence (no normal advance) it stands still like everything else.
+    private func advanceBeatClock(_ snap: AudioSnapshot, dt: Double) {
+        guard dt > 0 else { return }
+        let bpm = snap.bpm > 0 ? snap.bpm : 120
+        beatClockBPM += (bpm - beatClockBPM) * (1 - exp(-dt / 0.5))
+        let advance = dt * danceActivity * beatClockBPM / 60
+        if snap.beat { beatCorrectionLeft = (beatClock.rounded() - beatClock) * 0.35 }
+
+        // Exact critically damped step (stable for any dt): x is the
+        // correction still left, v its rate of change.
+        let omega = 12.0
+        let x0 = beatCorrectionLeft, v0 = beatCorrectionRate
+        let decay = exp(-omega * dt)
+        var x = (x0 + (v0 + omega * x0) * dt) * decay
+        var v = (v0 - omega * (v0 + omega * x0) * dt) * decay
+        var step = x0 - x
+        let limit = advance * 0.45
+        if abs(step) > limit {
+            step = min(limit, max(-limit, step))
+            x = x0 - step
+            v = -step / dt
+        }
+        beatCorrectionLeft = x
+        beatCorrectionRate = v
+        beatClock += advance + step
+    }
+
+    /// dt-correct one-pole smoothing of the loudness for uLevelSmooth and
+    /// uBassSmooth: attack ~0.3 s, release ~1.5 s (time constants).
+    private func easeLevels(_ snap: AudioSnapshot, dt: Double) {
+        func ease(_ value: inout Double, toward target: Double) {
+            let tau = target > value ? 0.3 : 1.5
+            value += (target - value) * (1 - exp(-dt / tau))
+        }
+        ease(&levelSmooth, toward: Double(snap.level))
+        ease(&bassSmooth, toward: Double(snap.bass))
     }
 
     private func drawShaderMode(_ mode: VisualizerMode, time: Float, snap: AudioSnapshot) {
@@ -1246,6 +1312,9 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.active, Float(danceActivity))
         glUniform1f(m.beats, Float(beatClock.truncatingRemainder(dividingBy: 1024)))
         glUniform1f(m.scroll, Float(scrollClock.truncatingRemainder(dividingBy: 4096)))
+        glUniform1f(m.clock, Float(wallClock.truncatingRemainder(dividingBy: 3600)))
+        glUniform1f(m.levelSmooth, Float(levelSmooth))
+        glUniform1f(m.bassSmooth, Float(bassSmooth))
         if mode == .spectrum {
             for i in 0..<spectrumPeaks.count {
                 let v = max(snap.bands[i * 2], snap.bands[i * 2 + 1])
@@ -1446,7 +1515,8 @@ final class OpenGLRenderer: NSObject {
                 level: loc("uLevel"), resolution: loc("uResolution"), idle: loc("uIdle"),
                 bands: loc("uBands[0]"), eventKind: loc("uEventKind"), eventAge: loc("uEventAge"),
                 active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
-                scroll: loc("uScroll"))
+                scroll: loc("uScroll"), clock: loc("uClock"),
+                levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")
