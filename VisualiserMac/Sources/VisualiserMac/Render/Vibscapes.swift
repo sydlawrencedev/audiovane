@@ -326,10 +326,29 @@ enum CustomVibscapeGuide {
       uActive      0..1   0 in silence, eases to 1 when there is sound
       uClock             seconds since launch, keeps running in silence
 
+    Anything that looks like a cloud, a flame or smoke is `fbm`:
+
+    vec3 render(vec2 p, float t)
+    {
+        float n = fbm(p * 7.0 + vec2(0.0, -t * 0.5));
+        n = fbm(p * 7.0 + vec2(n * 1.6, n * 1.6));
+        float glow = 1.0 - smoothstep(0.0, 0.2, length(p));
+        return mix(vec3(0.05, 0.1, 0.3), vec3(0.6, 0.8, 1.0), n * glow) * uActive;
+    }
+
+    Scale is what catches people out. `fbm(p)` sampled at the screen's scale is
+    too smooth to see — across a shape a few tenths wide you'd be looking at a
+    single slow ramp, and it reads as "the noise isn't working" rather than "the
+    frequency is wrong". Multiply by something around 7.0 so several cells land
+    inside the shape. Feeding one `fbm` into the next, as above, is what turns
+    grain into structure.
+
     These helpers are already defined for you:
 
       screenP()        centred coordinates, x scaled to the window shape
       hash21(p)        random number from a position, always 0..1
+      vnoise(p)        smooth noise at a position, 0..1
+      fbm(p)           four octaves of vnoise, 0..1
       bandAt(x)        loudness at a point across the spectrum, 0..1
       rot(a)           a 2x2 rotation matrix
       sdCircle(p, r)   distance to a circle — negative inside
@@ -428,7 +447,7 @@ enum CustomVibscapeGuide {
     Already available, do not redefine:
       uniforms: uBass uMid uTreble uLevel uLevelSmooth uBassSmooth
                 uBeat uBeatStrength uBands[96] uActive uBeats uClock
-      helpers:  screenP() hash21(p) bandAt(x) rot(a)
+      helpers:  screenP() hash21(p) vnoise(p) fbm(p) bandAt(x) rot(a)
                 sdCircle(p,r) sdBox(p,b) sdRoundBox(p,b,r) sdSeg(p,a,b)
                 fill(d,w) aaw(s)
       GLSL:     mix clamp sin cos fract length dot
