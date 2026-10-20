@@ -13,7 +13,7 @@ struct AboutButton: View {
     private static let site = URL(string: "https://minithlabs.com")!
     /// The app's own site, which is what the name in the credits should go to
     /// — minithlabs.com is the maker's, and stays below it as its own link.
-    private static let product = URL(string: "https://audiovane.minithlabs.com")!
+    private static let product = URL(string: "https://vibresia.com")!
 
     var body: some View {
         Button {
@@ -56,7 +56,7 @@ struct AboutButton: View {
                 }
                 .buttonStyle(.plain)
                 .onHover { titleHovering = $0 }
-                .help("audiovane.minithlabs.com")
+                .help("vibresia.com")
 
                 Link(destination: Self.site) {
                     Text("minithlabs.com")
@@ -239,7 +239,7 @@ private struct AnalyticsToggle: View {
 /// the website. The URL travels with the message, so a share that lands in a
 /// message is already a link.
 struct SharewareLink: View {
-    private static let site = URL(string: "https://audiovane.minithlabs.com")!
+    private static let site = URL(string: "https://vibresia.com")!
     private static let pitch = "I think you'll love Vibresia, it's free and proudly shareware"
     @State private var hovering = false
     @State private var isSharing = false

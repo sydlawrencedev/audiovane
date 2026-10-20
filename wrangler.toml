@@ -1,5 +1,5 @@
 # Landing page for https://vibresia.com — static files in ./site, served by
-# a Cloudflare Worker on the custom domain.
+# a Cloudflare Worker.
 #   npx wrangler deploy
 #
 # The Worker exists for one route: /download, which redirects to the latest
@@ -12,6 +12,10 @@ compatibility_date = "2026-10-01"
 [assets]
 directory = "./site"
 binding = "ASSETS"
+# The Worker has to see every request, not just the ones that miss a file:
+# the redirects from the old hostname and from www are decided here, and an
+# asset hit served straight from the edge would skip them.
+run_worker_first = true
 
 [vars]
 # Plain settings; the webhook URL is a secret, never a var:
@@ -19,20 +23,27 @@ binding = "ASSETS"
 DISCORD_NOTIFICATIONS_ENABLED = "true"
 DISCORD_BOT_USERNAME = "Vibresia"
 
-# Both names are attached to this Worker. The old one isn't there to be
-# served — it's there so the Worker can answer it with a permanent redirect
-# to the new one. Without it, every old link and the old install command
-# would just fail.
+# These are routes rather than custom domains because the DNS for
+# vibresia.com already exists and is proxied. A custom domain would want to
+# own those records, and Cloudflare refuses to overwrite records it didn't
+# create.
 #
-# The old hostname's DNS still has to point here for that to work.
+# The old hostname is attached too, so the Worker can answer it with a
+# permanent redirect to the new one — the old install command and any old
+# link in someone's post keep working. Its DNS has to keep pointing at
+# Cloudflare for that to happen.
 [[routes]]
-pattern = "vibresia.com"
-custom_domain = true
+pattern = "vibresia.com/*"
+zone_name = "vibresia.com"
 
 [[routes]]
-pattern = "www.vibresia.com"
-custom_domain = true
+pattern = "www.vibresia.com/*"
+zone_name = "vibresia.com"
 
+# The old name, as a custom domain rather than a route: a custom domain
+# outranks the Pages project that also answers for this hostname, which is
+# what was serving the company site on the bare "/" instead of redirecting.
 [[routes]]
 pattern = "audiovane.minithlabs.com"
 custom_domain = true
+
