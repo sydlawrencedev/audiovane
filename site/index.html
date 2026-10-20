@@ -225,7 +225,7 @@
   <section id="vibscapes">
     <h2>Vibscapes</h2>
     <p class="sub">Individual visual worlds you can create, customise and share.</p>
-    <p class="small">Switch with the number keys, or let Auto Scan cycle through them all. Every vibscape follows the music, and every vibscape holds still when it stops.</p>
+    <p class="small">Auto Scan cycles through them all, handing over a few bars at a time. Every vibscape follows the music, and holds still when it stops.</p>
     <div class="vibscapes">
       <article class="vibscape" data-vibscape="ribbons">
 <img src="media/modes/ribbons.jpg" alt="Ribbons: glowing hot pink and cyan ribbons weaving through cyan-edged glass shapes above a glossy floor" loading="lazy"><div class="body"><h3>Ribbons</h3><p>Luminous ribbons twist through floating glass as the whole scene drifts past. Every bass note bends them, and every beat turns the glass.</p></div></article>
@@ -291,6 +291,14 @@
       </ol>
       <p class="small">Plain-text versions: <a href="/install.md">install.md</a> · <a href="/llms.txt">llms.txt</a></p>
     </div>
+
+    <h3>Then let it write vibscapes</h3>
+    <p>Vibresia ships an MCP server, so an assistant can write vibscapes for you — and, the part that actually matters, <b>see them</b>. It draws each one and hands the picture back, several frames at a time if you ask, so it isn't describing a shader it hasn't looked at.</p>
+    <p>It can also read the music the app is hearing right now and the palette in use, which is how it picks colours that survive the grade instead of arriving as something else.</p>
+    <div class="cmd"><code id="mcp-cmd">Connect to this mcp: vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy data-command="mcp">Copy</button></div>
+    <p>Once it's connected, this is all it takes:</p>
+    <div class="cmd"><code>Make a vibscape that consists of a blue smokey orb pulsing to the music</code><button data-copy data-command="prompt">Copy</button></div>
+    <p class="small">It's a good first one to try, because the answer is a picture. Every assistant has a different way of wiring up an MCP server — <a href="/agents">the setup page</a> has yours, per client.</p>
   </section>
 
   <section id="changelog">
