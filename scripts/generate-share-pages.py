@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Generates the per-vibescape share HTML pages at `site/share/<slug>.html`,
-plus a couple of supporting files:
+"""Generates the per-vibescape share HTML pages at `site/share/<slug>.html`
+and the lookup table at `site/share/manifest.json`.
 
-  - `site/share/index.html` — server-side rewrite target. Cloudflare
-    Workers Static Assets resolve `/share/` to this index, and the
-    `site/_redirects` rule `/share → /share.html` (with `share.html` being
-    the fragment-based page) covers the bare path. Having both means the
-    site works whether the deployment is checked for `_redirects` or not.
-
-  - `site/share/manifest.json` — the lookup table for the fragment-based
-    page so it can suggest related built-ins and validate slugs.
+`site/share/index.html` — the page custom vibscape shares land on — is
+hand-written, not generated. It lives in the `share/` directory on purpose:
+Cloudflare Workers Static Assets serve a directory's index.html for both
+`/share` and `/share/`, so no rewrite is needed. A rewrite in `_redirects`
+was the obvious alternative and it 307s to itself forever, because a rule's
+source matches on path *prefix* — `/share -> /share.html` also matches
+`/share.html`, which is its own destination. See the note in
+`site/_redirects`.
 
 Each generated HTML is a static file with full `og:*` meta tags pointing at
 its per-vibescape share graphic, the Open-in-Vibresia button wired to
@@ -34,7 +34,6 @@ ROOT = Path(__file__).resolve().parent.parent
 INDEX_HTML = ROOT / "site" / "index.html"
 OUT_DIR = ROOT / "site" / "share"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
-CUSTOM_HTML = ROOT / "site" / "share.html"
 
 
 def parse_vibscape_cards() -> list[dict]:
@@ -153,14 +152,15 @@ def main() -> int:
         out.write_text(render(**card), encoding="utf-8")
         print(f"[share-pages] wrote {out.relative_to(ROOT)}")
 
-    # Mirror site/share.html into site/share/index.html so `/share/` (with
-    # trailing slash) serves the same fragment page through Cloudflare
-    # Workers Static Assets' directory-index resolution.
-    index_mirror = OUT_DIR / "index.html"
-    index_mirror.write_text(CUSTOM_HTML.read_text(encoding="utf-8"), encoding="utf-8")
-    print(f"[share-pages] wrote {index_mirror.relative_to(ROOT)}")
+    # site/share/index.html is hand-written and is what /share serves, so it is
+    # checked rather than generated — if it goes missing, every custom-vibscape
+    # share link 404s, and that should be a loud failure here.
+    if not (OUT_DIR / "index.html").exists():
+        print("[share-pages] site/share/index.html is missing — custom vibscape "
+              "shares would 404. Restore it before deploying.", file=sys.stderr)
+        return 1
 
-    # Lookup table so the JS in /share.html can suggest other built-ins
+    # Lookup table so the JS in /share can suggest other built-ins
     # and validate slugs without having to redeploy.
     manifest = {
         "generated": "regenerate with scripts/generate-share-pages.py",
