@@ -283,6 +283,21 @@ final class AudioEngine: ObservableObject {
 
     /// Just rebuild the snapshot from current analyzer state, without ticking the
     /// analyzer. Used by snapshot vibscape to avoid running the FFT pipeline.
+    /// Drives the analyzer from a beat clock, for offline rendering.
+    ///
+    /// Nothing is playing, but the vibscapes still need to move — a video of
+    /// eighteen vibscapes all reacting to one frozen moment reads as a bug.
+    /// Time drives everything, so this is deterministic: the same seconds give
+    /// the same frame every time, which is what makes a re-render comparable.
+    func syntheticState(at seconds: Double, bpm: Double = 124) {
+        let beat = 60.0 / bpm
+        let phase = seconds.truncatingRemainder(dividingBy: beat) / beat
+        // Sharp attack, exponential decay: 1 on the beat, gone by the next.
+        let kick = Float(exp(-phase * 5.5))
+        let barPhase = Float(seconds.truncatingRemainder(dividingBy: beat * 4) / (beat * 4))
+        analyzer.setSyntheticState(kick: kick, barPhase: barPhase)
+    }
+
     func refreshSnapshot() {
         var snap = AudioSnapshot()
         snap.rms = analyzer.rms

@@ -490,6 +490,78 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Record whatever vibscape is active (the --vibscape flag can set it).
         app.renderer.setVibscape(app.activeVibscape)
+    /// Renders every built-in vibscape to a numbered sequence of PNG frames.
+    ///
+    /// This is the same draw the app does, into an offscreen target, through
+    /// the same palette grade — so a frame here is a frame of the real thing.
+    /// The video is assembled from the PNGs afterwards (see
+    /// `scripts/make-demo-video.sh`), which keeps the app out of the business
+    /// of encoding video and makes a re-render of one vibscape cheap.
+    private func runVideo() {
+        let args = CommandLine.arguments
+        func value(_ flag: String, _ fallback: String) -> String {
+            if let i = args.firstIndex(of: flag), i + 1 < args.count { return args[i + 1] }
+            return fallback
+        }
+        let outDir = value("--video", "/tmp/vib_video")
+        // 960x632 is the size the site has always used, so the layout of the
+        // page doesn't move when the video is replaced.
+        let size = value("--video-size", "960x632").split(separator: "x")
+        let width = size.count == 2 ? Int(size[0]) ?? 960 : 960
+        let height = size.count == 2 ? Int(size[1]) ?? 632 : 632
+        let fps = Double(value("--video-fps", "30")) ?? 30
+        let seconds = Double(value("--video-seconds", "3.0")) ?? 3.0
+        let frames = max(2, Int((fps * seconds).rounded()))
+
+        // `--video-only ribbons,silk` renders a subset, for re-rendering one
+        // vibscape without paying for all of them.
+        let only: Set<String>? = {
+            guard let i = args.firstIndex(of: "--video-only"), i + 1 < args.count else { return nil }
+            return Set(args[i + 1].split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) })
+        }()
+
+        try? FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
+
+        var attempts = 0
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { t in
+            attempts += 1
+            guard let app = AppState.shared else {
+                if attempts > 200 { NSLog("[VIDEO] timeout AppState"); exit(1) }
+                return
+            }
+            if !app.renderer.isReady {
+                if attempts > 200 { NSLog("[VIDEO] timeout renderer"); exit(1) }
+                return
+            }
+            t.invalidate()
+
+            // Auto Scan isn't a look in itself — it's the thing that hands over
+            // to other looks — so a reel skips it and shows what it switches to.
+            let vibscapes = Vibscape.allCases.filter {
+                $0 != .autoScan && (only == nil || only!.contains($0.rawValue))
+            }
+            NSLog("[VIDEO] \(vibscapes.count) vibscapes, \(frames) frames each at \(Int(width))x\(Int(height))")
+
+            for (index, vibscape) in vibscapes.enumerated() {
+                let prefix = String(format: "%02d_%@_", index, vibscape.rawValue)
+                app.renderer.renderFrameSequence(
+                    width: width, height: height, mode: .builtin(vibscape),
+                    frames: frames, syntheticAudio: true, fps: fps,
+                    directory: outDir, prefix: prefix)
+                NSLog("[VIDEO] \(index + 1)/\(vibscapes.count) \(vibscape.rawValue)")
+            }
+
+            // A plain list, so the shell script doesn't have to re-derive the
+            // order and risk putting the reel in a different order than the app.
+            let list = vibscapes.enumerated()
+                .map { String(format: "%02d_%@", $0.offset, $0.element.rawValue) }
+                .joined(separator: "\n") + "\n"
+            try? list.write(toFile: outDir + "/_order.txt", atomically: true, encoding: .utf8)
+            NSLog("[VIDEO] done")
+            exit(0)
+        }
+    }
+
         NSLog("[REC] recording mode \(app.activeVibscape.rawValue)")
 
         NSLog("[REC] writing \(frames) frames @ \(intervalMs)ms to \(outDir)")

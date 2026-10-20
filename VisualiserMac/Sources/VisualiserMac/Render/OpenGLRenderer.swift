@@ -835,7 +835,56 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// One-shot offscreen render to PNG. Used for verification / debug snapshots.
+    /// Draws a vibscape offscreen and writes the last frame as a PNG.
     func renderToPNG(width: Int, height: Int, mode: VibscapeID, frames: Int = 60, path: String) {
+        var last: [UInt8] = []
+        renderFrames(width: width, height: height, mode: mode, frames: frames) { _, pixels in
+            last = pixels
+        }
+        guard !last.isEmpty else { return }
+        writePNG(last, width: width, height: height, to: path)
+        NSLog("[VIZ] saved \(path)")
+    }
+
+    /// Writes a vibscape offscreen, one PNG per frame, for assembling a video.
+    ///
+    /// Same pipeline as `renderToPNG` — same draw, same palette grade — so a
+    /// frame from here and a frame from the app are the same picture. What's
+    /// different is that every frame is kept instead of just the last.
+    func renderFrameSequence(width: Int, height: Int, mode: VibscapeID, frames: Int,
+                             syntheticAudio: Bool, fps: Double, directory: String, prefix: String) {
+        var written = 0
+        renderFrames(width: width, height: height, mode: mode, frames: frames,
+                     syntheticAudio: syntheticAudio, fps: fps) { index, pixels in
+            // Five digits, so the filenames sort in the order they were drawn
+            // and every clip has room for the same number of frames.
+            let path = "\(directory)/\(prefix)\(String(format: "%05d", index)).png"
+            self.writePNG(pixels, width: width, height: height, to: path)
+            written += 1
+        }
+        NSLog("[VIDEO] \(prefix) \(written)/\(frames) frames")
+    }
+
+    private func writePNG(_ flipped: [UInt8], width: Int, height: Int, to path: String) {
+        let rowBytes = width * 4
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let provider = CGDataProvider(data: Data(flipped) as CFData) else { return }
+        guard let cgImg = CGImage(width: width, height: height, bitsPerComponent: 8,
+                                 bitsPerPixel: 32, bytesPerRow: rowBytes,
+                                 space: cs, bitmapInfo: info,
+                                 provider: provider, decode: nil, shouldInterpolate: false,
+                                 intent: .defaultIntent) else { return }
+        let url = URL(fileURLWithPath: path)
+        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
+        CGImageDestinationAddImage(dest, cgImg, nil)
+        CGImageDestinationFinalize(dest)
+    }
+
+    /// The offscreen draw loop, handing every graded frame to `eachFrame`.
+    private func renderFrames(width: Int, height: Int, mode: VibscapeID, frames: Int,
+                              syntheticAudio: Bool = false, fps: Double = 60,
+                              eachFrame: (Int, [UInt8]) -> Void) {
         guard let ctx = ensureOffscreenContext() else {
             NSLog("[VIZ] renderToPNG: failed to create offscreen context")
             return
@@ -879,16 +928,21 @@ final class OpenGLRenderer: NSObject {
         // own FBO so the PNG shows the active palette.
         var snapTarget = makeSceneTarget(w: width, h: height)
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), snapTarget.fbo)
+        let rowBytes = width * 4
         for k in 0..<frames {
+            let seconds = Double(k) / fps
+            if syntheticAudio {
+                audio.syntheticState(at: seconds)
+            }
             audio.refreshSnapshot()
-            beatClock = Double(k) / 60.0 * 2.0
+            beatClock = seconds * 2.0
             glClearColor(0.02, 0.004, 0.03, 1.0)
             glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
             glEnable(GLbitfield(GL_BLEND))
             let snap = audio.snapshot
             if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass); presence = 1; presenceVelocity = 0 }
-            easeLevels(snap, dt: 1.0 / 60)
-            let t = Float(k) / 60.0
+            easeLevels(snap, dt: 1.0 / fps)
+            let t = Float(seconds)
             switch currentVibscape {
             case .builtin(let v):
                 switch v {
@@ -905,18 +959,39 @@ final class OpenGLRenderer: NSObject {
             case .custom(let id):
                 drawCustomVibscape(id, time: t, snap: snap)
             }
+
+            // Grade and read back inside the loop. A caller asking for a
+            // sequence needs every frame, not just the last, and grading each
+            // one is what a frame of the running app has already been through —
+            // so the video matches the screen.
+            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo)
+            glViewport(0, 0, GLsizei(width), GLsizei(height))
+            glDisable(GLbitfield(GL_BLEND))
+            drawGrade(sampling: snapTarget.tex, mode: currentVibscape)
+
+            var pixels = [UInt8](repeating: 0, count: width * height * 4)
+            glReadPixels(0, 0, GLsizei(width), GLsizei(height),
+                         GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &pixels)
+
+            // GL is bottom-up, an image is top-down.
+            var flipped = [UInt8](repeating: 0, count: width * height * 4)
+            for y in 0..<height {
+                let src = (height - 1 - y) * rowBytes
+                let dst = y * rowBytes
+                flipped[dst..<(dst + rowBytes)].withUnsafeMutableBytes { dst in
+                    pixels[src..<(src + rowBytes)].withUnsafeBytes { src in
+                        dst.copyBytes(from: src)
+                    }
+                }
+            }
+
+            eachFrame(k, flipped)
+
+            // Back to the scene target for the next frame's draw.
+            glBindFramebuffer(GLenum(GL_FRAMEBUFFER), snapTarget.fbo)
+            glViewport(0, 0, GLsizei(width), GLsizei(height))
+            glEnable(GLbitfield(GL_BLEND))
         }
-
-        // Grade the scene through the palette into the snapshot's FBO.
-        glBindFramebuffer(GLenum(GL_FRAMEBUFFER), fbo)
-        glViewport(0, 0, GLsizei(width), GLsizei(height))
-        glDisable(GLbitfield(GL_BLEND))
-        drawGrade(sampling: snapTarget.tex, mode: currentVibscape)
-
-        // read pixels
-        let rowBytes = width * 4
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        glReadPixels(0, 0, GLsizei(width), GLsizei(height), GLenum(GL_RGBA), GLenum(GL_UNSIGNED_BYTE), &pixels)
 
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
         glDeleteFramebuffers(1, &fbo)
@@ -924,33 +999,7 @@ final class OpenGLRenderer: NSObject {
         glDeleteFramebuffers(1, &snapTarget.fbo)
         glDeleteTextures(1, &snapTarget.tex)
 
-        // flip vertically (GL is bottom-up, PNG is top-down)
-        var flipped = [UInt8](repeating: 0, count: width * height * 4)
-        for y in 0..<height {
-            let src = (height - 1 - y) * rowBytes
-            let dst = y * rowBytes
-            for x in 0..<rowBytes {
-                flipped[dst + x] = pixels[src + x]
-            }
-        }
-
-        // write PNG via Core Graphics
-        let cs = CGColorSpaceCreateDeviceRGB()
-        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        guard let provider = CGDataProvider(data: Data(flipped) as CFData) else { return }
-        guard let cgImg = CGImage(width: width, height: height, bitsPerComponent: 8,
-                                 bitsPerPixel: 32, bytesPerRow: rowBytes,
-                                 space: cs, bitmapInfo: info,
-                                 provider: provider, decode: nil, shouldInterpolate: false,
-                                 intent: .defaultIntent) else { return }
-        let url = URL(fileURLWithPath: path)
-        guard let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
-        CGImageDestinationAddImage(dest, cgImg, nil)
-        CGImageDestinationFinalize(dest)
-
-        // restore
         currentVibscape = saveVibscape
-        NSLog("[VIZ] saved \(path)")
     }
 
     /// Capture the current screen backbuffer to a PNG. Reads from the front

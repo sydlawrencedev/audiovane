@@ -297,23 +297,36 @@ final class AudioAnalyzer {
 
     /// Direct-write bands + analysis state for snapshots. Bypasses FFT so we
     /// don't have to debug the vDSP pipeline offline.
-    func setSyntheticState() {
+    /// Plausible analyzer state without any audio, so a vibscape can be drawn
+    /// with something to react to.
+    ///
+    /// `kick` and `barPhase` let a caller drive this from a beat clock. One
+    /// call with no arguments is right for a still; a video needs the numbers
+    /// to move, because the spectrum, band and waveform vibscapes draw
+    /// `uBands`, and a frozen spectrum is a flat line with nothing happening on
+    /// it.
+    func setSyntheticState(kick: Float = 1, barPhase: Float = 0) {
         let n = AudioAnalyzer.bandCount
         for i in 0..<n {
             let t = Float(i) / Float(n)
             // Bass-heavy with treble sparkle. Mimics what we'd get from the
             // synthetic kick + pad.
-            let v = (1.0 - t) * 0.7 + 0.3 * sinf(t * 18.0) + 0.15 * (Float.random(in: 0...1))
-            bandsRaw[i] = max(0, min(1, v))
+            let base = (1.0 - t) * 0.7 + 0.3 * sinf(t * 18.0)
+            // A kick swells the low end hardest, the way a real one does.
+            let swell = 1.0 + kick * 0.30 * (1.0 - t)
+            // Bar position slides a lobe up the spectrum, so the shape shifts
+            // rather than only getting louder.
+            let drift = 0.12 * sinf(t * 18.0 + barPhase * 2 * .pi)
+            bandsRaw[i] = max(0, min(1, base * swell + drift + 0.08 * Float.random(in: 0...1)))
             bandsSmoothBuf[i] = bandsRaw[i]
         }
-        rms = 0.35
-        bass = 0.7
-        mid = 0.45
-        treble = 0.25
-        level = 0.45
-        beat = false
-        beatStrength = 0.6
+        rms = 0.35 + 0.18 * kick
+        bass = min(1, 0.62 + 0.28 * kick)
+        mid = 0.42 + 0.12 * kick
+        treble = min(1, 0.22 + 0.20 * barPhase)
+        level = 0.42 + 0.22 * kick
+        beat = kick > 0.75
+        beatStrength = 0.62 * max(0.15, kick)
         bpm = 124
     }
 
