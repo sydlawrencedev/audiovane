@@ -31,6 +31,7 @@ Most modes are a single full-screen fragment shader, which is the quickest way i
    - `uScroll`: forward-only distance that moves faster when louder
    - `uActive`: 0 in silence, easing to 1 with sound
    - `uLevelSmooth`, `uBassSmooth`: slow versions of `uLevel` and `uBass` (rise over ~0.3 s, fall over ~1.5 s). Use them for swells, brightness and size that should breathe with the music rather than flicker
+   - `uPresence`: music presence, 0 in silence and 1 with music, easing in and out over ~2.3 s with no chatter at quiet passages. Use it to morph between an idle state and the playing look
    - `uClock`: wall-clock seconds that keep running in silence. Only for a mode that should never stop completely (Ribbons keeps a slow drift); everything else follows the house rule below
    - helpers: `screenP()`, `sdCircle`, `sdBox`, `sdSeg`, `fill`, `rot`, `hash21`, …
 3. **Follow the house rules:**

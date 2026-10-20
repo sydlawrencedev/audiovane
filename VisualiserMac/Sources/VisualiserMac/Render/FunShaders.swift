@@ -39,6 +39,7 @@ enum FunShaders {
     uniform float uClock;       // wall-clock seconds; keeps running in silence (use sparingly)
     uniform float uLevelSmooth; // slow loudness, 0..1: rises over ~0.3 s, falls over ~1.5 s
     uniform float uBassSmooth;  // the same slow easing applied to uBass
+    uniform float uPresence;    // music presence, 0..1: eases in and out over ~2.3 s, no chatter
     out vec4 fragColor;
 
     const float PI = 3.14159265;
@@ -2689,7 +2690,12 @@ extension FunShaders {
     /// Louder music means a little faster flight and more light; the treble
     /// sparkles the glitter. The colours are picked to land as hot pink and gold through
     /// the NEON grade, and the background carries a touch of green so the
-    /// grade's purple lift reads as black. In silence: dim, and still.
+    /// grade's purple lift reads as black. In silence (uPresence, the
+    /// renderer's slow music presence, ~2.3 s each way) it rests: the same
+    /// sheets, dimmer, softer and a little cooler, breathing every 8 s, the
+    /// sheets swaying and the flakes drifting while the view turns once every
+    /// 10 min (every uClock period divides its one-hour wrap), so it never
+    /// freezes. When music starts it brightens and speeds up into the flight.
     static let flux = """
     // Flux: an abstract long-exposure light sweep. Huge fanned sheets of fine
     // light strands, hot pink and molten gold, sweep in from the edges of the
@@ -2697,6 +2703,7 @@ extension FunShaders {
     // while flying. Gold flakes and bokeh and a few cyan glass shards streak out
     // past the camera through black space. It flies faster, streaks longer and
     // burns brighter when the music is loud, and every motion glides.
+    // In silence it rests: dim, soft and slowly drifting.
 
     const vec3 fluxPink = vec3(1.0, 0.12, 0.42);
     const vec3 fluxGold = vec3(1.0, 0.52, 0.06);
@@ -2724,6 +2731,14 @@ extension FunShaders {
     // A soft swell that peaks on each beat and eases away; never a kick.
     float fluxSwell() { return (0.5 + 0.5 * cos(2.0 * PI * uBeats)) * uActive; }
 
+    // How much the music is playing: 0 in silence, 1 with sound. uPresence is
+    // the renderer's slow music presence (a critically damped ease, ~2.3 s each
+    // way, from the eased loudness, so it never snaps or chatters); the ends are
+    // trimmed so it lands on exactly 0 and 1.
+    float fluxPlay() { return smoothstep(0.02, 0.98, uPresence); }
+    float gPlay;      // fluxPlay(), once per pixel
+    float gIdle;      // 1 - gPlay
+
     // One sheet of light strands. `th` is the swirled angle round the vanishing
     // point, `r` the distance from it and `lr` its log, so equal steps of `lr`
     // fly past at equal speed. a0: the sheet's centre angle, w: its half-width
@@ -2731,6 +2746,8 @@ extension FunShaders {
     // much it covers what's behind in a.
     vec4 fluxSheet(float th, float r, float lr, float travel, float sm, float px,
                    float a0, float w, float n, float seed, vec3 tint, float lit) {
+        // in silence each sheet sways slowly open and shut (45 s, divides uClock's hour)
+        a0 += gIdle * 0.16 * sin(uClock * (2.0 * PI / 45.0) + seed * 1.7);
         float d = th - a0;
         d -= 2.0 * PI * floor((d + PI) / (2.0 * PI));            // wrap to -PI..PI
         // the sheet ripples as it flies
@@ -2781,20 +2798,24 @@ extension FunShaders {
         float travel = uTime * 3.6 + uScroll * 2.6;               // forward flight
         // streaks stretch with the (eased) flight speed, so motion blur hides
         // the step from frame to frame
-        float sm = 1.0 + 2.0 * uActive;
-        float lit = (0.35 + 0.65 * uActive) * (1.05 + 0.8 * uLevel + 0.15 * uBass + 0.1 * swl);
+        // it wakes and settles with the music presence (~2.3 s each way)
+        gPlay = fluxPlay();
+        gIdle = 1.0 - gPlay;
+        float sm = 1.0 + 2.0 * uActive * gPlay;
+        float lit = (0.35 + 0.65 * gPlay) * (1.05 + (0.8 * uLevel + 0.15 * uBass + 0.1 * swl) * gPlay);
+        float breath = 0.5 + 0.5 * sin(uClock * (2.0 * PI / 8.0));   // 8 s, divides uClock's hour
         float px = uResolution.y;
 
         // the vanishing point drifts slowly round the middle; the view rolls
         // the vanishing point circles slowly round the middle (a circle never
         // reverses), and the camera leans in as the flight eases up
         vec2 v = vec2(-0.05, 0.03) + vec2(0.09 * cos(clk * 0.12), 0.055 * sin(clk * 0.12));
-        vec2 q = (p - v) / (1.0 + 0.06 * uActive);
+        vec2 q = (p - v) / (1.0 + 0.06 * uActive * gPlay);
         float r = max(length(q), 1e-4);
         float lr = log(r);
-        float th = fluxAtan(q.y, q.x) + 0.22 * clk;               // a slow, steady roll
+        float th = fluxAtan(q.y, q.x) + 0.22 * clk + uClock * (2.0 * PI / 600.0);   // a slow, steady roll that never quite stops
         // the sheets swirl harder the nearer they get to the vanishing point
-        float sw = 1.0 / (r * 5.0 + 0.45);
+        float sw = 1.0 / (r * 5.0 + 0.45) * mix(0.6, 1.0, gPlay);   // relaxes into long curves in silence
 
         vec3 col = vec3(0.004, 0.03, 0.0);                        // lands near-neutral black after the grade
         // gold sheets underneath, pink over them
@@ -2821,7 +2842,7 @@ extension FunShaders {
         float busy = 0.35 + 0.9 * exp(-r * 3.0);
         for (int k = 0; k < 4; k++) {
             float fk = float(k);
-            float z = fract(fk * 0.25 + travel * 0.1);           // 0 far, 1 right past us
+            float z = fract(fk * 0.25 + travel * 0.1 + uClock / 40.0);   // 0 far, 1 right past us; drifts on in silence
             float scale = mix(28.0, 1.6, z * z);
             vec2 bq = q * scale + vec2(fk * 17.3, fk * 9.1);
             vec2 bc = floor(bq);
@@ -2833,8 +2854,8 @@ extension FunShaders {
             float fade = smoothstep(0.0, 0.25, z) * smoothstep(1.0, 0.93, z);
             float size = (0.04 + 0.16 * h3 * h3) * (0.6 + 0.9 * z);
             // motion streak along the flight line, kept inside the cell
-            float blur = min(1.0 + (0.8 + 5.0 * z * z) * uActive, 0.44 / size);
-            float spin = bh * 300.0 + clk * (1.0 + 3.0 * h4) + travel * 0.6;
+            float blur = min(1.0 + (0.8 + 5.0 * z * z) * uActive * gPlay, 0.44 / size);
+            float spin = bh * 300.0 + clk * (1.0 + 3.0 * h4) + travel * 0.6 + uClock * (2.0 * PI / 60.0);
             vec2 cp = rot(spin) * vec2(along / blur, across);
             if (bh < 0.012 && z > 0.4) {
                 // a cyan glass shard: a skewed slab with a corner sheared off,
@@ -2862,7 +2883,11 @@ extension FunShaders {
         }
 
         col = 1.0 - exp(-col * 1.5);                      // soft highlight roll-off
-        col = mix(col * 0.4, col, uActive);               // dims and settles in silence
+        // in silence: a soft, slightly cooler glow that breathes every 8 s
+        vec3 rest = pow(col, vec3(0.8)) * (0.5 + 0.08 * breath);
+        rest = mix(rest, rest * vec3(0.8, 0.95, 1.3), 0.7);
+        rest += mix(fluxPink, fluxGold, 0.4) * exp(-r * 3.0) * (0.035 + 0.02 * breath);
+        col = mix(rest, col, gPlay);
         fragColor = vec4(col, 1.0);
     }
     """
