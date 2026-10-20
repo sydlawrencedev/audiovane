@@ -1584,12 +1584,15 @@ extension FunShaders {
     /// sits high at the back and a fine hairline runs low up front. Each sits
     /// at its own height and depth and undulates on its own slow waves, so
     /// they cross with navy between them. The ribbons are hot pink at rest;
-    /// every beat launches a band of bright cyan that races along each one
+    /// every beat launches a band of cyan that races along each one
     /// the way it flows, some strands lighting a moment before others so it
     /// shimmers through, then shrinks away strand by strand so the ribbon
     /// flows back to pink. Each ribbon fires at its own point in the beat, so
     /// the bands ripple through one after another rather than all at once,
-    /// and every band eases in and out with a soft head and tail. The glass
+    /// and every band eases in and out with a soft head and tail. The bands
+    /// follow the music: on the eased bass and loudness a loud kick sends a
+    /// big, bright, long cyan surge and a quiet passage a faint, short one,
+    /// and the treble glints along the pulse heads. The glass
     /// is ray-traced exactly (each shape is a set of paired face planes, so
     /// there is no raymarching loop): solid clear faces that reflect the
     /// lights, refract the hero ribbon behind them, catch pink light inside
@@ -1609,8 +1612,12 @@ extension FunShaders {
     /// brightens the ribbons and swells the glass; the glass turns and the
     /// ribbons reshape on an eased beat clock that never stops; the treble
     /// makes the edges and the dust sparkle a little.
-    /// In silence it dims and goes pink with no pulses, but keeps a slow drift
-    /// (on uClock), by design.
+    /// In silence the glass fades away and the four ribbons gather into one
+    /// still set of ten perfectly level pink lines across the middle of the
+    /// screen: 1 px tall, 2 px apart, on whole pixel rows at any resolution.
+    /// When the music starts they unfurl back into the ribbons and the glass
+    /// returns; when it stops they settle back. The morph is eased on
+    /// uLevelSmooth (with uActive), so it never snaps or chatters.
     static let ribbons = """
     // Glass polyhedra as pairs of parallel planes: the first 4 axes make an
     // octahedron, all 10 an icosahedron (face normals, unit length).
@@ -1665,6 +1672,39 @@ extension FunShaders {
     float gSwell;   // beatSwell(), worked out once per pixel at the top of main()
     float gSpec;    // the low end of the spectrum, worked out once per pixel
 
+    // Silence: with no music the glass fades away and the four ribbons gather
+    // into one still set of ten perfectly level lines, 2 px apart, across the
+    // middle of the screen. gPlay is how much music there is (0 in silence, 1
+    // playing), eased on the slow loudness so it unfurls over about half a
+    // second when the music starts and settles over a second or two when it
+    // stops, with no chattering in quiet passages. At 1 everything is exactly
+    // as when playing. gGlass is how visible the glass is: it goes first and
+    // comes back last.
+    float gPlay;
+    float gGlass;
+    float gCut = 1e9;   // ribbons further along the ray than this (behind fading glass) ...
+    float gBehind = 1.0; // ... show this much
+    // How hard the cyan pulses hit: from the eased bass and loudness, so a loud
+    // kick sends a big, bright, long cyan surge racing through and a quiet
+    // passage only a faint, short one, without flicker. 0..1.
+    float gDrive;
+    float pulseDrive() { return smoothstep(0.1, 0.27, uBassSmooth * 0.6 + uLevelSmooth * 1.6); }
+    float gPx;      // one screen pixel, in world units, on the plane the lines settle on
+    const float kIdleZ = 0.1;                            // the lines settle at the hero's depth...
+    const float kIdleY = -0.40 + 0.24 * (kIdleZ + 3.3) / 1.3;   // ... at the height of the screen's middle
+    float playAmount() {
+        float m = uLevelSmooth * (0.3 + 0.7 * uActive);  // falls quickly once the sound has gone
+        float x = smoothstep(0.004, 0.035, m);
+        return x * x * (3.0 - 2.0 * x);
+    }
+    // The ten lines: 1 px tall, on whole pixel rows, 2 px apart, centred.
+    float idleRow0() { return floor(uResolution.y * 0.5) - 8.5; }
+    float idleLines() {
+        float d = gl_FragCoord.y - idleRow0();
+        float k = clamp(floor(d * 0.5 + 0.5), 0.0, 9.0);
+        return clamp(1.0 - abs(d - 2.0 * k), 0.0, 1.0);
+    }
+
     // The ribbons, from one big hero sheaf down to thin threads, each at its own
     // height and depth with its own slow undulation. Some flow left with the
     // scene, some flow right against it, and their pulses race the way they flow.
@@ -1689,6 +1729,10 @@ extension FunShaders {
 
     // How far ribbon k's pattern has slid along itself.
     float ribbonShift(int k) { return sceneShift() * kRibFlow[k].y; }
+    // Where ribbon k rests, as the music fades: its height and depth move to the
+    // lines' and its depth swing flattens out.
+    float ribbonBaseY(int k) { return mix(kIdleY, kRibShape[k].x, gPlay); }
+    float ribbonBaseZ(int k) { return mix(kIdleZ, kRibFlow[k].z, gPlay); }
 
     // How cyan the ribbon is at x (position across its sheet, measured the way it
     // flows) for a strand that lights `delay` beats late: every beat launches a
@@ -1702,8 +1746,9 @@ extension FunShaders {
         float ph = fract(uBeats - off) - delay;
         float s0 = x - 4.4 + spd * ph;                      // behind this beat's front
         float s1 = s0 + spd;                                // ... and the last beat's
-        float p0 = exp(-max(s0 - 1.1, 0.0) * 1.2 - max(-s0, 0.0) * sharp) * pulseAmp(ph);
-        float p1 = exp(-max(s1 - 1.1, 0.0) * 1.2 - max(-s1, 0.0) * sharp) * pulseAmp(ph + 1.0);
+        float tail = 1.2 / mix(0.55, 1.7, gDrive);           // louder: a longer tail
+        float p0 = exp(-max(s0 - 1.1, 0.0) * tail - max(-s0, 0.0) * sharp) * pulseAmp(ph);
+        float p1 = exp(-max(s1 - 1.1, 0.0) * tail - max(-s1, 0.0) * sharp) * pulseAmp(ph + 1.0);
         return max(p0, p1) * energy;
     }
 
@@ -1719,14 +1764,14 @@ extension FunShaders {
         float xf = q.x * dir;                                // ... measured the way it flows
         float edge = smoothstep(-4.8, -3.6, q.x) * smoothstep(4.8, 3.6, q.x);
         // Broad waves; the beat swell bends the sheaf a little harder.
-        float amp = shp.y * (1.0 + (0.14 * gSpec + 0.55 * gSwell) * size) * mix(0.75, 1.0, uActive);
+        float amp = shp.y * (1.0 + (0.14 * gSpec + 0.55 * gSwell) * size) * mix(0.75, 1.0, uActive) * gPlay;
         float ph = turn * 0.45 + wav.z;
         float s = uScroll * 0.3 * dir;                       // a gentle ripple along the ribbon on top of the slide
         float a1 = X * wav.x + s + ph;
         float a2 = X * wav.y - s * 0.6 + ph * 1.7;
-        float yc = shp.x + amp * sin(a1) + amp * 0.35 * sin(a2);
+        float yc = ribbonBaseY(k) + amp * sin(a1) + amp * 0.35 * sin(a2);
         float lo = kFloorY + shp.z * 0.6 + 0.06;             // skim the floor rather than sink into it
-        yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
+        yc = mix(yc, 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004)), gPlay);
         float slope = amp * (wav.x * cos(a1) + 0.35 * wav.y * cos(a2));
         float norm = inversesqrt(1.0 + slope * slope);
         float dc = abs(q.y - yc) * norm;
@@ -1734,11 +1779,11 @@ extension FunShaders {
         if (k > 0 && dc > 1.4 * sqrt(size) + soft * 24.0) return vec3(0.0);
         // The sheaf twists as it travels: fanned wide where it faces you, gathered
         // where it turns, and each strand weaves a little on its own so they cross.
-        float width = shp.z * (1.0 + 0.3 * gSwell) * (0.75 + 0.25 * sin(X * 0.6 + wav.z));
+        float width = mix(10.0 * gPx, shp.z * (1.0 + 0.3 * gSwell) * (0.75 + 0.25 * sin(X * 0.6 + wav.z)), gPlay);
         float twist = X * 0.55 - uScroll * 0.25 * dir + turn * 0.2 + wav.z;
         float face = cos(twist);
         float sw = flw.x;                                    // strand radius: fine silk
-        float energy = uActive;
+        float energy = uActive * gPlay * mix(0.25, 1.25, gDrive);   // faint when quiet, a surge when loud
         const float spd = 7.5;                               // world units per beat
         vec3 bundle = vec3(0.0);
         float pc = smoothstep(0.15, 0.95, ribbonPulse(xf, wav.w, 0.06, spd, energy, 1.2));   // the wave through the sheaf as a whole
@@ -1753,21 +1798,23 @@ extension FunShaders {
             vec2 ps = vec2(sin(X * 0.9 - uScroll * 0.4), cos(X * 0.9 - uScroll * 0.4));   // shimmer, steps 2.3 rad
             const mat2 stepW = mat2(0.2675, -0.9636, 0.9636, 0.2675);
             const mat2 stepS = mat2(-0.6663, -0.7457, 0.7457, -0.6663);
-            float aa = max(soft, 0.0025);
+            float aa = mix(max(soft, 0.5 * gPx), max(soft, 0.0025), gPlay);
+            float lane = (idleRow0() - 0.5 * uResolution.y) * gPx;   // where strand lane 0 settles, from the middle
             for (int i = 0; i < kStrands; i++) {
                 if (i >= n) break;
                 float fi = float(i);
                 float h1 = fract(fi * 0.6180), h2 = fract(fi * 0.7549 + 0.31), h3 = fract(fi * 0.5698 + 0.17);
                 float u = fi / (fn - 1.0) * 2.0 - 1.0;
                 float off = width * (u * (0.5 + 0.5 * abs(face)) + 0.45 * sin(X * (1.1 + 0.25 * h1) + fi * 2.4 + turn * 0.3));
+                off = mix(lane + 2.0 * gPx * floor((u * 0.5 + 0.5) * 9.999), off, gPlay);   // in silence, onto one of the ten lines
                 float sd = (q.y - yc - off) * norm;
                 float d = abs(sd);
-                float w = sw * (0.45 + 0.9 * h2) * (0.75 + 0.25 * pw.x);
+                float w = mix(0.5 * gPx, sw * (0.45 + 0.9 * h2) * (0.75 + 0.25 * pw.x), gPlay);
                 float cov = 1.0 - smoothstep(w - aa, w + aa, d);     // the strand's outline, anti-aliased
                 float x = min(d / (w + aa), 1.0);
                 float tube = sqrt(1.0 - x * x);                       // round strand: hot in the middle, deep at the rim
                 // each strand is itself a few hairline fibres, read where it's sharp enough
-                float fib = mix(0.55 + 0.45 * cos(sd / (w + aa) * 9.4 + fi * 1.7), 1.0, smoothstep(0.3, 0.8, aa / w));
+                float fib = mix(0.55 + 0.45 * cos(sd / (w + aa) * 9.4 + fi * 1.7), 1.0, max(smoothstep(0.3, 0.8, aa / w), 1.0 - gPlay));
                 // some strands catch the wave before others, so it shimmers through the sheaf;
                 // as a band fades, its strands drop back to pink one by one
                 float pulse = smoothstep(0.08 + 0.55 * h2, 0.28 + 0.55 * h2, ribbonPulse(xf, wav.w, h3 * 0.14, spd, energy, 3.0));
@@ -1775,20 +1822,22 @@ extension FunShaders {
                 vec3 deep = mix(ribbonDeep, ribbonTeal, pulse);
                 float t2 = tube * tube, t8 = t2 * t2; t8 *= t8;
                 float t32 = t8 * t8; t32 *= t32;
-                vec3 c = mix(deep, hot, tube) * (0.35 + 1.35 * tube) * (1.0 - 0.25 * pulse) * fib
+                // the hats glint on the pulse heads (a fine sparkle running along the strand)
+                float glint = 1.0 + pulse * (0.45 * gDrive + 0.6 * uTreble * (0.5 + 0.5 * sin(X * 23.0 + fi * 2.1 - uScroll * 9.0)));
+                vec3 c = mix(deep, hot, tube) * (0.35 + 1.35 * tube) * (1.0 - 0.25 * pulse) * glint * fib
                        + mix(vec3(1.0, 0.5, 0.75), vec3(0.3, 1.0, 1.0), pulse) * t32 * t8 * 0.6;
-                strands = mix(strands, c * (0.75 + 0.25 * ps.x), cov * 0.8);   // later strands lie over earlier ones
+                strands = mix(strands, c * mix(1.0, 0.75 + 0.25 * ps.x, gPlay), cov * 0.8);   // later strands lie over earlier ones
                 pw = stepW * pw;
                 ps = stepS * ps;
             }
             // the strands' shared glow: bright through the sheaf, falling off outside it
             float halo = 5.0 * exp(-max(dc - width * 0.9, 0.0) / (0.06 * size + soft * 3.0));
-            bundle = strands + hotC * halo * 0.15
-                   + hotC * mix(vec3(1.0, 0.55, 0.8), vec3(0.3, 1.0, 0.95), pc) * exp(-dc / (width * 0.45 + 0.02 * size + soft * 4.0)) * 0.55;   // thick luminous core
+            bundle = strands + (hotC * halo * 0.15
+                   + hotC * mix(vec3(1.0, 0.55, 0.8), vec3(0.3, 1.0, 0.95), pc) * exp(-dc / (width * 0.45 + 0.02 * size + soft * 4.0)) * 0.55) * gPlay;   // thick luminous core
         }
         // the glow the sheaf throws on the air around it
-        bundle += hotC * exp(-dc / (0.2 * sqrt(size) + soft * 4.0)) * 0.08 * sqrt(size);
-        float glow = (0.45 + 0.55 * uActive) * (0.95 + 0.3 * gSwell);
+        bundle += hotC * exp(-dc / (0.2 * sqrt(size) + soft * 4.0)) * 0.08 * sqrt(size) * gPlay;
+        float glow = mix(1.6, (0.45 + 0.55 * uActive) * (0.95 + 0.3 * gSwell), gPlay);
         return bundle * 1.1 * edge * glow / (1.0 + soft * 20.0);
     }
 
@@ -1796,7 +1845,7 @@ extension FunShaders {
     // stretches of ribbon swing towards the camera (and move faster) and back
     // away again. Where a ray meets it (a few fixed-point steps), or -1.
     float ribbonDepth(float x, int k) {
-        return kRibFlow[k].z + kRibFlow[k].w * sin((x + ribbonShift(k)) * 0.45 + 0.9 + kRibWave[k].z);
+        return ribbonBaseZ(k) + kRibFlow[k].w * gPlay * sin((x + ribbonShift(k)) * 0.45 + 0.9 + kRibWave[k].z);
     }
     float ribbonT(vec3 ro, vec3 rd, int k) {
         if (abs(rd.z) < 1e-3) return -1.0;
@@ -1815,16 +1864,18 @@ extension FunShaders {
         if (k > 0) {
             // A cheap first look: rays that pass well above or below the band
             // this ribbon can wave through never reach its glow.
-            float t0 = (kRibFlow[k].z - ro.z) / rd.z;
+            float t0 = (ribbonBaseZ(k) - ro.z) / rd.z;
             float band = 2.6 * kRibShape[k].y + 1.4 * sqrt(kRibShape[k].z / 0.3)
                        + abs(rd.y / rd.z) * kRibFlow[k].w * 1.2 + (soft + (abs(t0) + 3.0) * (softT + 0.7 / uResolution.y)) * 24.0;
-            if (abs(ro.y + rd.y * t0 - kRibShape[k].x) > band) return vec3(0.0);
+            if (abs(ro.y + rd.y * t0 - ribbonBaseY(k)) > band) return vec3(0.0);
         }
         float t = ribbonT(ro, rd, k);
         if (t <= 0.0 || t > tMax) return vec3(0.0);
         vec3 p = ro + rd * t;
         if (p.y < kFloorY) return vec3(0.0);
-        return ribbonLight(p.xy, soft + t * (softT + 0.7 / uResolution.y), k);
+        float seen = t > gCut ? gBehind : 1.0;
+        if (seen <= 0.0) return vec3(0.0);
+        return ribbonLight(p.xy, soft + t * (softT + 0.7 / uResolution.y), k) * seen;
     }
 
     // All the ribbons along a ray (they glow, so their light adds). Written out
@@ -2037,11 +2088,17 @@ extension FunShaders {
     void main() {
         gSwell = beatSwell();
         gSpec = (ribbonSpec(0.05) + ribbonSpec(0.15) + ribbonSpec(0.25)) / 3.0;
+        gPlay = playAmount();
+        gGlass = smoothstep(0.35, 1.0, gPlay);
+        gPx = 3.4 / 1.3 / uResolution.y;
+        gDrive = pulseDrive();
+        float lines = 1.0 - smoothstep(0.0, 0.3, gPlay);  // the exact lines take over from the ribbons at the end
         vec2 p = screenP();
         // Camera sits low by the glossy floor and sways slowly (on the
-        // sound-gated clock); it leans in a little on the bass.
+        // sound-gated clock); it leans in a little on the bass. In silence it
+        // turns to face straight ahead, so the lines lie level.
         // The scene itself slides left past it (sceneShift).
-        float yaw = 0.12 * sin(uTime * 0.07);
+        float yaw = 0.12 * sin(uTime * 0.07) * gPlay;
         // The lens is shifted up rather than tilted, so the horizon sits low and
         // the glass stays upright.
         vec3 ro = vec3(0.0, -0.40, -3.3 + 0.06 * gSwell);
@@ -2051,41 +2108,53 @@ extension FunShaders {
         vec3 rd = normalize(p.x * rt + vec3(0.0, p.y + 0.24, 0.0) + 1.3 * fw);
 
         float tFloor = rd.y < 0.0 ? (kFloorY - ro.y) / rd.y : 1e5;
-        vec3 col = skyColour(rd);
+        vec3 sky = skyColour(rd);
+        vec3 col = sky;
+        bool ribbons = lines < 1.0;                      // fully settled: only the exact lines are left
 
-        int j; float tGem;
-        bool hitGem = nearestGem(ro, rd, tFloor, j, tGem);
-        float tEnd = hitGem ? tGem : tFloor;
-        if (hitGem) {
-            col = shadeGem(j, ro, rd, tGem, true);
-        } else if (tFloor < 1e4) {
+        int j = -1; float tGem = tFloor;
+        bool hitGem = gGlass > 0.0 && nearestGem(ro, rd, tFloor, j, tGem);
+        if (tFloor < 1e4 && (!hitGem || gGlass < 1.0)) {
             // Glossy black floor: a near-mirror of the ribbons and the glass,
             // softening with distance and fading into the hot horizon line.
             vec3 fp = ro + rd * tFloor;
             vec3 rr = reflect(rd, vec3(0.0, 1.0, 0.0));
             float fres = 0.30 + 0.70 * pow(1.0 - clamp(-rd.y, 0.0, 1.0), 5.0);
             vec3 refl = skyColour(rr) * 0.8;
-            int j2; float t2;
-            if (nearestGem(fp, rr, 40.0, j2, t2)) refl = shadeGem(j2, fp, rr, t2, false);
-            vec3 glassPool;
-            refl += ribbonsAlong(fp, rr, 0.01, 0.035, 40.0, false) + gemHalo(fp, rr, 40.0, glassPool) * 2.0;
+            vec3 glassPool = vec3(0.0);
+            if (gGlass > 0.0) {
+                int j2; float t2;
+                if (nearestGem(fp, rr, 40.0, j2, t2)) refl = mix(refl, shadeGem(j2, fp, rr, t2, false), gGlass);
+                refl += gemHalo(fp, rr, 40.0, glassPool) * 2.0 * gGlass;
+            }
+            if (ribbons) refl += ribbonsAlong(fp, rr, 0.01, 0.035, 40.0, false) * (1.0 - lines);
             col = vec3(0.002, 0.006, 0.014) + refl * fres * 0.75;
             // the ribbons' light pooling on the floor beneath them
             float pool = (exp(-abs(fp.z - ribbonDepth(fp.x, 0)) * 0.8) + 0.35 * exp(-abs(fp.z - ribbonDepth(fp.x, 2)) * 1.6))
                        * smoothstep(-4.8, -2.5, fp.x) * smoothstep(4.8, 2.5, fp.x);
             col += ribbonPink * 0.6 * pool * (0.4 + 0.6 * uActive) * (0.85 + 0.25 * gSwell);
-            col += glassPool * 0.8 * (0.4 + 0.6 * uActive);
-            col = mix(col, skyColour(rd), smoothstep(8.0, 30.0, tFloor));
+            col += glassPool * 0.8 * (0.4 + 0.6 * uActive) * gGlass;
+            col = mix(col, sky, smoothstep(8.0, 30.0, tFloor));
         }
-        // Ribbons in front of whatever we hit.
-        col += ribbonsAlong(ro, rd, 0.0, 0.0, tEnd, true);
-        vec3 unused;
-        col += gemHalo(ro, rd, tEnd, unused);
+        // Ribbons in front of whatever we hit; as the glass fades, the ribbons
+        // behind it show through.
+        if (hitGem) col = mix(col, shadeGem(j, ro, rd, tGem, true), gGlass);
+        if (ribbons) {
+            gCut = hitGem ? tGem : 1e9;
+            gBehind = 1.0 - gGlass;
+            col += ribbonsAlong(ro, rd, 0.0, 0.0, tFloor, true) * (1.0 - lines);
+        }
+        if (gGlass > 0.0) {
+            vec3 unused;
+            col += gemHalo(ro, rd, hitGem ? tGem : tFloor, unused) * gGlass;
+        }
         col += ribbonPink * gSwell * 0.015;
 
         col = 1.0 - exp(-col * 1.8);                   // soft highlight roll-off
         col *= 1.0 - 0.3 * dot(p, p);                   // vignette
-        col = mix(col * 0.5, col, uActive);             // dims in silence, but keeps drifting
+        col = mix(col * 0.5, col, uActive);             // dims in silence
+        // The ten still lines, in the ribbons' resting pink.
+        col = mix(col, vec3(0.92, 0.2, 0.52), idleLines() * lines);
         fragColor = vec4(col, 1.0);
     }
     """
