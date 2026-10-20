@@ -656,8 +656,8 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
     case ribbons
     /// Flying forward through satin ribbons and tumbling glass cubes.
     case silk
-    /// Pink and gold paint threads wrung through one twisted knot.
-    case knot
+    /// Abstract sheets of pink and gold light swirling into a vanishing point.
+    case flux
     /// Cycles through every other mode, 20 seconds each.
     /// Keep this the LAST case: the mode list shows Auto Scan at the bottom.
     case autoScan
@@ -680,7 +680,7 @@ enum VisualizerMode: String, CaseIterable, Identifiable {
         case .waveform: return "NEON WAVE"
         case .ribbons: return "RIBBONS"
         case .silk: return "SILK FLIGHT"
-        case .knot: return "KNOT"
+        case .flux: return "FLUX"
         }
     }
     private var index: Int { Self.allCases.firstIndex(of: self)! }

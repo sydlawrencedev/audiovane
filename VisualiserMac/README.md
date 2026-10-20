@@ -19,7 +19,7 @@ Sixteen modes, plus Auto Scan:
 13. **Neon Wave**: layered glowing green waveforms, shaped by the spectrum like an analogue sound analyser.
 14. **Ribbons**: glowing hot pink and cyan ribbons of silk strands weaving through clear, cyan-edged glass polyhedra in a dark navy room above a glossy floor, the whole scene sliding right to left with depth parallax. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble. It keeps a slow, dim drift in silence.
 15. **Silk Flight**: flying forward past a wide, glossy hot pink satin ribbon in a few broad folds that sweeps in from the edges and twists away into a teal dust cloud on near-black space, turning violet in the distance, with chunky cyan glass blocks tumbling past. The camera races when the music is loud, the bass widens the ribbon, every beat turns the glass and throws a burst of glitter, and the treble makes the specks and glass edges sparkle. It goes dim and still in silence.
-16. **Knot**: two broad streams of glowing paint threads, hot pink sweeping in from the top left and gold from the bottom right, wrung through one tight twisted neck and flaring out again, with loose threads tangled round the neck. Every fibre is drawn on its own, so you can watch them fray, split and rejoin. Gold glitter, chunky flakes and cyan glass shards stream out past the camera. The bass wrings the knot tighter and swells the streams, every beat twists the neck another notch and re-ties a loose thread, and the treble makes the fibres sparkle. Louder music means more motion. In silence it goes dim and still.
+16. **Flux**: an abstract light sweep. Huge fanned sheets of fine light strands, hot pink and molten gold, sweep in from the edges of the frame and swirl into a drifting vanishing point, like long-exposure light trails seen while flying. Gold flakes, soft bokeh and a few cyan glass shards streak out past the camera. Louder music flies faster, with longer streaks and more light, the beat is a soft swell, and the treble sparkles the glitter. Every motion glides. In silence it goes dim and still.
 
 **Auto Scan** cycles through every other mode, 20 seconds each, and always sits at the bottom of the mode list.
 
@@ -327,7 +327,7 @@ Electronic vs Rock, 75bpm Blues vs Country, tempo-less ballad vs Ambient).
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch mode (`0` is Warp, `-` is The Band, `[` Machine, `]` Neon Wave, `;` Ribbons, `'` Silk Flight, `\` Knot)
+- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch mode (`0` is Warp, `-` is The Band, `[` Machine, `]` Neon Wave, `;` Ribbons, `'` Silk Flight, `\` Flux)
 - `Space` / `Esc` — toggle intro overlay
 
 ## Implementation notes
