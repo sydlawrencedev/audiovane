@@ -202,11 +202,13 @@ mcp-server-config:
 
     <h2>What the agent can do</h2>
     <div class="facts">
-      <div class="fact"><h3>List and read</h3><p>See every vibscape there is, and the full source of yours.</p></div>
-      <div class="fact"><h3>Test</h3><p>Compile a shader and draw it. The agent gets the picture back, so it can see what it made and judge it.</p></div>
-      <div class="fact"><h3>Create and edit</h3><p>Write a new vibscape, or change one that already exists. Nothing is saved unless it compiles, so the folder never fills with broken worlds.</p></div>
-      <div class="fact"><h3>Delete</h3><p>Remove one you don't want any more.</p></div>
-      <div class="fact"><h3>Hear what you hear</h3><p>Ask what Vibresia is hearing right now — the suspected genre and instruments, the tempo, the levels, the shape of the spectrum — and write something that suits the music actually playing.</p></div>
+      <div class="fact"><h3>See it</h3><p>It draws a vibscape and gets the picture back, so it can look at what it wrote instead of imagining it. Ask for several frames and it gets the animation, too — a still tunnel and a scrolling tunnel look identical, and one of them is wrong.</p></div>
+      <div class="fact"><h3>Point the music anywhere</h3><p>It sets the audio uniforms by hand — bass at 0.9, treble at 0.2 — and draws it again, so it can find out how a vibscape behaves when the music isn't playing. No audio required.</p></div>
+      <div class="fact"><h3>Tune to reality</h3><p>It can read the actual uniform values the app is drawing with right now, and the ranges they run in, so it picks coefficients that work on your music instead of guesses that do nothing.</p></div>
+      <div class="fact"><h3>Hear what you hear</h3><p>Ask what Vibresia is hearing at that moment — the suspected genre and instruments, the tempo, the levels, the shape of the spectrum — and write something that suits the track in front of you.</p></div>
+      <div class="fact"><h3>Get the colours right</h3><p>It can read the current palette and see how hard the app tints over what a vibscape draws, so it stops picking colours that come out as something else.</p></div>
+      <div class="fact"><h3>Check before saving</h3><p>Nothing is saved unless it compiles, and code that doesn't work comes back as an error in words with the line number — not a blank picture.</p></div>
+      <div class="fact"><h3>Save, and compare</h3><p>Write a new vibscape or replace one that exists, and see the picture of exactly what it saved. When rewriting something, put the old and new side by side under the same music.</p></div>
     </div>
 
     <h2>What a vibscape is</h2>
@@ -227,8 +229,13 @@ mcp-server-config:
       <p>The music, as numbers: <code>uBass</code>, <code>uMid</code>, <code>uTreble</code>, <code>uLevel</code>, <code>uBeat</code>, <code>uBeatStrength</code>, <code>uBands[96]</code> (the whole spectrum), <code>uBeats</code> (a beat counter), <code>uActive</code> (how much is playing), <code>uTime</code>, <code>uClock</code>. Plus helpers for shapes, colour and noise.</p>
       <h3>What it can ask</h3>
       <p>Your agent doesn't have to guess what the music is doing. <code>what_i_hear</code> reports what Vibresia is hearing at that moment: the suspected genre, the instruments it thinks are playing, the tempo, the levels, and the shape of the spectrum. It can write a vibscape that suits the track in front of you rather than one that suits music in general.</p>
+      <p><code>get_uniform_snapshot</code> goes one level lower and returns the numbers themselves — what <code>uBeatStrength</code> and <code>uBass</code> are actually reading right now, and how far they reach. It's the difference between multiplying by 0.5 because it sounds right and multiplying by 2 because you can see the range.</p>
       <p class="note">The full list of uniforms and helpers is one call away, so it never has to remember it.</p>
     </div>
+
+    <h2>It draws before it commits</h2>
+    <p>Every vibscape it writes comes back as a picture first. It renders the shader, looks at the result, changes one constant, renders again — about forty milliseconds a frame. That's the difference between a vibscape that was designed and one that was guessed.</p>
+    <p>Two details worth knowing if you'd rather look over its shoulder. Previews are graded through the same colour palette the app uses, so what the agent sees is what you'll see — ask it to pass <code>grade: false</code> if you want to see a shader's own colours instead. And because the palette shifts everything slightly, the agent can read the current palette and pick colours that survive it.</p>
 
     <h2>Without an agent</h2>
     <p>Prefer to write it yourself? In the app, <b>View All → + Custom Vibscape</b> takes the same route: paste the code, press <b>Test</b>, and you'll see the picture before you keep it.</p>

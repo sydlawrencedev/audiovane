@@ -28,7 +28,7 @@ enum VibscapeCompiler {
     /// made current each time because "current" is a per-thread thing.
     private static var context: NSOpenGLContext?
 
-    private static func ensureContext() -> Bool {
+    static func ensureContext() -> Bool {
         if let c = context {
             c.makeCurrentContext()
             return true

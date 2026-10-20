@@ -289,6 +289,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// lost every time someone quit shortly after fiddling with the controls.
     func applicationWillTerminate(_ notification: Notification) {
         Task { await Analytics.shared.flushNow() }
+        // The live uniform values are only true while the app is running, and
+        // the file is left behind on quit. Removing it means an agent asking
+        // straight after the app closes is told the app isn't running, rather
+        // than being handed one last frozen frame as though it were live.
+        LiveUniforms.clearPublishedFile()
     }
 
     /// Renders the SwiftUI view tree to a PNG. The OpenGL layer won't appear

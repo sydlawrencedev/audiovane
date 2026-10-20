@@ -39,6 +39,13 @@ final class MCPServer {
             }
             handle(method: method, request: request)
         }
+
+        // stdin closed, so the client has gone. A stdio server that outlives
+        // its client is a process nobody will ever reap, and the client that
+        // launched it is already waiting for it to go away — so leave.
+        // `fflush` first: the last response is still sitting in the buffer.
+        fflush(stdout)
+        exit(0)
     }
 
     private func handle(method: String, request: [String: Any]) {
@@ -110,11 +117,47 @@ final class MCPServer {
     that returns a colour. `p` is the position on screen, centred on 0,0 and \
     about -0.5 to 0.5 vertically; `t` is time in seconds.
 
-    Call `vibscape_reference` first for the uniforms and helpers that are \
-    available — uBass, uBands, uBeats and the rest — rather than guessing at \
-    them. Call `test_vibscape` to check a shader and see what it looks like \
-    before saving it. `create_vibscape` and `update_vibscape` compile what they \
-    are given and refuse to save code that doesn't work, so a vibscape on disk \
-    always runs.
+    ## See it, don't imagine it
+
+    This server can draw a vibscape and hand you the picture. That is the whole \
+    point of it — don't describe a shader you haven't looked at.
+
+        preview_vibscape({ code })                      one frame
+        preview_vibscape_animation({ code })            several frames, one picture
+
+    Both return a PNG. Try a constant, change it, look again — that's the loop, \
+    and it costs about 40ms a frame. If code doesn't compile you get the driver's \
+    own error in words rather than a blank picture.
+
+    The uniforms are yours to set, which is how you find out how a vibscape \
+    behaves when the music isn't playing:
+
+        preview_vibscape({ code, options: { uniforms: { uBass: 0.9 } } })
+
+    `uActive` defaults to 1, so a preview is never a black rectangle.
+
+    ## Tune to the real numbers
+
+    `get_uniform_snapshot` returns the values the app is drawing with right now, \
+    including the ranges they run in. Use it instead of guessing a coefficient. \
+    `what_i_hear` says what the music currently is — genre, tempo, spectrum — so \
+    you can write something that suits it.
+
+    `get_palette` explains why your colours come out shifted: every vibscape is \
+    graded through the current palette after it draws. Pick colours from the \
+    palette, or draw with `uPalette` directly, rather than bringing your own and \
+    watching them turn teal.
+
+    ## Save
+
+    `save_vibscape` replaces the one with the same name, so there is no \
+    create/update to choose between. It compiles first — code that doesn't work \
+    is never written to disk — and it returns a picture of what it saved.
+
+    Also here: `list_vibscapes` (every vibscape with a thumbnail, so you can see \
+    what's been made), `get_vibscape` (read one), `diff_vibscape` (two versions, \
+    one picture), `validate_vibscape` (compile without drawing), \
+    `delete_vibscape`, and `vibscape_reference` for the full list of uniforms \
+    and helpers.
     """
 }

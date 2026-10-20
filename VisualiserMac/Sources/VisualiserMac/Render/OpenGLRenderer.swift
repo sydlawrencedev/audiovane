@@ -604,6 +604,37 @@ final class OpenGLRenderer: NSObject {
         )
         self.tunnelIndexCount = 64 * 96 * 6
         super.init()
+        startUniformPublishing()
+    }
+
+    /// Which vibscape was last drawn, for the uniform report.
+    private var lastDrawnVibscape: Vibscape?
+
+    /// Keeps the live uniform values published for the MCP tools.
+    ///
+    /// Driven by a timer rather than by the draw loop, because macOS stops a
+    /// display link whenever its window is occluded or on another Space.
+    /// Publishing from the draw would mean the values go stale the moment the
+    /// window sits behind anything — which is most of the time, and always
+    /// true while the user is watching the app and an agent is asking from
+    /// elsewhere. The audio keeps updating either way; only the clocks pause,
+    /// and pausing them is honest, because they're paused on screen too.
+    private func startUniformPublishing() {
+        // Not in MCP mode. The SwiftUI App value builds an AppState — and so a
+        // renderer — before the `--mcp` branch returns, and a renderer here
+        // would publish the server's own audio engine reading silence, over the
+        // top of the file the running app is writing. Every snapshot would
+        // then report a quiet room no matter what was playing.
+        guard !CommandLine.arguments.contains("--mcp") else { return }
+
+        let timer = Timer(timeInterval: 0.2, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            self.publishLiveUniforms(snap: self.audio.snapshot,
+                                     mode: self.lastDrawnVibscape)
+        }
+        // .common so it keeps running while a menu is open or a panel has the
+        // run loop — exactly when somebody might be looking at the app.
+        RunLoop.main.add(timer, forMode: .common)
     }
 
     func attach(to view: NSOpenGLView) {
@@ -1490,6 +1521,40 @@ final class OpenGLRenderer: NSObject {
         presence = min(1, max(0, presence + presenceVelocity * h))
     }
 
+    /// Hands the live uniform values to `LiveUniforms`, for the MCP tools.
+    ///
+    /// Called from `drawShaderProgram` — every vibscape, built-in or the
+    /// user's, goes through there, so this is the one place that sees the full
+    /// set at the moment they're used.
+    private func publishLiveUniforms(snap: AudioSnapshot, mode: Vibscape?) {
+        let beats = Float(beatClock.truncatingRemainder(dividingBy: 1024))
+        var reading = LiveUniforms.Reading()
+        reading.bass = snap.bass
+        reading.mid = snap.mid
+        reading.treble = snap.treble
+        reading.level = snap.level
+        reading.levelSmooth = Float(levelSmooth)
+        reading.bassSmooth = Float(bassSmooth)
+        reading.beat = snap.beat ? 1 : 0
+        reading.beatStrength = snap.beatStrength
+        reading.beats = Float(beatClock.truncatingRemainder(dividingBy: 1024))
+        reading.active = Float(danceActivity)
+        reading.idle = snap.sourceIsIdle
+        reading.presence = Float(presence)
+        reading.scroll = Float(scrollClock.truncatingRemainder(dividingBy: 4096))
+        reading.clock = Float(wallClock.truncatingRemainder(dividingBy: 3600))
+        reading.bands = snap.bands
+        reading.beatsPerSecond = Float(beatClockBPM / 60)
+        reading.bpm = snap.bpm
+        reading.rms = snap.rms
+        reading.palette = Palette.palette(at: paletteIndex).name
+        reading.vibscape = mode?.rawValue ?? ""
+        LiveUniforms.shared.record(reading)
+        // And out to disk, because the MCP server is a different process and
+        // wouldn't otherwise be able to read a single one of these.
+        LiveUniforms.publishToDisk(reading)
+    }
+
     private func drawFullScreenShader(_ mode: Vibscape, time: Float, snap: AudioSnapshot) {
         guard let m = shaderVibscapes[mode] else { return }
         drawShaderProgram(m, mode: mode, time: time, snap: snap)
@@ -1521,6 +1586,10 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.bassSmooth, Float(bassSmooth))
         glUniform1f(m.presence, Float(presence))
         if m.palette >= 0 { bindPalette(to: m.palette) }
+        // Everything drawn from here on is exactly this: the values, the clocks
+        // and the palette. Publishing them means an agent tuning a coefficient
+        // can see what the app really throws at a shader, rather than guessing.
+        lastDrawnVibscape = mode
         if mode == .spectrum {
             for i in 0..<spectrumPeaks.count {
                 let v = max(snap.bands[i * 2], snap.bands[i * 2 + 1])

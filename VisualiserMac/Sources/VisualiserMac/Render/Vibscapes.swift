@@ -342,14 +342,65 @@ enum CustomVibscapeGuide {
 
     To fade out in silence, multiply by `uActive` near the end.
 
-    If you want to know what the music is actually doing right now — the
-    suspected genre and instruments, the tempo, the levels — ask with
-    `what_i_hear`, and write something that suits it.
+    ## Look at it before you believe it
 
-    One more thing: the app tints every mode with the colour palette you pick
-    in the header, so your colours come out shifted a little. That's the same
-    as the built-in modes — pick a different palette in the header if you want
-    to see your colours more truly.
+    This server can draw what you write and hand you the picture. Don't describe
+    a shader you haven't seen. The loop is two calls: draw it, change one thing,
+    draw it again. A frame takes about 40ms.
+
+      preview_vibscape({ code })                   one frame, as a PNG
+      preview_vibscape_animation({ code })         several frames in one picture
+
+    Ask for several frames when the movement is the point — a single frame of a
+    scrolling tunnel and a still tunnel look identical, and one of them is
+    wrong. `preview_vibscape_animation` defaults to 8 frames over 4 seconds.
+
+    You can also point the audio uniforms anywhere you like, which is how you
+    find out how it behaves when the music isn't playing:
+
+      preview_vibscape({
+        code: myShader,
+        options: { uniforms: { uBass: 0.9, uLevel: 0.7, uActive: 1.0 } }
+      })
+
+    `uActive` defaults to 1, so a preview is never a black rectangle in a quiet
+    room. Draw the same shader at uBass 0.1 and uBass 0.9 and look at both
+    before you decide how much it should react.
+
+    Code that doesn't compile comes back as the driver's own error, in words,
+    with the line number — not a blank picture. If a vibscape compiles but looks
+    wrong, the problem is usually one of the lints: not reading the music at all,
+    or a uniform that keeps running in silence when you wanted it to stop.
+
+    ## Tune to the real numbers
+
+    `get_uniform_snapshot` returns what the app is drawing with right now, with
+    the ranges these values actually run in. Read it rather than picking a
+    coefficient out of the air. `beat * 0.5` sounds reasonable and does nothing
+    on a quiet track; the snapshot shows you that uBeatStrength peaks around 0.6
+    on one and 0.2 on another, and that's the difference between a flash and a
+    flicker.
+
+    `what_i_hear` says what the music is — genre, instruments, tempo, spectrum —
+    so you can write something that suits it rather than something generic.
+
+    ## Colours are graded, and you can see it
+
+    Every vibscape is drawn and then graded through the palette you pick in the
+    header — the same as the built-ins. That's why a colour can look muted on
+    screen when it was bright in your code: the app maps brightness between two
+    palette colours and pushes saturation. It is not a bug, and the built-ins
+    are treated identically.
+
+      get_palette()          every palette, with its two colours and tint
+      get_palette("NEON")    the details of one
+
+    Two ways to work with it rather than against it. Use `uPalette` in your
+    shader — it's a `vec3[3]` you get for free, holding shadow, highlight and
+    their midpoint — and you get the palette exactly right. Or pick colours from
+    the palette rather than bringing your own; anything between its shadow and
+    highlight arrives as a version of those two. If you want to see a colour as
+    you wrote it, pass `grade: false` in the preview options.
     """
 
     /// Ready-to-paste prompt for someone using an AI coding assistant.
