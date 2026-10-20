@@ -97,12 +97,43 @@ code, .mono {
   overflow: hidden;
 }
 .code-preview header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 18px;
   border-bottom: 1px solid var(--line);
   font: 600 11px "JetBrains Mono", monospace;
   color: var(--muted);
   letter-spacing: 2px;
   text-transform: uppercase;
+}
+/* The copy button sits in that header, so it inherits the label's type scale
+   rather than becoming a second visual object competing with the code. */
+.code-preview .copy {
+  flex: none;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: 600 11px "JetBrains Mono", monospace;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color .15s, border-color .15s;
+}
+.code-preview .copy:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+.code-preview .copy:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+.code-preview .copy[data-done] {
+  color: var(--cyan);
+  border-color: var(--cyan);
 }
 .code-preview pre {
   margin: 0;

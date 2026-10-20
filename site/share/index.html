@@ -37,7 +37,7 @@
 
   <section class="hero">
     <p class="eyebrow">A vibescape was shared with you</p>
-    <h1>Your music. <span>Someone's world.</span></h1>
+    <h1>Your music. <span id="world-owner">Someone's world.</span></h1>
     <p class="lede" id="lede" hidden></p>
   </section>
 
@@ -66,6 +66,7 @@
     var content = document.getElementById("content");
     var lede = document.getElementById("lede");
     var creditAuthor = document.getElementById("credit-author");
+    var worldOwner = document.getElementById("world-owner");
 
     if (!d) {
       content.innerHTML = noPayloadContent();
@@ -86,23 +87,84 @@
       : "A vibescape called “" + payload.name + "”.");
     document.title = payload.name + " — Vibresia";
     creditAuthor.textContent = payload.author || "Minith Labs";
+    // The headline names the person who made it, when the link says who they
+    // are. textContent, not innerHTML: the payload comes out of the URL, so
+    // the author is whatever the sender typed.
+    if (payload.author) worldOwner.textContent = possessive(payload.author) + " world.";
 
     content.innerHTML =
-      '<div class="code-preview">' +
-        '<header>The shader</header>' +
-        '<pre><code></code></pre>' +
-      '</div>' +
       '<div class="cta-row">' +
         '<a class="btn primary" href="#" data-share-open data-share-custom>Open in Vibresia</a>' +
         '<a class="btn coffee" href="/download?src=share_fallback" data-share-download hidden>Download for Mac</a>' +
       '</div>' +
-      '<p class="share-cta"><small>Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small></p>';
+      '<p class="share-cta"><small>Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small></p>' +
+      // The shader last. Someone sent you this vibescape and you want to open
+      // it; the source is the interesting bit after that, not the thing being
+      // asked for. It was above the button, which put a wall of code between the
+      // reader and the one action the page exists to offer.
+      '<div class="code-preview">' +
+        '<header><span>The shader</span>' +
+          '<button type="button" class="copy" data-copy-shader>Copy</button></header>' +
+        '<pre><code></code></pre>' +
+      '</div>';
 
     content.querySelector("code").textContent = payload.shader;
+    wireCopyButton(content.querySelector("[data-copy-shader]"));
   })();
+
+  /* Copies the shader, and says so.
+   *
+   * Falls back to selecting the text when the clipboard API isn't there. It
+   * needs a secure context, so a page opened over plain http from someone's
+   * server rather than localhost has no navigator.clipboard — and a copy
+   * button that silently does nothing is worse than one that leaves the text
+   * selected for a manual ⌘C.
+   */
+  function wireCopyButton(button) {
+    if (!button) return;
+    var code = button.parentElement.parentElement.querySelector("code");
+    if (!code) return;
+    button.addEventListener("click", function () {
+      var text = code.textContent;
+      var flash = function (label, done) {
+        button.textContent = label;
+        if (done) button.setAttribute("data-done", "");
+        setTimeout(function () {
+          button.textContent = "Copy";
+          button.removeAttribute("data-done");
+        }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () {
+          flash("Copied", true);
+        }, function () {
+          select(code);
+          flash("Press ⌘C");
+        });
+      } else {
+        select(code);
+        flash("Press ⌘C");
+      }
+    });
+    function select(node) {
+      var range = document.createRange();
+      range.selectNodeContents(node);
+      var sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+  }
+
+  /* "Alisan's world", but "Chris' world" rather than "Chris's". */
+  function possessive(name) {
+    var n = name.trim();
+    if (!n) return "";
+    return /s$/i.test(n) ? n + "'" : n + "'s";
+  }
 
   // Mirror of SharePayload on the Swift side (Sources/VisualiserMac/Share/ShareImporter.swift).
   function decodePayload(s) {
+
     var t = s.replace(/-/g, "+").replace(/_/g, "/");
     while (t.length % 4 !== 0) t += "=";
     var json = decodeURIComponent(escape(atob(t)));
