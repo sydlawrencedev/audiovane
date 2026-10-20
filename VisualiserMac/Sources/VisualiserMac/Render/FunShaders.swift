@@ -1575,31 +1575,40 @@ extension FunShaders {
 extension FunShaders {
     // MARK: - Ribbons
 
-    /// One braided sheaf of fine glowing silk strands (18 round strands, each a
-    /// few hairline fibres, around a luminous core) weaves through several
-    /// small clear glass polyhedra at different depths, in a dark navy room
-    /// above a glossy floor: the look of the screens in the AudioVane film.
-    /// The ribbon is hot pink at rest; every beat launches a band of bright
-    /// cyan that races right to left along the strands, some strands lighting
-    /// a moment before others so it shimmers through the sheaf, then shrinks
-    /// away strand by strand so the ribbon flows back to pink. Every band eases
-    /// in and out, with a soft head and tail. The glass is ray-traced
-    /// exactly (each shape is a set of paired face planes, so there is no
-    /// raymarching loop): solid clear faces that reflect the lights, refract
-    /// the ribbon behind them, catch pink light inside and burn cyan along
-    /// their edges, and shapes far from the lens's focus go soft. The floor
-    /// mirrors it all, pulses included. Colours are chosen to land as pink and
-    /// cyan after the NEON grade. The whole scene slides right to left past
-    /// the camera, so near glass and near stretches of ribbon cross faster
-    /// than far ones (parallax), and each shape comes back in from the right
-    /// once it has left. The slide speeds up with uScroll. Everything is
-    /// smoothed so nothing snaps from frame to frame: instead of the raw bass
-    /// and beat strength, a soft swell on the beat clock (easing in over about
-    /// a third of a beat, dying away over the next one or two) bends, widens
-    /// and brightens the ribbon and swells the glass; the glass turns and the
-    /// ribbon reshapes on an eased beat clock that never stops; the spectrum
-    /// shapes the ribbon gently along its length, and the treble makes the
-    /// edges and the dust sparkle a little.
+    /// Several braided sheaves of fine glowing silk, of clearly different
+    /// sizes, weave through small clear glass polyhedra at different depths
+    /// in a dark navy room above a glossy floor: the look of the screens in
+    /// the AudioVane film. A big hero sheaf (18 round strands, each a few
+    /// hairline fibres, around a luminous core) runs low through the middle;
+    /// a medium one (12 strands) rides above and behind it, a thin thread
+    /// sits high at the back and a fine hairline runs low up front. Each sits
+    /// at its own height and depth and undulates on its own slow waves, so
+    /// they cross with navy between them. The ribbons are hot pink at rest;
+    /// every beat launches a band of bright cyan that races along each one
+    /// the way it flows, some strands lighting a moment before others so it
+    /// shimmers through, then shrinks away strand by strand so the ribbon
+    /// flows back to pink. Each ribbon fires at its own point in the beat, so
+    /// the bands ripple through one after another rather than all at once,
+    /// and every band eases in and out with a soft head and tail. The glass
+    /// is ray-traced exactly (each shape is a set of paired face planes, so
+    /// there is no raymarching loop): solid clear faces that reflect the
+    /// lights, refract the hero ribbon behind them, catch pink light inside
+    /// and burn cyan along their edges, and shapes far from the lens's focus
+    /// go soft. The floor mirrors the hero ribbon and the glass, pulses
+    /// included, and glows pink under the ribbons. Colours are chosen to land
+    /// as pink and cyan after the NEON grade. The scene slides past the
+    /// camera in both directions: the hero and the low hairline flow right to
+    /// left, the medium ribbon and the high thread flow left to right, and
+    /// most glass drifts left while three shapes drift right, a little
+    /// slower. Near glass and near stretches of ribbon cross faster than far
+    /// ones (parallax), and each shape comes back in from the other side once
+    /// it has left. The slide speeds up with uScroll. Everything is smoothed
+    /// so nothing snaps from frame to frame: instead of the raw bass and beat
+    /// strength, a soft swell on the beat clock (easing in over about a third
+    /// of a beat, dying away over the next one or two) bends, widens and
+    /// brightens the ribbons and swells the glass; the glass turns and the
+    /// ribbons reshape on an eased beat clock that never stops; the treble
+    /// makes the edges and the dust sparkle a little.
     /// In silence it dims and goes pink with no pulses, but keeps a slow drift
     /// (on uClock), by design.
     static let ribbons = """
@@ -1654,17 +1663,43 @@ extension FunShaders {
         return (swellAt(ph) + swellAt(ph + 1.0) + swellAt(ph + 2.0) + swellAt(ph + 3.0)) * 1.2 * uActive;
     }
     float gSwell;   // beatSwell(), worked out once per pixel at the top of main()
+    float gSpec;    // the low end of the spectrum, worked out once per pixel
 
-    // How cyan the ribbon is at x (position across its sheet) for a strand that
-    // lights `delay` beats late: every beat launches a band of bright cyan that
-    // races right to left along the strands. It's born off screen to the right,
-    // eases in, and fades out again over the next beat and a half, with a soft
-    // head (`sharp`) and a long soft tail, so the ribbon flows back to pink
-    // without a snap. The band from the beat before is still on its way out.
-    // In silence there are none.
+    // The ribbons, from one big hero sheaf down to thin threads, each at its own
+    // height and depth with its own slow undulation. Some flow left with the
+    // scene, some flow right against it, and their pulses race the way they flow.
+    //  x: base height  y: wave height  z: half-width of the sheaf  w: strands
+    const vec4 kRibShape[4] = vec4[4](
+        vec4(0.08, 0.32, 0.24, 18.0),
+        vec4(0.95, 0.34, 0.145, 12.0),
+        vec4(-0.26, 0.24, 0.014, 4.0),
+        vec4(1.9, 0.45, 0.07, 7.0));
+    //  x: strand radius  y: flow (+ left, - right, and how fast)  z: depth  w: depth swing
+    const vec4 kRibFlow[4] = vec4[4](
+        vec4(0.036, 1.0, 0.1, 0.65),
+        vec4(0.028, -0.8, 1.55, 0.5),
+        vec4(0.006, 1.3, -1.05, 0.3),
+        vec4(0.018, -0.6, 2.7, 0.4));
+    //  x, y: wave frequencies  z: phase  w: beat offset of its pulses
+    const vec4 kRibWave[4] = vec4[4](
+        vec4(1.2, 2.28, 0.0, 0.0),
+        vec4(0.85, 1.85, 1.7, 0.37),
+        vec4(1.55, 2.9, 3.1, 0.61),
+        vec4(0.75, 1.6, 4.4, 0.83));
+
+    // How far ribbon k's pattern has slid along itself.
+    float ribbonShift(int k) { return sceneShift() * kRibFlow[k].y; }
+
+    // How cyan the ribbon is at x (position across its sheet, measured the way it
+    // flows) for a strand that lights `delay` beats late: every beat launches a
+    // band of bright cyan that races along the strands, born off screen, easing
+    // in and fading out again over the next beat and a half, with a soft head
+    // (`sharp`) and a long soft tail, so the ribbon flows back to pink without a
+    // snap. Each ribbon's bands set off at their own point in the beat (`off`),
+    // so they never all fire at once. In silence there are none.
     float pulseAmp(float ph) { return smoothstep(0.0, 0.2, ph) * (1.0 - smoothstep(0.45, 1.5, ph)); }
-    float ribbonPulse(float x, float delay, float spd, float energy, float sharp) {
-        float ph = fract(uBeats) - delay;
+    float ribbonPulse(float x, float off, float delay, float spd, float energy, float sharp) {
+        float ph = fract(uBeats - off) - delay;
         float s0 = x - 4.4 + spd * ph;                      // behind this beat's front
         float s1 = s0 + spd;                                // ... and the last beat's
         float p0 = exp(-max(s0 - 1.1, 0.0) * 1.2 - max(-s0, 0.0) * sharp) * pulseAmp(ph);
@@ -1672,41 +1707,47 @@ extension FunShaders {
         return max(p0, p1) * energy;
     }
 
-    // Light from the ribbon at point q on its plane: one braided sheaf of fine
+    // Light from ribbon k at point q on its plane: a braided sheaf of fine
     // glowing strands, hot pink, with cyan pulses racing through it on the beat.
     // soft > 0 blurs it, for reflections in the floor.
-    vec3 ribbonLight(vec2 q, float soft) {
+    vec3 ribbonLight(vec2 q, float soft, int k) {
+        vec4 shp = kRibShape[k], flw = kRibFlow[k], wav = kRibWave[k];
+        float dir = sign(flw.y);
+        float size = shp.z / 0.3;                            // 1 for the hero sheaf
         float turn = beatTurn();
-        float X = q.x + sceneShift();                        // position along the ribbon, sliding left
-        float x01 = clamp(q.x / 7.0 + 0.5, 0.0, 1.0);
+        float X = q.x + ribbonShift(k);                      // position along the ribbon
+        float xf = q.x * dir;                                // ... measured the way it flows
         float edge = smoothstep(-4.8, -3.6, q.x) * smoothstep(4.8, 3.6, q.x);
-        float spec = 0.55 * (ribbonSpec(0.05) + ribbonSpec(0.15) + ribbonSpec(0.25)) / 3.0
-                   + 0.45 * (ribbonSpec(0.02 + x01 * 0.5) + ribbonSpec(0.1 + x01 * 0.5) + ribbonSpec(0.18 + x01 * 0.5)) / 3.0;
-        // Broad waves; bass bends the sheaf harder and each beat reshapes it a little.
-        float amp = (0.36 + 0.05 * spec + 0.2 * gSwell) * mix(0.75, 1.0, uActive);
-        float ph = turn * 0.45;
-        float s = uScroll * 0.3;                             // a gentle ripple along the ribbon on top of the slide
-        float a1 = X * 1.2 + s + ph;
-        float a2 = X * 2.28 - s * 0.6 + ph * 1.7;
-        float yc = 0.12 + amp * sin(a1) + amp * 0.35 * sin(a2);
-        float lo = kFloorY + 0.18;                           // skim the floor rather than sink into it
+        // Broad waves; the beat swell bends the sheaf a little harder.
+        float amp = shp.y * (1.0 + (0.14 * gSpec + 0.55 * gSwell) * size) * mix(0.75, 1.0, uActive);
+        float ph = turn * 0.45 + wav.z;
+        float s = uScroll * 0.3 * dir;                       // a gentle ripple along the ribbon on top of the slide
+        float a1 = X * wav.x + s + ph;
+        float a2 = X * wav.y - s * 0.6 + ph * 1.7;
+        float yc = shp.x + amp * sin(a1) + amp * 0.35 * sin(a2);
+        float lo = kFloorY + shp.z * 0.6 + 0.06;             // skim the floor rather than sink into it
         yc = 0.5 * (yc + lo + sqrt((yc - lo) * (yc - lo) + 0.004));
-        float slope = amp * 1.2 * (cos(a1) + 0.665 * cos(a2));
+        float slope = amp * (wav.x * cos(a1) + 0.35 * wav.y * cos(a2));
         float norm = inversesqrt(1.0 + slope * slope);
         float dc = abs(q.y - yc) * norm;
+        // Far from a small ribbon there's nothing left of its glow to draw.
+        if (k > 0 && dc > 1.4 * sqrt(size) + soft * 24.0) return vec3(0.0);
         // The sheaf twists as it travels: fanned wide where it faces you, gathered
         // where it turns, and each strand weaves a little on its own so they cross.
-        float width = 0.3 * (1.0 + 0.3 * gSwell) * (0.75 + 0.25 * sin(X * 0.6));
-        float twist = X * 0.55 - uScroll * 0.25 + turn * 0.2;
+        float width = shp.z * (1.0 + 0.3 * gSwell) * (0.75 + 0.25 * sin(X * 0.6 + wav.z));
+        float twist = X * 0.55 - uScroll * 0.25 * dir + turn * 0.2 + wav.z;
         float face = cos(twist);
-        const float sw = 0.036;                              // strand radius: fine silk
+        float sw = flw.x;                                    // strand radius: fine silk
         float energy = uActive;
         const float spd = 7.5;                               // world units per beat
         vec3 bundle = vec3(0.0);
-        float pc = smoothstep(0.15, 0.95, ribbonPulse(q.x, 0.06, spd, energy, 1.2));      // the wave through the sheaf as a whole
+        float pc = smoothstep(0.15, 0.95, ribbonPulse(xf, wav.w, 0.06, spd, energy, 1.2));   // the wave through the sheaf as a whole
+        vec3 hotC = mix(ribbonPink, ribbonCyan, pc);
         // Only pixels near the sheaf pay for its strands.
-        if (dc < width * 1.6 + 0.12 + soft * 12.0) {
+        if (dc < width * 1.6 + 0.12 * size + soft * 12.0) {
             vec3 strands = vec3(0.0);
+            int n = int(shp.w);
+            float fn = shp.w;
             // Per-strand phases advance by a fixed angle each strand (cheap rotations, not sin per strand).
             vec2 pw = vec2(sin(X * 0.8), cos(X * 0.8));      // thickness wobble, steps 1.3 rad per strand
             vec2 ps = vec2(sin(X * 0.9 - uScroll * 0.4), cos(X * 0.9 - uScroll * 0.4));   // shimmer, steps 2.3 rad
@@ -1714,9 +1755,10 @@ extension FunShaders {
             const mat2 stepS = mat2(-0.6663, -0.7457, 0.7457, -0.6663);
             float aa = max(soft, 0.0025);
             for (int i = 0; i < kStrands; i++) {
+                if (i >= n) break;
                 float fi = float(i);
                 float h1 = fract(fi * 0.6180), h2 = fract(fi * 0.7549 + 0.31), h3 = fract(fi * 0.5698 + 0.17);
-                float u = fi / float(kStrands - 1) * 2.0 - 1.0;
+                float u = fi / (fn - 1.0) * 2.0 - 1.0;
                 float off = width * (u * (0.5 + 0.5 * abs(face)) + 0.45 * sin(X * (1.1 + 0.25 * h1) + fi * 2.4 + turn * 0.3));
                 float sd = (q.y - yc - off) * norm;
                 float d = abs(sd);
@@ -1726,10 +1768,9 @@ extension FunShaders {
                 float tube = sqrt(1.0 - x * x);                       // round strand: hot in the middle, deep at the rim
                 // each strand is itself a few hairline fibres, read where it's sharp enough
                 float fib = mix(0.55 + 0.45 * cos(sd / (w + aa) * 9.4 + fi * 1.7), 1.0, smoothstep(0.3, 0.8, aa / w));
-                // some strands catch the wave before others, so it shimmers through the sheaf
-                // as a band fades, its strands drop back to pink one by one rather than
-                // all turning pale together
-                float pulse = smoothstep(0.08 + 0.55 * h2, 0.28 + 0.55 * h2, ribbonPulse(q.x, h3 * 0.14, spd, energy, 3.0));
+                // some strands catch the wave before others, so it shimmers through the sheaf;
+                // as a band fades, its strands drop back to pink one by one
+                float pulse = smoothstep(0.08 + 0.55 * h2, 0.28 + 0.55 * h2, ribbonPulse(xf, wav.w, h3 * 0.14, spd, energy, 3.0));
                 vec3 hot = mix(ribbonPink, ribbonCyan, pulse);
                 vec3 deep = mix(ribbonDeep, ribbonTeal, pulse);
                 float t2 = tube * tube, t8 = t2 * t2; t8 *= t8;
@@ -1740,36 +1781,61 @@ extension FunShaders {
                 pw = stepW * pw;
                 ps = stepS * ps;
             }
-            vec3 hotC = mix(ribbonPink, ribbonCyan, pc);
             // the strands' shared glow: bright through the sheaf, falling off outside it
-            float halo = 5.0 * exp(-max(dc - width * 0.9, 0.0) / (0.06 + soft * 3.0));
+            float halo = 5.0 * exp(-max(dc - width * 0.9, 0.0) / (0.06 * size + soft * 3.0));
             bundle = strands + hotC * halo * 0.15
-                   + hotC * mix(vec3(1.0, 0.55, 0.8), vec3(0.3, 1.0, 0.95), pc) * exp(-dc / (width * 0.45 + 0.02 + soft * 4.0)) * 0.55;   // thick luminous core
+                   + hotC * mix(vec3(1.0, 0.55, 0.8), vec3(0.3, 1.0, 0.95), pc) * exp(-dc / (width * 0.45 + 0.02 * size + soft * 4.0)) * 0.55;   // thick luminous core
         }
         // the glow the sheaf throws on the air around it
-        bundle += mix(ribbonPink, ribbonCyan, pc) * exp(-dc / (0.22 + soft * 4.0)) * 0.12;
+        bundle += hotC * exp(-dc / (0.2 * sqrt(size) + soft * 4.0)) * 0.08 * sqrt(size);
         float glow = (0.45 + 0.55 * uActive) * (0.95 + 0.3 * gSwell);
         return bundle * 1.1 * edge * glow / (1.0 + soft * 20.0);
     }
 
-    // The ribbons live on a curved sheet that slides left with the scene, so
+    // Each ribbon lives on its own curved sheet that slides with its flow, so
     // stretches of ribbon swing towards the camera (and move faster) and back
     // away again. Where a ray meets it (a few fixed-point steps), or -1.
-    float ribbonDepth(float x) { return 0.65 * sin((x + sceneShift()) * 0.45 + 0.9) + 0.1; }
-    float ribbonT(vec3 ro, vec3 rd) {
+    float ribbonDepth(float x, int k) {
+        return kRibFlow[k].z + kRibFlow[k].w * sin((x + ribbonShift(k)) * 0.45 + 0.9 + kRibWave[k].z);
+    }
+    float ribbonT(vec3 ro, vec3 rd, int k) {
         if (abs(rd.z) < 1e-3) return -1.0;
-        float t = (ribbonDepth(ro.x) - ro.z) / rd.z;
-        for (int i = 0; i < 4; i++) t = (ribbonDepth(ro.x + rd.x * max(t, 0.0)) - ro.z) / rd.z;
+        float t = (ribbonDepth(ro.x, k) - ro.z) / rd.z;
+        int steps = k == 0 ? 4 : 2;                          // the small ones' sheets bend less
+        for (int i = 0; i < 4; i++) {
+            if (i >= steps) break;
+            t = (ribbonDepth(ro.x + rd.x * max(t, 0.0), k) - ro.z) / rd.z;
+        }
         return t;
     }
 
-    // The ribbons as seen along a ray, or nothing if the ray doesn't reach them.
-    vec3 ribbonsAlong(vec3 ro, vec3 rd, float soft, float tMax) {
-        float t = ribbonT(ro, rd);
+    // One ribbon as seen along a ray, or nothing if the ray doesn't reach it.
+    // Blur is soft + softT per unit of distance, never thinner than a pixel.
+    vec3 ribbonAlong(vec3 ro, vec3 rd, float soft, float softT, float tMax, int k) {
+        if (k > 0) {
+            // A cheap first look: rays that pass well above or below the band
+            // this ribbon can wave through never reach its glow.
+            float t0 = (kRibFlow[k].z - ro.z) / rd.z;
+            float band = 2.6 * kRibShape[k].y + 1.4 * sqrt(kRibShape[k].z / 0.3)
+                       + abs(rd.y / rd.z) * kRibFlow[k].w * 1.2 + (soft + (abs(t0) + 3.0) * (softT + 0.7 / uResolution.y)) * 24.0;
+            if (abs(ro.y + rd.y * t0 - kRibShape[k].x) > band) return vec3(0.0);
+        }
+        float t = ribbonT(ro, rd, k);
         if (t <= 0.0 || t > tMax) return vec3(0.0);
         vec3 p = ro + rd * t;
         if (p.y < kFloorY) return vec3(0.0);
-        return ribbonLight(p.xy, soft + t * 0.7 / uResolution.y);   // never thinner than a pixel
+        return ribbonLight(p.xy, soft + t * (softT + 0.7 / uResolution.y), k);
+    }
+
+    // All the ribbons along a ray (they glow, so their light adds). Written out
+    // one by one, so each ribbon's settings are fixed when the shader compiles.
+    // Reflections in the floor and the glass (`all` false) show only the hero
+    // sheaf, which keeps the cost down.
+    vec3 ribbonsAlong(vec3 ro, vec3 rd, float soft, float softT, float tMax, bool all) {
+        vec3 acc = ribbonAlong(ro, rd, soft, softT, tMax, 0);
+        if (all) acc += ribbonAlong(ro, rd, soft, softT, tMax, 1) + ribbonAlong(ro, rd, soft, softT, tMax, 2)
+                      + ribbonAlong(ro, rd, soft, softT, tMax, 3);
+        return acc;
     }
 
     // The room: deep navy, a little lighter up high, a faint pink haze behind the
@@ -1804,10 +1870,11 @@ extension FunShaders {
     }
 
     // Where each glass shape is, how it's turned, and how big it is. Each one
-    // sits at its own depth and slides left with the scene; once it's off the
-    // left edge it comes back in from the right (a little higher or lower, a bit
-    // bigger or smaller, turned differently), so the stream never runs dry. The
-    // starting points are staggered so the shapes don't travel as one clump.
+    // sits at its own depth and slides with the scene, most of them left and a
+    // few the other way; once it's off one edge it comes back in from the other
+    // (a little higher or lower, a bit bigger or smaller, turned differently),
+    // so the stream never runs dry. The starting points are staggered so the
+    // shapes don't travel as one clump.
     void gemPose(int j, out vec3 c, out vec2 ang, out float r, out int faces) {
         float fj = float(j);
         if (j == 0)      { c = vec3(0.0, -0.40, -1.10); r = 0.17; faces = 10; }
@@ -1821,7 +1888,9 @@ extension FunShaders {
         // Wrap span: wide enough that the jump happens off screen at this depth.
         float depth = c.z + 3.4;
         float span = 2.0 * (depth * 0.85 + r) + 0.4;
-        float x = fract(fj * 0.375 + 0.62) * span - sceneShift();
+        // Three of them drift the other way, left to right, a little slower.
+        float flow = (j == 1 || j == 3 || j == 6) ? -0.7 : 1.0;
+        float x = fract(fj * 0.375 + 0.62) * span - sceneShift() * flow;
         float lap = floor(x / span);
         c.x = x - lap * span - 0.5 * span;
         float lh = hash11(lap * 3.7 + fj * 11.3);
@@ -1949,13 +2018,13 @@ extension FunShaders {
                 behind = skyColour(fromGem(reflect(d1, -nf2), ang)) * 1.3;
             } else {
                 vec3 wd2 = fromGem(d2, ang);
-                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 30.0) * 0.7;
+                behind = skyColour(wd2) + ribbonsAlong(wOut, wd2, 0.002, 0.0, 30.0, false) * 0.7;
             }
             col += behind * vec3(0.8, 1.0, 1.05) * (1.0 - fres) * (1.0 + 0.5 * facet);
             vec2 edgeBack = gemEdge(pOut, faces, h, edgeW * 1.2);
             // A ribbon passing through the glass lights it from inside.
-            float tz = ribbonT(ro, rd);
-            if (tz > tHit && tz < tHit + (tf - tn)) col += ribbonLight((ro + rd * tz).xy, 0.0) * 0.6;
+            float tz = ribbonT(ro, rd, 0);
+            if (tz > tHit && tz < tHit + (tf - tn)) col += ribbonLight((ro + rd * tz).xy, 0.0, 0) * 0.6;
             col += glassCyan * (edgeBack.x * 0.12 + edgeBack.y * 0.15) * lit * (1.0 - 0.7 * blur);
         }
         vec2 edgeGlow = gemEdge(pIn, faces, h, min(edgeW * 3.0, h * 0.08));
@@ -1967,6 +2036,7 @@ extension FunShaders {
 
     void main() {
         gSwell = beatSwell();
+        gSpec = (ribbonSpec(0.05) + ribbonSpec(0.15) + ribbonSpec(0.25)) / 3.0;
         vec2 p = screenP();
         // Camera sits low by the glossy floor and sways slowly (on the
         // sound-gated clock); it leans in a little on the bass.
@@ -1997,18 +2067,18 @@ extension FunShaders {
             vec3 refl = skyColour(rr) * 0.8;
             int j2; float t2;
             if (nearestGem(fp, rr, 40.0, j2, t2)) refl = shadeGem(j2, fp, rr, t2, false);
-            float tr = ribbonT(fp, rr);
             vec3 glassPool;
-            refl += ribbonsAlong(fp, rr, 0.01 + 0.035 * max(tr, 0.0), 40.0) + gemHalo(fp, rr, 40.0, glassPool) * 2.0;
+            refl += ribbonsAlong(fp, rr, 0.01, 0.035, 40.0, false) + gemHalo(fp, rr, 40.0, glassPool) * 2.0;
             col = vec3(0.002, 0.006, 0.014) + refl * fres * 0.75;
             // the ribbons' light pooling on the floor beneath them
-            float pool = exp(-abs(fp.z - ribbonDepth(fp.x)) * 0.8) * smoothstep(-4.8, -2.5, fp.x) * smoothstep(4.8, 2.5, fp.x);
+            float pool = (exp(-abs(fp.z - ribbonDepth(fp.x, 0)) * 0.8) + 0.35 * exp(-abs(fp.z - ribbonDepth(fp.x, 2)) * 1.6))
+                       * smoothstep(-4.8, -2.5, fp.x) * smoothstep(4.8, 2.5, fp.x);
             col += ribbonPink * 0.6 * pool * (0.4 + 0.6 * uActive) * (0.85 + 0.25 * gSwell);
             col += glassPool * 0.8 * (0.4 + 0.6 * uActive);
             col = mix(col, skyColour(rd), smoothstep(8.0, 30.0, tFloor));
         }
         // Ribbons in front of whatever we hit.
-        col += ribbonsAlong(ro, rd, 0.0, tEnd);
+        col += ribbonsAlong(ro, rd, 0.0, 0.0, tEnd, true);
         vec3 unused;
         col += gemHalo(ro, rd, tEnd, unused);
         col += ribbonPink * gSwell * 0.015;
