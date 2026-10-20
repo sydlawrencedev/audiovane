@@ -23,3 +23,6 @@ VisualiserMac/dist/
 dist/
 VisualiserMac/Tests/eval-results/
 .env
+
+# Local git worktrees
+.worktrees/

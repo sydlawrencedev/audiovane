@@ -6,3 +6,14 @@
 # One canonical URL for the homepage. The sitemap, the canonical tag and the
 # og:url all say "https://vibresia.com/"; make the server agree.
 /index.html  /  301
+
+# There is deliberately no rule for /share here.
+#
+# /share is a directory (site/share/), so Cloudflare serves its index.html for
+# both /share and /share/ — which is what the custom-vibscape share page wants,
+# and what the built-in vibscapes sit beside. A rewrite would be the obvious way
+# to spell it, but a rule's source matches on path *prefix*: "/share ->
+# /share.html" also matches "/share.html" itself, so the rewrite lands on its
+# own destination and 307s to itself forever. Files that genuinely exist
+# (/share/ribbons, /share/manifest.json) win the match, which is why the bug
+# looked like it only affected the bare page.

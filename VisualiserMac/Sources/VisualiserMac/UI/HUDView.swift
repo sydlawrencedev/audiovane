@@ -11,24 +11,29 @@ struct HUDView: View {
 
     var body: some View {
         HStack(alignment: .center) {
-            // brand
-            HStack(spacing: 12) {
-                BrandMark()
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("VIBRESIA")
-                        .font(.system(size: 17, weight: .bold, design: .default))
-                        .tracking(3.5)
-                        .foregroundStyle(Color.white)
-                    // The real version, not a standing "v1": someone reporting
-                    // a crash or a vibscape that looks wrong needs to be able to
-                    // read it off the screen. Uppercased by .textCase, like
-                    // the rest of the header.
-                    Text("v\(Self.version)")
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .tracking(1.6)
-                        .foregroundStyle(Color(white: 0.45))
-                        .textCase(.uppercase)
+            // brand + share pill (the share pill rides the chrome too, so it
+            // hides when the rest of the chrome does — Auto Scan aside, sharing
+            // a vibescape needs the same focus the rest of the bar needs)
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 12) {
+                    BrandMark()
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("VIBRESIA")
+                            .font(.system(size: 17, weight: .bold, design: .default))
+                            .tracking(3.5)
+                            .foregroundStyle(Color.white)
+                        // The real version, not a standing "v1": someone reporting
+                        // a crash or a vibscape that looks wrong needs to be able to
+                        // read it off the screen. Uppercased by .textCase, like
+                        // the rest of the header.
+                        Text("v\(Self.version)")
+                            .font(.system(size: 10, weight: .regular, design: .monospaced))
+                            .tracking(1.6)
+                            .foregroundStyle(Color(white: 0.45))
+                            .textCase(.uppercase)
+                    }
                 }
+                ShareVibscapeButton()
             }
 
             Spacer()

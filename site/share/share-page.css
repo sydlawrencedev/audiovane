@@ -1,0 +1,221 @@
+/* Shared styling for share pages — both `/share/<slug>.html` for built-in
+ * vibscapes and `/share?d=…` for custom. Mirrors the visual language of
+ * the main site (`site/index.html`) so a link recipient lands on something
+ * that feels like the same product. */
+
+:root {
+  --bg: #06010d;
+  --panel: #110820;
+  --line: #2a1840;
+  --text: #f1eaf7;
+  --muted: #a596b8;
+  --magenta: #ff2bd6;
+  --cyan: #2bf2ff;
+  --gold: #ffc35a;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); color: var(--text); }
+body {
+  font: 17px/1.6 "Space Grotesk", system-ui, sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--cyan); text-decoration: none; }
+code, .mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  white-space: pre;
+  font-size: 13px;
+  line-height: 1.55;
+  color: #d3cce0;
+}
+
+.wrap { max-width: 720px; margin: 0 auto; padding: 28px 24px 80px; }
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-decoration: none;
+  color: var(--text);
+}
+.brand svg {
+  width: 30px; height: 30px;
+  filter: drop-shadow(0 0 8px rgba(255, 43, 214, 0.7));
+}
+
+.hero {
+  margin: 56px 0 28px;
+  text-align: center;
+}
+.eyebrow {
+  font: 700 11px/1 "JetBrains Mono", ui-monospace;
+  letter-spacing: 3.4px;
+  text-transform: uppercase;
+  color: var(--magenta);
+  margin: 0 0 14px;
+}
+.hero h1 {
+  font-size: clamp(36px, 7vw, 56px);
+  line-height: 1.05;
+  margin: 0 0 14px;
+  letter-spacing: -0.02em;
+}
+.hero h1 span {
+  background: linear-gradient(90deg, var(--magenta), var(--cyan));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero p.lede {
+  color: var(--muted);
+  font-size: 18px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.shot {
+  margin: 32px 0;
+  border-radius: 14px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: #000;
+  aspect-ratio: 1200 / 630;
+}
+.shot img, .shot video {
+  width: 100%; height: 100%; display: block;
+  object-fit: cover;
+}
+
+.code-preview {
+  margin: 24px 0;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.code-preview header {
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line);
+  font: 600 11px "JetBrains Mono", monospace;
+  color: var(--muted);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.code-preview pre {
+  margin: 0;
+  padding: 18px;
+  overflow-x: auto;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.cta-row {
+  display: flex; flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  margin: 32px 0 12px;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 22px;
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 16px;
+  border: 0;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn.primary {
+  background: var(--magenta);
+  color: #fff;
+  box-shadow: 0 0 28px rgba(255, 43, 214, 0.45);
+}
+.btn.primary:hover { transform: translateY(-1px); }
+.btn.coffee {
+  background: transparent;
+  color: var(--gold);
+  border: 1.5px solid var(--gold);
+}
+.btn.coffee:hover { transform: translateY(-1px); }
+
+.share-cta {
+  display: flex; flex-direction: column; align-items: center;
+  margin: 18px 0 0;
+}
+.share-cta small {
+  display: block;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.credit {
+  margin: 64px 0 0;
+  text-align: center;
+  font: 600 13px "JetBrains Mono", monospace;
+  color: var(--gold);
+  letter-spacing: 0.5px;
+}
+
+.related {
+  margin: 64px 0 0;
+  padding: 22px 22px 26px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+.related h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+.related p {
+  margin: 0 0 16px;
+  color: var(--muted);
+}
+.related ul {
+  list-style: none;
+  padding: 0; margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 10px;
+}
+.related a {
+  display: block;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid transparent;
+  color: var(--text);
+}
+.related a:hover { border-color: var(--magenta); }
+.related .slug {
+  font: 600 11px "JetBrains Mono", monospace;
+  color: var(--cyan);
+  letter-spacing: 1.2px;
+  display: block;
+  margin-bottom: 4px;
+}
+
+[data-share-download] { margin-top: 8px; }
+
+/* Used by the fragment page when a custom payload couldn't be decoded. */
+.error-card {
+  margin: 24px auto;
+  padding: 22px;
+  border-radius: 14px;
+  border: 1px solid #5a2030;
+  background: rgba(255, 64, 64, 0.10);
+  color: #ffd8d8;
+  text-align: left;
+}
+
+@media (max-width: 640px) {
+  .hero { margin-top: 32px; }
+  .wrap { padding: 20px 18px 60px; }
+}

@@ -124,6 +124,21 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <string>${REPORT_ENDPOINT}</string>
     <key>ReportToken</key>
     <string>${REPORT_TOKEN}</string>
+    <!-- Register Vibresia as the handler for vibresia:// URLs so a shared
+         vibscape link handed to us (vibresia://open?p=ribbons or ?d=...) lands
+         in the app rather than in the browser. The handler is wired up in
+         AppDelegate.applicationWillFinishLaunching. -->
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.minithlabs.visualiser.share</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>vibresia</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 EOF

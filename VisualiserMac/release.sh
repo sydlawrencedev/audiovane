@@ -38,10 +38,20 @@ rm -rf dist && mkdir dist
 ditto build/Vibresia.app dist/Vibresia.app
 (cd dist && ditto -c -k --keepParent Vibresia.app Vibresia.zip)
 
-# The app was called AudioVane until the rename, and the version already
-# installed on people's Macs looks for "AudioVane.zip" when it checks for an
-# update. Attaching the same zip under the old name too means those installs
-# can still update themselves; drop this once nobody is running the old one.
+# The zip is attached twice, under the current name and the one the app had
+# before the rename. This is not a leftover: builds released as AudioVane
+# hardcode `assetName = "AudioVane.zip"` and find updates only through
+# `releases/latest`, so the old name has to stay attached or those installs
+# can never update again — they'd sit on whatever they had, permanently,
+# with no path forward. (The copy on the current release shows 0 downloads,
+# so it's likely nobody is on one any more, but that's not provable from
+# here.)
+#
+# Drop the `cp` and the second asset once every pre-rename install is gone.
+# The signal is the download count on AudioVane.zip across recent releases
+# staying at 0 — check it before removing:
+#   gh release view <tag> -R sydlawrencedev/vibresia --json assets \
+#     --jq '.assets[] | select(.name=="AudioVane.zip") | .downloadCount'
 cp dist/Vibresia.zip dist/AudioVane.zip
 
 gh release create "$TAG" dist/Vibresia.zip dist/AudioVane.zip -R "$REPO" \

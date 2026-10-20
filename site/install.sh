@@ -6,10 +6,6 @@ set -euo pipefail
 
 REPO="sydlawrencedev/vibresia"
 URL="https://github.com/$REPO/releases/latest/download/Vibresia.zip"
-# The app was called AudioVane until recently, and the release it was
-# published under is still called that. Both are attached to the release, so
-# this only matters for the first Vibresia release.
-FALLBACK_URL="https://github.com/$REPO/releases/latest/download/AudioVane.zip"
 COFFEE="https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01"
 
 if [ "$(uname -s)" != "Darwin" ]; then
@@ -27,10 +23,12 @@ fi
 tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT
 echo "Downloading Vibresia…"
-if ! curl -fsSL "$URL" -o "$tmp/Vibresia.zip"; then
-    echo "Falling back to the previous release name…" >&2
-    curl -fsSL "$FALLBACK_URL" -o "$tmp/Vibresia.zip"
-fi
+# No fallback to the old AudioVane.zip name here, deliberately. The app was
+# renamed a few releases ago and every release since carries Vibresia.zip, so
+# a failure on that URL means the release is broken rather than misnamed. An
+# old-name fallback would quietly install a months-old build and report
+# success, which is worse than stopping and saying so.
+curl -fsSL "$URL" -o "$tmp/Vibresia.zip"
 ditto -x -k "$tmp/Vibresia.zip" "$tmp"
 
 # Where the app goes. The bundle id hasn't changed, so this replaces the
