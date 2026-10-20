@@ -2100,19 +2100,25 @@ extension FunShaders {
     /// violet in the distance, while chunky cyan glass blocks with crisp edges
     /// and hard reflections tumble past on near-black space. The ribbon is
     /// found per pixel by a sign change of its side function along the ray (at
-    /// most 36 depth steps for both ends together, stopping once both are
-    /// found); the glass blocks are exact ray/box slabs. The camera flies on
-    /// uScroll, so it races when the music is loud. The bass widens the ribbon,
-    /// the spectrum lights its far reaches, the mids thicken the dust, every
-    /// beat turns the glass a step and throws a burst of glitter, and the
-    /// treble makes the specks and the glass edges sparkle. In silence: dim,
-    /// and still.
+    /// most 31 depth steps for both ends together, out to where it has faded,
+    /// stopping once both are found); the glass blocks are exact ray/box slabs.
+    /// Smooth by design: the camera flies on uTime (the eased activity clock),
+    /// so it speeds up and slows down gently, and uLevelSmooth surges it
+    /// forward a little when the music gets louder. The folds sway slowly, like
+    /// silk in slow air, and the glass turns steadily; nothing steps on the
+    /// beat. Each kick is a soft swell on the beat clock (in over ~150 ms, out
+    /// over ~1 s), sized by uBassSmooth, that widens and brightens the satin
+    /// and throws glitter that drifts outward. Snares and claps (the upper
+    /// mids) send a ripple running down the satin; hats and cymbals (the top of
+    /// the spectrum) make the satin's rolled edges glitter, the glass glint and
+    /// the specks twinkle. Each band is an average over many bins. In silence:
+    /// dim, and still.
     static let silk = """
     // Silk Flight: flying forward through the music. A wide satin ribbon, hot
     // pink with deep folds, sweeps in from both frame edges and twists away
     // into a teal dust cloud, turning electric violet in the distance, while
     // chunky cyan glass blocks tumble past on near-black space.
-    const int kSilkSteps = 36;       // depth samples per ribbon branch
+    const int kSilkSteps = 31;       // depth samples per ribbon branch (out to z ~17, where it has faded out)
     const int kSilkGlass = 6;        // glass blocks
 
     const vec3 silkPink   = vec3(1.00, 0.36, 0.62);
@@ -2123,28 +2129,52 @@ extension FunShaders {
     const vec3 silkCyan   = vec3(0.00, 1.00, 0.89);
     const vec3 silkDust   = vec3(0.20, 0.43, 0.47);
 
-    float silkTravel() { return uScroll * 3.0; }
-    float silkTurn() { return floor(uBeats) + smoothstep(0.0, 0.5, fract(uBeats)); }
+    // Smooth clocks. uTime only runs while there's sound and eases in and out of
+    // it, so flying on it makes the camera accelerate and decelerate smoothly;
+    // uLevelSmooth on top surges it forward a little as the music gets louder
+    // and lets it fall back gently. Nothing here steps on the beat.
+    float silkTravel() { return uTime * 1.36 + uLevelSmooth * 1.5; }
+    float silkFlow() { return uTime; }
+
+    // A soft swell on every kick, in place of the raw bass and beat-strength
+    // inputs (which jump from one frame to the next): it eases in over about
+    // 150 ms on the (continuous) beat clock and dies away over about a second,
+    // sized by the slow bass. Summing the last few beats keeps it continuous.
+    float silkSwellAt(float x) { return smoothstep(0.0, 0.3, x) * exp(-x * 1.5); }
+    float silkSwell() {
+        float ph = fract(uBeats);
+        return (silkSwellAt(ph) + silkSwellAt(ph + 1.0) + silkSwellAt(ph + 2.0)) * clamp(0.3 + 2.8 * uBassSmooth, 0.0, 1.2) * uActive;
+    }
+    float gSilkSwell;   // silkSwell(), worked out once per pixel at the top of main()
+    float gSilkFlow;
+    float gSilkMid;     // snares and claps: the upper mids, shaped 0..1
+    float gSilkHi;      // hats and cymbals: the top of the spectrum, shaped 0..1
+    vec4 gSilkSway;   // slow phase drifts for the ribbon's curves, from gSilkFlow
 
     // Ribbon centre (xy) and twist (z) at world depth s, for branch b (0 or 1).
     // Near the camera each branch is pushed out to its own side, so it sweeps
     // in from the frame edge and never closes over the lens.
-    vec3 silkPath(float s, float z, float b) {
-        float side = b < 0.5 ? -1.0 : 1.0;
-        float push = 1.8 * exp(-0.5 * z);
-        float cross = side * (0.75 + push - 1.5 * smoothstep(1.5, 7.0, z));
-        return vec3(cross + 1.1 * sin(s * 0.7 + b * 2.4) + 0.4 * exp(-0.12 * z) * sin(s * 1.13 + b * 5.1),
-                    side * (-0.25 - 0.55 * push) + 0.05 + 0.45 * sin(s * 0.47 + b * 1.7 + 2.0),
-                    0.5 + 0.75 * exp(-0.06 * z) * sin(s * 0.41 + b * 3.0 + 1.0));
+    // Depth terms of the ribbon path, shared by both branches at depth z.
+    vec4 silkDepth(float z) {
+        return vec4(1.8 * exp(-0.5 * z), 1.5 * smoothstep(1.5, 7.0, z), 0.4 * exp(-0.12 * z), 0.75 * exp(-0.06 * z));
     }
+    vec3 silkPathK(float s, float b, vec4 k) {
+        float side = b < 0.5 ? -1.0 : 1.0;
+        float cross = side * (0.75 + k.x - k.y);
+        vec4 f = gSilkSway;   // slow air: each curve's phase drifts, so the ribbon sways
+        return vec3(cross + 1.1 * sin(s * 0.7 + b * 2.4 + f.x) + k.z * sin(s * 1.13 + b * 5.1 + f.y),
+                    side * (-0.25 - 0.55 * k.x) + 0.05 + 0.45 * sin(s * 0.47 + b * 1.7 + 2.0 + f.z),
+                    0.5 + k.w * sin(s * 0.41 + b * 3.0 + 1.0 + f.w));
+    }
+    vec3 silkPath(float s, float z, float b) { return silkPathK(s, b, silkDepth(z)); }
 
     // Signed offset of the ray point from the ribbon's plane line at depth z,
     // and the across-ribbon coordinate.
-    vec2 silkSide(vec2 rd, float z, float s, float b, float w) {
-        vec3 c = silkPath(s, z, b);
+    vec2 silkSide(vec2 rd, float z, float s, float b, float w, vec4 k) {
+        vec3 c = silkPathK(s, b, k);
         vec2 q = rd * z - c.xy;
         vec2 t = vec2(cos(c.z), sin(c.z));
-        return vec2(dot(q, vec2(-t.y, t.x)), dot(q, t) / w);
+        return vec2(dot(q, vec2(-t.y, t.x)), dot(q, t) * w);   // w here is 1/width
     }
 
     vec3 silkShade(vec2 rd, float z, float s, float u, float b, float w) {
@@ -2158,10 +2188,13 @@ extension FunShaders {
         N *= side;
         // Broad folds: the width is split into a few wide panels, each tilted its
         // own way and slowly re-folding along the length, rounded at the corners.
-        float uq = (u * 0.5 + 0.5) * 3.5 + 0.4 * sin(s * 0.3 + b * 3.0);
+        float f = gSilkFlow;
+        float uq = (u * 0.5 + 0.5) * 3.5 + 0.4 * sin(s * 0.3 + b * 3.0 + f * 0.21);
         float id = floor(uq), fu = fract(uq);
-        float tilt = 0.55 * sin(s * 0.45 + id * 2.1 + b * 1.3) + 0.35 * (hash11(id * 3.1 + b * 17.0) - 0.5);
-        vec3 Np = normalize(N + T * (tilt + 1.1 * (fu - 0.5)) + normalize(D) * 0.2 * sin(s * 0.8 + id));
+        float tilt = 0.55 * sin(s * 0.45 + id * 2.1 + b * 1.3 + f * 0.33) + 0.35 * (hash11(id * 3.1 + b * 17.0) - 0.5);
+        // Snares and claps send a ripple running down the satin, away from us.
+        float rip = gSilkMid * sin(s * 2.6 - f * 7.0 + b * 2.0);
+        vec3 Np = normalize(N + T * (tilt + 1.1 * (fu - 0.5)) + normalize(D) * (0.2 * sin(s * 0.8 + id + f * 0.4) + 0.12 * rip));
         float crease = smoothstep(0.0, 0.14, fu) * smoothstep(1.0, 0.86, fu);
         vec3 L = normalize(vec3(0.35, 0.75, -0.55));
         float dif = max(dot(Np, L), 0.0);
@@ -2174,11 +2207,18 @@ extension FunShaders {
         vec3 col = k < 0.5 ? mix(silkFold * 0.75, silkPink, k * 2.0) : mix(silkPink, silkPinkHi, k * 2.0 - 1.0);
         col = mix(col, mix(silkViolet, silkLilac, k) * (0.6 + 0.6 * k), step(N.y, 0.0) * 0.4);
         col = mix(col, silkPinkHi, sheen * 0.15);
-        col += vec3(1.0, 0.82, 0.95) * spec * (1.2 + 0.6 * uBeatStrength);
+        col += vec3(1.0, 0.82, 0.95) * spec * (1.25 + 0.3 * gSilkSwell + 0.4 * gSilkHi);
+        // Hats and cymbals: glitter catching along the rolled edges of the satin.
+        vec2 gq = vec2(u * 26.0, s * 40.0);
+        vec2 gc = floor(gq);
+        float gh = hash21(gc + b * 13.0);
+        float glit = step(0.8, gh) * (gh * 4.0 - 3.0) * (1.0 - smoothstep(0.12, 0.38, length(fract(gq) - 0.5)))
+                   * smoothstep(0.6, 0.9, abs(u)) * (1.0 - smoothstep(3.0, 6.0, z));
+        col += vec3(1.0, 0.9, 1.0) * glit * gSilkHi * 1.2;
         col *= (0.72 + 0.28 * crease) * (1.0 - 0.5 * smoothstep(0.82, 1.0, abs(u)));   // soft folds, thick rolled edges
         // Far away the ribbon cools to electric violet-blue and sinks into the dust.
         float far = smoothstep(1.8, 7.0, z);
-        float band = 0.8 + 0.7 * bandAt(clamp(z / 18.0, 0.0, 1.0));     // the spectrum lights the far ribbon
+        float band = 0.9 + 0.15 * bandAt(clamp(z / 18.0, 0.0, 1.0)) + 0.1 * gSilkSwell;     // a faint spectrum glow on the far ribbon
         col = mix(col, (mix(silkViolet, silkLilac, 0.35 * dif + spec) * (0.75 + 0.55 * dif) + spec * 0.4) * band, far * 0.9);
         col = mix(col, silkDust * 0.6, smoothstep(12.0, 30.0, z));
         return col;
@@ -2195,7 +2235,7 @@ extension FunShaders {
         float rr = (0.6 + 0.8 * hash11(n * 2.3 + 0.53)) * (0.35 + 0.28 * z);
         vec3 c = vec3(cos(a) * rr * 1.3, sin(a) * rr * 0.8, z);
         vec3 hs = vec3(0.28 + 0.24 * hash11(n * 5.3 + 0.7), 0.24 + 0.2 * hash11(n * 6.7 + 0.3), 0.28 + 0.26 * hash11(n * 8.9 + 0.9));
-        vec2 ang = vec2(uTime * (0.15 + 0.2 * hash11(n * 9.1)) + silkTurn() * 0.35 + n,
+        vec2 ang = vec2(uTime * (0.32 + 0.2 * hash11(n * 9.1)) + n,
                         uTime * (0.12 + 0.15 * hash11(n * 1.3)) + n * 2.0);
         mat2 r1 = rot(ang.x), r2 = rot(ang.y);
         vec3 ro = -c;
@@ -2237,9 +2277,9 @@ extension FunShaders {
         float fres = pow(1.0 - abs(dot(nf, normalize(d))), 3.0);
         float thick = clamp((tF - tN) / (2.0 * hs.z), 0.0, 1.5);
         vec3 g = col * mix(0.45, 0.15, min(thick, 1.0)) + vec3(0.0, 0.03, 0.035) * min(thick, 1.0);            // tinted glass body
-        g += silkCyan * (0.02 + 0.9 * step(0.45, lit) * (0.5 + 0.5 * lit) + 0.7 * step(0.6, tone) + 0.15 * fres + 0.4 * refl + 0.35 * step(0.4, litB)) * (0.7 + 0.5 * uTreble);
-        g += vec3(0.85, 1.0, 1.0) * (glint * 1.5 + refl * 0.25);
-        g += vec3(0.45, 1.0, 0.98) * (lineF * 1.6 + lineB * 0.7 + lineD * 0.8) * (0.85 + 0.5 * uTreble + 0.5 * uBeatStrength);
+        g += silkCyan * (0.02 + 0.9 * step(0.45, lit) * (0.5 + 0.5 * lit) + 0.7 * step(0.6, tone) + 0.15 * fres + 0.4 * refl + 0.35 * step(0.4, litB)) * (0.75 + 0.1 * gSilkSwell);
+        g += vec3(0.85, 1.0, 1.0) * (glint * (1.5 + 2.0 * gSilkHi) + refl * 0.25);
+        g += vec3(0.45, 1.0, 0.98) * (lineF * 1.6 + lineB * 0.7 + lineD * 0.8) * (0.9 + 0.25 * gSilkSwell);
         col = mix(col, g, fade);
     }
 
@@ -2252,18 +2292,32 @@ extension FunShaders {
 
     void main() {
         vec2 p = screenP();
+        gSilkSwell = silkSwell();
+        gSilkFlow = silkFlow();
+        // The other parts of the music, each an average over many bands so it is
+        // smooth across the spectrum, and shaped so a hat or a clap reads clearly.
+        float bm = 0.0, bh = 0.0;
+        for (int i = 0; i < 28; i++) bm += uBands[44 + i];    // ~0.8-3.5 kHz
+        for (int i = 0; i < 16; i++) bh += uBands[80 + i];    // ~6-16 kHz
+        gSilkMid = smoothstep(0.065, 0.11, sqrt(bm / 28.0)) * uActive;
+        gSilkHi = smoothstep(0.03, 0.09, sqrt(bh / 16.0)) * uActive;
+        gSilkSway = vec4(0.45 * sin(gSilkFlow * 0.23), 0.7 * sin(gSilkFlow * 0.31 + 1.0),
+                         0.5 * sin(gSilkFlow * 0.19 + 2.0), 0.55 * sin(gSilkFlow * 0.27 + 3.0));
         p = rot(0.06 * sin(uTime * 0.05)) * p;
         float travel = silkTravel();
         vec2 rd = p * 1.25 + vec2(0.04 * sin(uTime * 0.11), 0.03 * sin(uTime * 0.083 + 1.0));
 
         // Space: near-black teal with a drifting cloud of dust in the middle.
         vec3 col = vec3(0.0, 0.05, 0.025) + vec3(0.0, 0.05, 0.07) * smoothstep(0.7, 0.0, length(p * vec2(0.7, 1.4)));
-        vec2 dq = p * 2.2 + vec2(travel * 0.02, 0.0);
-        float dn = silkNoise(dq * 1.6) * 0.45 + silkNoise(dq * 3.4 + 7.0) * 0.27 + silkNoise(dq * 7.5 - 3.0) * 0.17 + silkNoise(dq * 16.0 + 1.0) * 0.11;
         vec2 pc = (p - vec2(0.05, 0.03)) * vec2(1.8, 3.2);
         float core = exp(-dot(pc, pc));
-        float dust = smoothstep(0.25, 0.85, dn) * core * 1.5;
-        col += silkDust * dust * 1.25 * (1.0 + 0.4 * uMid) * (0.6 + 0.4 * uActive);
+        float dust = 0.0;
+        if (core > 0.02) {                               // the cloud is nothing out at the corners
+            vec2 dq = p * 2.2 + vec2(travel * 0.02, 0.0);
+            float dn = silkNoise(dq * 1.6) * 0.45 + silkNoise(dq * 3.4 + 7.0) * 0.27 + silkNoise(dq * 7.5 - 3.0) * 0.17 + silkNoise(dq * 16.0 + 1.0) * 0.11;
+            dust = smoothstep(0.25, 0.85, dn) * core * 1.5;
+        }
+        col += silkDust * dust * 1.25 * (1.0 + 0.15 * gSilkSwell) * (0.6 + 0.4 * uActive);
         // Fine specks streaming outward as we fly.
         for (int l = 0; l < 3; l++) {
             float fl = float(l);
@@ -2272,21 +2326,24 @@ extension FunShaders {
             vec2 cell = floor(sp);
             float h = hash21(cell);
             float sd = length(fract(sp) - 0.5 - 0.3 * (vec2(hash21(cell + 3.1), hash21(cell + 5.7)) - 0.5));
-            float star = step(0.93, h) * (1.0 - smoothstep(0.05, 0.25, sd)) * smoothstep(0.0, 0.3, ph) * smoothstep(1.0, 0.8, ph);
-            col += mix(vec3(0.75, 0.35, 0.9), vec3(0.8, 0.9, 1.0), hash21(cell + 9.0)) * star * (0.35 + 0.6 * uTreble + 0.4 * uBeatStrength) * (0.4 + 0.6 * dust + 0.3 * uActive);
+            float pxc = mix(14.0, 2.5, ph) * 30.0 / uResolution.y;   // one pixel, in cells: soft enough not to shimmer
+            float star = step(0.93, h) * (1.0 - smoothstep(0.05, 0.25 + 1.2 * pxc, sd)) / (1.0 + 6.0 * pxc * pxc) * smoothstep(0.0, 0.3, ph) * smoothstep(1.0, 0.8, ph);
+            col += mix(vec3(0.75, 0.35, 0.9), vec3(0.8, 0.9, 1.0), hash21(cell + 9.0)) * star * (0.45 + 0.12 * gSilkSwell + 0.7 * gSilkHi * step(0.5, hash21(cell + 11.0))) * (0.4 + 0.6 * dust + 0.3 * uActive);
         }
 
         // The ribbon: two branches, each found by a sign change of its side
         // function along the ray (exponential depth steps, front to back).
-        float w = 0.62 * (1.0 + 0.15 * uBass);
+        float w = 0.62 * (1.0 + 0.06 * gSilkSwell);
+        float iw = 1.0 / w;
         vec4 hitA = vec4(1e5, 0.0, 0.0, 0.0), hitB = vec4(1e5, 0.0, 0.0, 0.0);   // z, u, s, alpha
         vec2 prevA = vec2(0.0), prevB = vec2(0.0);
         float zPrev = 0.0;
         for (int i = 0; i < kSilkSteps; i++) {
             float z = 0.45 * pow(1.13, float(i));
             float s = travel + z;
-            vec2 fa = silkSide(rd, z, s, 0.0, w);
-            vec2 fb = silkSide(rd, z, s, 1.0, w);
+            vec4 dk = silkDepth(z);
+            vec2 fa = silkSide(rd, z, s, 0.0, iw, dk);
+            vec2 fb = silkSide(rd, z, s, 1.0, iw, dk);
             if (i > 0) {
                 if (hitA.x > 1e4 && fa.x * prevA.x <= 0.0) {
                     float k = prevA.x / (prevA.x - fa.x);
@@ -2316,22 +2373,30 @@ extension FunShaders {
         // Glass blocks in front of the ribbon.
         for (int i = 0; i < kSilkGlass; i++) silkGlass(col, vec3(rd, 1.0), zr, i, travel);
 
-        // Beat sparks: a burst of pink and cyan glitter thrown outward.
-        float ph = fract(uBeats);
+        // Beat sparks: pink and cyan glitter drifting outward from each beat,
+        // fading in over the swell's rise and out over about a second. The last
+        // two beats' bursts overlap so nothing pops at the beat.
         float ang = atan(p.y, p.x) * 7.0;
+        float pr = length(p);
         for (int j = 0; j < 2; j++) {
             float fj = float(j);
             float cellA = floor(ang + fj * 0.5) + fj * 50.0;
-            float hs = hash11(cellA + floor(uBeats) * 1.37);
             float a2 = (floor(ang + fj * 0.5) + 0.5 - fj * 0.5 + 0.6 * (hash11(cellA * 2.1) - 0.5)) / 7.0;
-            float rr = 0.06 + ph * (0.25 + 0.6 * hs);
-            vec2 sp = vec2(cos(a2), sin(a2)) * rr;
-            float spark = (1.0 - smoothstep(0.002, 0.006 + 0.004 * hs, length(p - sp))) * step(0.5, hs);
-            col += mix(silkPink, silkCyan, hash11(cellA * 1.3)) * spark * uBeatStrength * (1.0 - ph) * 3.0 * uActive;
+            vec2 dir = vec2(cos(a2), sin(a2));
+            vec3 sc = mix(silkPink, silkCyan, hash11(cellA * 1.3));
+            for (int k = 0; k < 2; k++) {
+                float bk = floor(uBeats) - float(k);
+                float x = uBeats - bk;                      // time since that beat, in beats
+                float hs = hash11(cellA + bk * 1.37);
+                float rr = 0.07 + (1.0 - exp(-x * 1.1)) * (0.12 + 0.3 * hs);   // eased outward drift, like glitter in slow air
+                if (hs < 0.5 || abs(pr - rr) > 0.02) continue;
+                float spark = 1.0 - smoothstep(0.002, 0.006 + 0.004 * hs + 1.5 / uResolution.y, length(p - dir * rr));
+                col += sc * spark * silkSwellAt(x) * uActive * 1.4;
+            }
         }
 
         col *= 1.0 - 0.25 * dot(p, p);                  // vignette
-        col = mix(col * 0.45, col, uActive);             // dims and settles in silence
+        col = mix(col * 0.5, col, smoothstep(0.0, 1.0, uActive));   // dims and settles in silence, easing
         fragColor = vec4(col, 1.0);
     }
     """
