@@ -9,6 +9,18 @@ import SoundAnalysis
 final class InstrumentDetector: NSObject, SNResultsObserving {
     enum Part: Int, CaseIterable {
         case drums, bass, guitar, keys, vocals
+
+        /// Readable name. The raw values are integers, and "2" on a report
+        /// tells nobody which instrument was heard.
+        var name: String {
+            switch self {
+            case .drums: return "drums"
+            case .bass: return "bass"
+            case .guitar: return "guitar"
+            case .keys: return "keys"
+            case .vocals: return "vocals"
+            }
+        }
     }
 
     /// Classifier labels that count towards each part (max confidence wins).

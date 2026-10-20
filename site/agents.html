@@ -113,9 +113,9 @@
 
     <div class="setup">
       <h3>The one thing to know</h3>
-      <p>Vibresia is the server. The command names the app on <em>your</em> Mac, so if you moved it, use where it actually is — usually <code>/Applications/Vibresia.app</code>.</p>
-      <div class="cmd"><code id="cmd">claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy>Copy</button></div>
-      <p class="note">That's the server. The other clients want the same two things: the path to that binary, and <code>--mcp</code> as its argument.</p>
+      <p>Vibresia is the server. It needs the app on <em>your</em> Mac, so if you moved it, use where it actually is — usually <code>/Applications/Vibresia.app</code>.</p>
+      <div class="cmd"><code id="cmd">Add this mcp: vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy>Copy</button></div>
+      <p class="note">That's the whole thing: a name, the program to run, and the argument to run it with. Every client below wants the same three, just spelled its own way.</p>
     </div>
 
     <h2>Per assistant</h2>
@@ -205,6 +205,7 @@ mcp-server-config:
       <div class="fact"><h3>Test</h3><p>Compile a shader and draw it. The agent gets the picture back, so it can see what it made and judge it.</p></div>
       <div class="fact"><h3>Create and edit</h3><p>Write a new vibscape, or change one that already exists. Nothing is saved unless it compiles, so the folder never fills with broken worlds.</p></div>
       <div class="fact"><h3>Delete</h3><p>Remove one you don't want any more.</p></div>
+      <div class="fact"><h3>Hear what you hear</h3><p>Ask what Vibresia is hearing right now — the suspected genre and instruments, the tempo, the levels, the shape of the spectrum — and write something that suits the music actually playing.</p></div>
     </div>
 
     <h2>What a vibscape is</h2>
@@ -223,7 +224,9 @@ mcp-server-config:
 }</code></pre>
       <h3>What it can use</h3>
       <p>The music, as numbers: <code>uBass</code>, <code>uMid</code>, <code>uTreble</code>, <code>uLevel</code>, <code>uBeat</code>, <code>uBeatStrength</code>, <code>uBands[96]</code> (the whole spectrum), <code>uBeats</code> (a beat counter), <code>uActive</code> (how much is playing), <code>uTime</code>, <code>uClock</code>. Plus helpers for shapes, colour and noise.</p>
-      <p class="note">Your agent can ask for the full list — it doesn't have to guess.</p>
+      <h3>What it can ask</h3>
+      <p>Your agent doesn't have to guess what the music is doing. <code>what_i_hear</code> reports what Vibresia is hearing at that moment: the suspected genre, the instruments it thinks are playing, the tempo, the levels, and the shape of the spectrum. It can write a vibscape that suits the track in front of you rather than one that suits music in general.</p>
+      <p class="note">The full list of uniforms and helpers is one call away, so it never has to remember it.</p>
     </div>
 
     <h2>Without an agent</h2>

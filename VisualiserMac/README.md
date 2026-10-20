@@ -307,6 +307,7 @@ The tools it offers:
 | `list_vibscapes` | Every vibscape: the ones that ship with the app and the user's own. |
 | `get_vibscape` | The full source of one of the user's own vibscapes. |
 | `vibscape_reference` | The uniforms and helpers available, and a worked example. |
+| `what_i_hear` | What Vibresia is hearing right now: suspected genre and instruments, tempo, levels, spectrum. |
 | `test_vibscape` | Compile a shader and draw it, without saving anything. |
 | `create_vibscape` | Save a new vibscape. Compiles first; won't save code that doesn't run. |
 | `update_vibscape` | Change one of the user's own vibscapes. Compiles first. |

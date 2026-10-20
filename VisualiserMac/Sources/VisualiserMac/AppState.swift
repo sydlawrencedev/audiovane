@@ -249,6 +249,7 @@ final class AppState: ObservableObject {
             self?.syncScanTarget()
             self?.writeEvalLine()
             self?.refreshCrashState()
+            self?.publishWhatItHears()
             self?.reloadCustomVibscapesIfChanged()
         }
         // `--genre-auto` forces auto-detect on (ignoring a remembered lock) and
@@ -313,6 +314,72 @@ final class AppState: ObservableObject {
     /// Band vibscape is the reason this exists: a stage with a cross-fade mid-way,
     /// three musicians held on and two more waiting to be re-confirmed is a
     /// crash nobody can reason about from a stack trace alone.
+    /// Publishes what the app is hearing, so an assistant can read it.
+    ///
+    /// The MCP server is a separate process, and macOS only allows one
+    /// system-audio tap at a time — so the server can't listen for itself.
+    /// The app that has the audio writes it down here and the server reads
+    /// it. The file is rewritten only when something in it has changed.
+    private func publishWhatItHears() {
+        let snap = audio.snapshot
+        let presence = audio.instruments.presence()
+        let instruments: [[String: Any]] = InstrumentDetector.Part.allCases.enumerated()
+            .compactMap { index, part -> [String: Any]? in
+                guard index < presence.count else { return nil }
+                return ["name": part.name, "confidence": Self.round2(Double(presence[index]))]
+            }
+        let state: [String: Any] = [
+            "at": Date().timeIntervalSince1970,
+            "genre": genre.name,
+            "genre_suspected": genreIsAuto,
+            "genre_confidence": Self.round2(Double(genreConfidence)),
+            "instruments": instruments,
+            "bpm": snap.bpm,
+            "beat": snap.beat,
+            "beat_strength": Self.round2(Double(snap.beatStrength)),
+            "rms": Self.round2(Double(snap.rms)),
+            "level": Self.round2(Double(snap.level)),
+            "bass": Self.round2(Double(snap.bass)),
+            "mid": Self.round2(Double(snap.mid)),
+            "treble": Self.round2(Double(snap.treble)),
+            // The spectrum, thinned out: the shape is what a vibscape
+            // author needs, and a small file that doesn't change on every
+            // wobble.
+            "bands": Self.thin(snap.bands.map { Double($0) }, groups: 24),
+            "source": sourceLabel,
+            "source_idle": snap.sourceIsIdle > 0.5,
+            "vibscape": activeVibscape.rawValue,
+            "palette": paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?",
+        ]
+        guard let data = try? JSONSerialization.data(withJSONObject: state),
+              let text = String(data: data, encoding: .utf8),
+              text != lastPublishedState else { return }
+        lastPublishedState = text
+        let path = SupportFolder.folder("what-it-hears.json")
+        try? data.write(to: path, options: .atomic)
+    }
+
+    /// Two decimal places. Enough for a vibscape author, and it keeps the
+    /// published file from changing on every tiny wobble.
+    private static func round2(_ value: Double) -> Double {
+        (value * 100).rounded() / 100
+    }
+
+    /// Averages a spectrum down to a handful of groups.
+    private static func thin(_ values: [Double], groups: Int) -> [Double] {
+        guard !values.isEmpty else { return [] }
+        let per = max(1, values.count / groups)
+        var out: [Double] = []
+        for start in stride(from: 0, to: values.count, by: per) {
+            let slice = values[start..<min(start + per, values.count)]
+            out.append(round2(slice.reduce(0, +) / Double(slice.count)))
+        }
+        return out
+    }
+
+    /// The last thing published, so an unchanged second doesn't write again.
+    private var lastPublishedState: String?
+
     private func refreshCrashState() {
         let drawing = renderer.effectiveVibscape
         var snapshot: [String: String] = [

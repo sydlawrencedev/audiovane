@@ -12,9 +12,14 @@ enum MCPSetup {
         Bundle.main.bundlePath + "/Contents/MacOS/Vibresia"
     }
 
-    /// The command to add the server to an agent.
+    /// How the server is described, in a form every MCP client understands:
+    /// a name, the program to run, and the arguments to run it with.
+    ///
+    /// Not a copy-and-paste command for one client in particular — there are
+    /// too many of them, and each wants it spelled differently. The page at
+    /// `pageURL` has the per-client versions.
     static var command: String {
-        "claude mcp add vibresia -- \"\(serverPath)\" --mcp"
+        "vibresia -- \"\(serverPath)\" --mcp"
     }
 
     /// Where the setup instructions live — a page of their own, because
