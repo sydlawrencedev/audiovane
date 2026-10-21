@@ -46,20 +46,65 @@
     hq.load();
 
     var swap = function () {
-      // Join the small clip where it is rather than starting over.
-      try {
-        if (lq.readyState >= 1 && lq.duration) {
-          hq.currentTime = Math.min(lq.currentTime, (hq.duration || lq.duration) - 0.05);
+      // Freeze the small clip before reading its playhead. Leaving it playing
+      // means the position we aim for is already stale by the time the seek on
+      // the other one lands, which is a smaller version of the same bug.
+      var wanted = lq.currentTime || 0;
+      lq.pause();
+
+      // Only revealed once the two are showing the same frame. Fading earlier
+      // is worse than not fading: the full clip is still on frame 0 while the
+      // small one is somewhere in the middle of the reel, so the crossfade
+      // dissolves one moment into a different one.
+      var shown = false;
+      var reveal = function () {
+        if (shown) return;
+        shown = true;
+        hq.play().catch(function () { /* autoplay refused: the poster still stands in */ });
+        hq.classList.add("upgraded");
+        // Leave the small one alone rather than tearing it down mid-frame: it is
+        // the thing still painting if the full one is blocked or has no decoder.
+        hq.addEventListener("playing", function once() {
+          lq.removeAttribute("src");
+          lq.load();
+        }, { once: true });
+      };
+
+      if (hq.readyState < 1 || !isFinite(hq.duration) || hq.duration === 0) {
+        // No metadata, so there is nothing to seek within. Start at the top
+        // rather than pretend — and say so, because it is visible.
+        lq.play().catch(function () {});
+        reveal();
+        return;
+      }
+
+      // Never seek onto the very last frame: the clip is about to loop, and a
+      // playhead sitting on duration wraps on the next tick, which reads as a
+      // stutter at exactly the moment the two are meant to look identical.
+      var target = Math.max(0, Math.min(wanted, hq.duration - 0.05));
+
+      // Assigning currentTime starts a seek; it does not perform one, and the
+      // element keeps painting the old frame until it lands. Polling the
+      // playhead is the direct test for "has it landed" — the `seeked` event is
+      // not, because a seek to the position it is already at fires nothing, and
+      // whoever arrives at second zero would then never be upgraded at all.
+      var deadline = Date.now() + 2000;
+      var settled = function () {
+        if (shown) return;
+        if (Math.abs(hq.currentTime - target) < 0.08) { reveal(); return; }
+        if (Date.now() > deadline) {
+          // Out of patience. Whatever the playhead is, better to show the sharp
+          // version from there than to sit on the small one forever.
+          lq.play().catch(function () {});
+          reveal();
+          return;
         }
-      } catch (e) { /* seeking before metadata is fine to lose */ }
-      hq.play().catch(function () { /* autoplay refused: the poster still stands in */ });
-      hq.classList.add("upgraded");
-      // Leave the small one alone rather than tearing it down mid-frame: it is
-      // the thing still painting if the full one is blocked or has no decoder.
-      hq.addEventListener("playing", function once() {
-        lq.removeAttribute("src");
-        lq.load();
-      }, { once: true });
+        setTimeout(settled, 50);
+      };
+      try {
+        hq.currentTime = target;
+      } catch (e) { /* seek refused: settled() notices and moves on */ }
+      settled();
     };
 
     // canplaythrough rather than loadeddata: swapping on the first decoded
