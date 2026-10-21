@@ -42,7 +42,8 @@ let package = Package(
                 .linkedFramework("AVFoundation"),
                 .linkedFramework("CoreAudio"),
                 .linkedFramework("Accelerate"),
-                .linkedFramework("CoreVideo")
+                .linkedFramework("CoreVideo"),
+                .linkedFramework("ShazamKit")
             ]
         ),
         // Draws the website's share pictures for every built-in vibescape.

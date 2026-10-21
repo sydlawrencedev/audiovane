@@ -63,6 +63,29 @@ final class AudioEngine: ObservableObject {
         }
     }
 
+    /// The last few seconds of audio, as a buffer something else can sign.
+    ///
+    /// ShazamKit takes a buffer of audio and turns it into a signature. It
+    /// wants a few seconds of it — the app's ring buffer holds about five and
+    /// a half — and it wants float samples at 48kHz, which is what the
+    /// capture is.
+    func recentAudioBuffer(seconds: Double) -> AVAudioPCMBuffer? {
+        let sampleRate = 48000.0
+        let wanted = Int(seconds * sampleRate)
+        guard wanted > 0 else { return nil }
+
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(wanted)) else {
+            return nil
+        }
+        buffer.frameLength = AVAudioFrameCount(wanted)
+
+        guard let samples = buffer.floatChannelData?[0] else { return nil }
+        let ok = ringBuffer.readLatest(into: samples, count: wanted)
+        guard ok else { return nil }
+        return buffer
+    }
+
     // MARK: - Source switching
 
     // Still filed under the old name, so the chosen source survives the rename.

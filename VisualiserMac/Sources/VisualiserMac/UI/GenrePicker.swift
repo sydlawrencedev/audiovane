@@ -31,6 +31,7 @@ struct GenrePicker: View {
                 tint: app.genreIsAuto ? .bandTint : .modeTint,
                 pillExtra: AnyView(confidenceBar)
             )
+            .help("The band's genre — \(genreSource)")
         }
     }
 
@@ -56,9 +57,21 @@ struct GenrePicker: View {
 
     private var autoSubtitle: String {
         if app.genreIsAuto {
-            return app.genreIsDecided ? "on · \(app.genre.name)" : "on · detecting…"
+            if app.genreIsDecided { return "on · \(app.genre.name)" } else { return "on · detecting…" }
         }
         return "off · click to re-enable"
+    }
+
+    /// Where the genre came from, for the tooltip.
+    ///
+    /// A catalogue knows the genre of a song; the detector is reading the
+    /// waveform and guessing. Both are called "auto" from here, and it is
+    /// worth saying which one is answering.
+    private var genreSource: String {
+        if app.nowPlaying?.genre != nil {
+            return "from the song's genre in the catalogue"
+        }
+        return "from the sound"
     }
 
     /// Confidence bar in the pill. Cyan when the detector has committed,

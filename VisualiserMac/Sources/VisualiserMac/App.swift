@@ -194,6 +194,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Song lookup — ask the catalogue what a song is, and say. Used to
+        // check the lookup without a music app in the picture.
+        if CommandLine.arguments.contains("--song-lookup") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                self.runSongLookup()
+            }
+        }
+
+        // Shazam spike — one match against Shazam's catalogue, and what came
+        // back. Needs a music app playing something; the demo tone will not
+        // match anything.
+        if CommandLine.arguments.contains("--shazam-spike") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.runShazamSpike()
+            }
+        }
+
         // Record vibescape — capture consecutive frames for diffing.
         if CommandLine.arguments.contains("--record") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
@@ -582,6 +599,76 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             } catch {
                 NSLog("[SHARE-IMAGE] could not write: \(error)")
                 exit(1)
+            }
+        }
+    }
+
+    /// Looks a song up in Apple's catalogue and says what it found.
+    ///
+    ///   Vibresia --song-lookup "bad guy" "Billie Eilish"
+    ///
+    /// The same lookup the app makes when a music app says what it is
+    /// playing, so the answer here is the answer there.
+    private func runSongLookup() {
+        let args = CommandLine.arguments
+        guard let i = args.firstIndex(of: "--song-lookup"), i + 1 < args.count else {
+            NSLog("[SONG] needs a title: --song-lookup \"title\" [artist]")
+            exit(1)
+        }
+        let title = args[i + 1]
+        let artist = i + 2 < args.count ? args[i + 2] : ""
+
+        Task {
+            let song = await SongIdentifier.shared.identify(title: title, artist: artist)
+            guard let song else {
+                NSLog("[SONG] no match for \(title) — \(artist)")
+                exit(1)
+            }
+            NSLog("[SONG] \(song.title) — \(song.artist)")
+            NSLog("[SONG] catalogue genre: \(song.catalogueGenre)")
+            NSLog("[SONG] our genre: \(song.genre?.name ?? "none")")
+            exit(0)
+        }
+    }
+
+    /// Asks Shazam's catalogue what is playing, once, and says what happened.
+    ///
+    ///   Vibresia --shazam-spike
+    ///
+    /// The point of it is the answer, not the song: matching against the
+    /// catalogue needs the ShazamKit capability enabled on the app's
+    /// identifier, and error 202 means the app wasn't allowed to ask rather
+    /// than that the catalogue didn't know the song.
+    private func runShazamSpike() {
+        guard let app = AppState.shared else { exit(1) }
+        var attempts = 0
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { t in
+            attempts += 1
+            guard app.renderer.isReady else {
+                if attempts > 60 { NSLog("[SHAZAM] timeout renderer"); exit(1) }
+                return
+            }
+            t.invalidate()
+
+            // A couple of seconds of audio, so there is something to sign.
+            DispatchQueue.global(qos: .userInitiated).asyncAfter(deadline: .now() + 2.0) {
+                guard let buffer = app.audio.recentAudioBuffer(seconds: ShazamIdentifier.seconds) else {
+                    NSLog("[SHAZAM] no audio captured")
+                    exit(1)
+                }
+                Task {
+                    let outcome = await ShazamIdentifier().match(buffer)
+                    switch outcome {
+                    case .matched(let match):
+                        NSLog("[SHAZAM] matched: \(match.title) — \(match.artist)")
+                        NSLog("[SHAZAM] genres: \(match.genres.joined(separator: ", "))")
+                    case .noMatch:
+                        NSLog("[SHAZAM] the catalogue didn't know it")
+                    case .failed(let reason):
+                        NSLog("[SHAZAM] failed: \(reason)")
+                    }
+                    exit(0)
+                }
             }
         }
     }

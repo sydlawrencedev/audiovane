@@ -168,10 +168,28 @@ follow — so the preview was blank and the link looked broken in a chat.
 Now the payload is stored and the link is short:
 
 ```
-POST /api/share   {payload, name, author, image}   →  {"url": "https://vibresia.com/s/k3f9x2"}
+POST /api/share   {payload, name, author, image, key}   →  {"url": "https://vibresia.com/s/k3f9x2"}
 GET  /s/k3f9x2                                         the share page, with the payload inlined
 GET  /og/k3f9x2.jpg                                    a picture of this vibescape
 ```
+
+- **The same vibescape always gets the same link.** A share used to be made
+  fresh every time — a new row, a new id, a new URL — so sharing the same
+  vibescape twice gave you two links, and re-sharing one somebody sent you
+  gave you a third. The app hashes the vibescape's contents (name, author,
+  url, shader) and sends the hash; the Worker looks for a share with that
+  hash, and for one with the same payload, and returns the row it finds
+  rather than making another. The `key` column has a partial unique index
+  on it, so two devices sharing at once land on one row.
+- **A vibescape that arrived on a link keeps the link it arrived on.** The
+  page puts the share's id in the deep link, the app remembers it with the
+  vibescape, and sharing it on hands that link back: the person who sent it
+  to you sent you that link, and the person you send it to should get the
+  same one. Edit the vibescape and the hash changes, so it gets a link of
+  its own.
+- **The picture says who made it.** The app stamps the Vibresia mark and the
+  credit onto the picture it uploads, and the built-in pictures on the site
+  are drawn by the same code — see `VisualiserMac/Sources/VibresiaBrand`.
 
 - **D1, not Workers KV.** KV is eventually consistent — a link opened ten
   seconds after it was shared could reach an edge that hadn't seen the write
@@ -228,6 +246,78 @@ that honest:
 - **The Worker is attached with routes, not custom domains.** `vibresia.com` was pointed at Cloudflare before the Worker existed, so its DNS records are ones Cloudflare didn't make; a custom domain would want to own them and refuses to overwrite them. A route binds the hostname to the Worker and leaves the DNS alone. `run_worker_first` is on for the same reason: the redirects are decided in the Worker, and an asset served straight from the edge would skip them.
 - **Caching** is Cloudflare's default (`max-age=0, must-revalidate`), and a `Cache-Control` rule in `site/_headers` *appends* to that rather than replacing it, so it can't be changed that way. Repeat visits revalidate with a 304 from the ETag instead of re-downloading 5.9MB, which is the part that matters.
 - Page is a single static file: one H1, 16 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
+
+## The song, and its genre
+
+The Band's genre comes from the song when the app can work out what is
+playing. Two ways, and they sit side by side:
+
+- **By name.** Apple Music and Spotify both post a notification when the
+  track changes, with the title and the artist in it. The app looks the song
+  up in Apple's public catalogue, which knows its genre — so the stage is
+  chosen for the track rather than guessed at from the waveform.
+  `VisualiserMac/Sources/VisualiserMac/Audio/SongIdentifier.swift`.
+- **By listening.** ShazamKit matches a signature of the sound against
+  Shazam's catalogue, which works with anything that makes a sound — a
+  browser, a film — rather than only with the players that post
+  notifications. `VisualiserMac/Sources/VisualiserMac/Audio/ShazamIdentifier.swift`.
+
+The first one is what ships. The second one is behind a flag, because
+matching against Shazam's catalogue needs the app to be *allowed* to ask,
+and being allowed is decided by the ShazamKit service on the app's identifier
+in the developer portal.
+
+### What ShazamKit needs, and why it isn't on by default
+
+Apple issues the `com.apple.developer.shazamkit` entitlement for apps signed
+with a provisioning profile. This app is signed with a Developer ID
+certificate and notarized, so the entitlement has to be declared in the
+signature by hand — and declaring one the team hasn't been granted is not a
+build that fails to match, it is a build that will not launch. macOS kills
+the process:
+
+```
+$ SHAZAMKIT=1 ./build-app.sh debug && ./build/Vibresia.app/Contents/MacOS/Vibresia
+Killed (exit 137)
+```
+
+The same app without the entitlement runs, and the match comes back
+`com.apple.ShazamCore error 102` — "not allowed", not "not found".
+
+So the entitlement is opt-in (`SHAZAMKIT=1`) and only worth turning on once
+the ShazamKit service is enabled for `com.minithlabs.visualiser` in the
+developer portal *and* Apple grants it for a Developer ID signature.
+
+The spike is still here, because that question deserves an answer rather
+than a forum post:
+
+```bash
+./build/Vibresia.app/Contents/MacOS/Vibresia --shazam-spike
+```
+
+### What leaves the machine
+
+The audio never does — it is analysed locally and drawn locally, and the
+band's stage is drawn from what the shader does with it.
+
+The *name* of the song does, when a music app says what it is playing: the
+title and the artist are looked up in Apple's public catalogue, which is the
+same search the iTunes Store does. Nothing else is sent, and no account is
+involved. The catalogue's answer is a genre, and the genre is a local
+decision from then on.
+
+The lookup needs both the title and the artist to match. The catalogue will
+happily answer "Me and Your Mama" for "Redbone" — same artist, different
+song — and a wrong song means a wrong genre on the stage, so a result that
+isn't clearly the right song is thrown away rather than used. When the
+catalogue doesn't know the song, the app falls back to the audio heuristic
+it has always used, and nothing is lost.
+
+To try the lookup without a music app in the picture:
+
+```bash
+./build/Vibresia.app/Contents/MacOS/Vibresia --song-lookup "bad guy" "Billie Eilish"
+```
 
 ## Tuning The Band
 

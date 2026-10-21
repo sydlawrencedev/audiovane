@@ -89,6 +89,13 @@ final class AppState: ObservableObject {
     /// Detector's confidence in its last decision (0..1). Drives the AUTO pill
     /// glow in the picker so the user can see when the detector is confident.
     @Published private(set) var genreConfidence: Float = 0
+    /// The song that is playing, when the app has worked out what it is.
+    ///
+    /// The music apps say what they are playing; the app looks the song up in
+    /// Apple's catalogue, which knows what genre it is. That is a fact about
+    /// the song, where the detector is a guess from the sound, so it wins
+    /// while it lasts.
+    @Published private(set) var nowPlaying: SongIdentifier.Song?
     /// While auto-scanning, the vibescape currently on screen. Mirrors the
     /// renderer's scanner so the header can show what's playing right now.
     @Published private(set) var scanTarget: VibescapeID = .builtin(.tunnel)
@@ -250,6 +257,7 @@ final class AppState: ObservableObject {
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.reEvaluateAutoGenre()
             self?.pumpAutoGenre()
+            self?.refreshNowPlaying()
             self?.syncScanTarget()
             self?.writeEvalLine()
             self?.refreshCrashState()
@@ -1247,6 +1255,14 @@ final class AppState: ObservableObject {
     /// 1Hz timer in `init` (cheaper than doing it every frame, and the
     /// detector itself only refreshes every 1.5s).
     private func pumpAutoGenre() {
+        // A song the app has identified beats a guess from the waveform: the
+        // catalogue knows the genre, the detector is reading tea leaves. A
+        // genre the user picked by hand beats both.
+        if let songGenre, genreIsAuto {
+            genreConfidence = 1
+            if genre != songGenre { genre = songGenre }
+            return
+        }
         let detected = audio.genreDetector.genre
         let conf = audio.genreDetector.confidence
         if genreConfidence != conf { genreConfidence = conf }
@@ -1256,6 +1272,63 @@ final class AppState: ObservableObject {
         guard conf >= Self.autoGenreMinConfidence else { return }
         if genre != detected {
             genre = detected
+        }
+    }
+
+    // MARK: - The song that is playing
+
+    /// The genre of the song, when the app knows what is playing.
+    ///
+    /// Nil while nothing is known, which is most of the time: a music app
+    /// has to say what it is playing, and the catalogue has to know the song.
+    private var songGenre: Genre?
+
+    /// The track change the last lookup was for, so a song is only looked up
+    /// once.
+    private var songLookupChange: Int = 0
+
+    /// Looks the song up when the track changes.
+    ///
+    /// The music apps post a notification with the title and the artist, and
+    /// the catalogue says what genre that is. The lookup is a nicety: if it
+    /// fails, or the song isn't in the catalogue, the heuristic takes over
+    /// and nothing is lost.
+    private func refreshNowPlaying() {
+        let tracks = audio.tracks
+        guard tracks.changeCount != songLookupChange else { return }
+        songLookupChange = tracks.changeCount
+        // A new song: the old one's genre is about a different song.
+        songGenre = nil
+        nowPlaying = nil
+
+        guard let title = tracks.nowPlayingTitle, !title.isEmpty else { return }
+        let artist = tracks.nowPlayingArtist ?? ""
+        Task { [weak self] in
+            guard let song = await SongIdentifier.shared.identify(title: title, artist: artist) else {
+                return
+            }
+            await MainActor.run { self?.applySong(song) }
+        }
+    }
+
+    /// Takes what the catalogue said and puts it on the stage.
+    private func applySong(_ song: SongIdentifier.Song) {
+        // A song we already know about: the same track change can be seen
+        // more than once, and the answer won't have changed.
+        guard nowPlaying?.title != song.title || nowPlaying?.artist != song.artist else {
+            return
+        }
+        nowPlaying = song
+        songGenre = song.genre
+        if let genre = song.genre, genreIsAuto, genre != self.genre {
+            self.genre = genre
+        }
+        Task {
+            await Analytics.shared.track("song_identified", [
+                "genre": song.catalogueGenre,
+                "genre_id": song.genre?.rawValue ?? -1,
+                "known": song.genre != nil,
+            ])
         }
     }
 }

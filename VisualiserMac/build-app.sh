@@ -172,6 +172,38 @@ EOF
 # library validation only applies to dynamically-loaded code. Leaving it in
 # would be a blanket relaxation of a security boundary that notarization
 # scrutinises, for a library validation has no opinion about.
+# The ShazamKit entitlement.
+#
+# Matching audio against Shazam's catalogue needs the app to be allowed to
+# ask, and being allowed is decided by the ShazamKit service on the app's
+# identifier in the developer portal. Apple issues that entitlement for apps
+# signed with a provisioning profile; this app is signed with a Developer ID
+# certificate and notarized, so the entitlement has to be declared here and
+# only works if the portal has the capability enabled for the identifier.
+#
+# Declaring it when the team has not been granted it is not a build that
+# fails to match — it is a build that will not launch. macOS kills a process
+# whose signature carries an entitlement it hasn't authorised, so turning
+# this on before the portal says yes produces an app that dies on launch with
+# no message.
+#
+# It is opt-in for that reason:
+#
+#   SHAZAMKIT=1 ./build-app.sh release
+#
+# Everything else in the app works without it: the band's genre comes from
+# the song's genre in Apple's catalogue, looked up by name.
+#
+SHAZAMKIT_ENTITLEMENT=""
+if [ "${SHAZAMKIT:-}" = "1" ]; then
+    echo "==> ShazamKit: adding com.apple.developer.shazamkit to the signature."
+    echo "    If the ShazamKit service is not enabled for this app's identifier"
+    echo "    in the developer portal, macOS will kill the app on launch."
+    SHAZAMKIT_ENTITLEMENT="    <key>com.apple.developer.shazamkit</key>
+    <true/>
+"
+fi
+
 cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -185,7 +217,7 @@ cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
     <true/>
     <key>com.apple.security.network.client</key>
     <true/>
-</dict>
+$SHAZAMKIT_ENTITLEMENT</dict>
 </plist>
 EOF
 

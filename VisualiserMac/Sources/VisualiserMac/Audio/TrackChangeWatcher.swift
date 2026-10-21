@@ -9,6 +9,12 @@ final class TrackChangeWatcher: NSObject {
     /// Bumped on every change to a different track (main thread).
     private(set) var changeCount = 0
     private(set) var nowPlaying: String?
+    /// The title on its own, and who made it.
+    ///
+    /// Separate because the song's name is what a catalogue is asked about:
+    /// "Song – Artist" is a string for a label and two fields for a lookup.
+    private(set) var nowPlayingTitle: String?
+    private(set) var nowPlayingArtist: String?
     /// Length of the current track, if the player reported it, and when it
     /// started (approximately: when we heard about it).
     private(set) var duration: TimeInterval?
@@ -44,6 +50,8 @@ final class TrackChangeWatcher: NSObject {
         let title = info["Name"] as? String ?? "?"
         let artist = info["Artist"] as? String ?? "?"
         nowPlaying = "\(title) – \(artist)"
+        nowPlayingTitle = title
+        nowPlayingArtist = artist
         // Music: "Total Time"; Spotify: "Duration" — both milliseconds.
         let ms = (info["Total Time"] as? NSNumber) ?? (info["Duration"] as? NSNumber)
         duration = ms.map { $0.doubleValue / 1000 }
