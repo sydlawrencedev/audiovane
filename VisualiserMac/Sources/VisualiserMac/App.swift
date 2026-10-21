@@ -175,13 +175,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Look for a newer release on every launch (not in the test vibescapes).
-        let testVibescape = ["--snapshot", "--record", "--video"].contains { CommandLine.arguments.contains($0) }
+        let testVibescape = ["--snapshot", "--record", "--video", "--share-image"].contains { CommandLine.arguments.contains($0) }
         if !testVibescape { UpdateChecker.shared.check(userInitiated: false) }
 
         // Snapshot vibescape — render a few frames then exit. Used for verification.
         if CommandLine.arguments.contains("--snapshot") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 self.runSnapshot()
+            }
+        }
+
+        // Share picture — render the picture a share link shows, with the
+        // brand and the credit on it, and write it out. The share sheet is
+        // the only other way to see it, and it needs a window and a click.
+        if CommandLine.arguments.contains("--share-image") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.runShareImage()
             }
         }
 
@@ -520,6 +529,60 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             NSLog("[SNAP] saved")
             exit(0)
+        }
+    }
+
+    /// Writes the picture a share link shows: the vibescape, with the brand
+    /// and the credit on it.
+    ///
+    ///   Vibresia --share-image [slug] [out.jpg]
+    ///
+    /// The same code path the share sheet uses, so what comes out here is
+    /// what goes into the link preview.
+    private func runShareImage() {
+        let args = CommandLine.arguments
+        func value(_ flag: String, _ fallback: String) -> String {
+            if let i = args.firstIndex(of: flag), i + 1 < args.count { return args[i + 1] }
+            return fallback
+        }
+        let slug = value("--share-image", "tunnel")
+        let out = value("--share-image-out", "/tmp/vibresia-share.jpg")
+
+        guard let app = AppState.shared else { exit(1) }
+        var attempts = 0
+        Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { t in
+            attempts += 1
+            guard app.renderer.isReady else {
+                if attempts > 200 { NSLog("[SHARE-IMAGE] timeout renderer"); exit(1) }
+                return
+            }
+            t.invalidate()
+
+            let mode: VibescapeID
+            if let builtin = Vibescape(rawValue: slug) {
+                mode = .builtin(builtin)
+            } else if let custom = app.customVibescapes.first(where: { $0.id == slug }) {
+                mode = .custom(custom.id)
+            } else {
+                NSLog("[SHARE-IMAGE] no vibescape called \(slug)")
+                exit(1)
+            }
+            let author = app.customVibescape(id: mode.slug)?.author ?? VibescapeMetadata.author
+            guard let data = ShareImageBuilder.jpeg(
+                renderer: app.renderer, mode: mode,
+                width: 1200, height: 630, time: 6.0,
+                author: author.isEmpty ? VibescapeMetadata.author : author) else {
+                NSLog("[SHARE-IMAGE] could not render")
+                exit(1)
+            }
+            do {
+                try data.write(to: URL(fileURLWithPath: out), options: .atomic)
+                NSLog("[SHARE-IMAGE] saved=\(out) bytes=\(data.count)")
+                exit(0)
+            } catch {
+                NSLog("[SHARE-IMAGE] could not write: \(error)")
+                exit(1)
+            }
         }
     }
 

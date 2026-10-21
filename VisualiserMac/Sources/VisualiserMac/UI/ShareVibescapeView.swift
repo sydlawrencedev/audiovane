@@ -313,7 +313,7 @@ struct ShareVibescapeView: View {
         makingLink = true
         let payload = ShareImporter.encodePayload(mode, minify: minifyLink)
         let name = mode.name
-        let author = mode.author
+        let author = mode.author.isEmpty ? "Minith Labs" : mode.author
         let target = vibescape
 
         // Rendering is a GPU job and takes a moment, so it happens off the
@@ -321,8 +321,9 @@ struct ShareVibescapeView: View {
         // looking at it.
         let image: Data? = await withCheckedContinuation { continuation in
             DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: app.renderer.renderStill(
-                    width: 1200, height: 630, mode: target, time: 6.0))
+                continuation.resume(returning: ShareImageBuilder.jpeg(
+                    renderer: app.renderer, mode: target,
+                    width: 1200, height: 630, time: 6.0, author: author))
             }
         }
 
@@ -363,6 +364,7 @@ struct ShareVibescapeView: View {
         guard let app = AppState.shared else { return }
         savingPreview = true
         let slug = previewFilenameSlug()
+        let author = previewAuthor()
         // Output to ~/Downloads so it's right where the user expects. Filename
         // mirror's the share URL slug so it's recognisable in Finder.
         let downloads = FileManager.default.urls(for: .downloadsDirectory,
@@ -373,17 +375,41 @@ struct ShareVibescapeView: View {
         // 1280x720 is the existing snapshot size and a reasonable attachment
         // for chats that don't show link previews.
         DispatchQueue.global(qos: .userInitiated).async {
-            app.renderer.renderToPNG(width: 1280, height: 720,
-                                     mode: vibescape, frames: 60,
-                                     path: url.path)
+            let data = ShareImageBuilder.png(
+                renderer: app.renderer, mode: vibescape,
+                width: 1280, height: 720, frames: 60, author: author)
             DispatchQueue.main.async {
                 savingPreview = false
+                guard let data else {
+                    Task { await Analytics.shared.track("share_preview_failed", [
+                        "kind": vibescape.isCustom ? "custom" : "builtin"
+                    ]) }
+                    return
+                }
+                do {
+                    try data.write(to: url, options: .atomic)
+                } catch {
+                    NSLog("[SHARE] could not write the preview image: \(error)")
+                    return
+                }
                 savedPreviewPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 Task { await Analytics.shared.track("share_preview_saved", [
                     "kind": vibescape.isCustom ? "custom" : "builtin"
                 ]) }
             }
+        }
+    }
+
+    /// Who the credit names: the vibescape's author, or the app's own name
+    /// when the vibescape doesn't say.
+    private func previewAuthor() -> String {
+        switch vibescape {
+        case .builtin:
+            return VibescapeMetadata.author
+        case .custom(let id):
+            let author = app.customVibescape(id: id)?.author ?? ""
+            return author.isEmpty ? VibescapeMetadata.author : author
         }
     }
 

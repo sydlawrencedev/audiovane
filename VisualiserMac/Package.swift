@@ -16,10 +16,19 @@ let package = Package(
         .package(url: "https://github.com/PostHog/posthog-ios.git", from: "3.58.0")
     ],
     targets: [
+        // The logo, in one place. The app draws it in its header and on the
+        // share picture it uploads; the share-graphics tool draws it on the
+        // website's built-in share pictures. One implementation, so the app and
+        // its own share images can't drift apart.
+        .target(
+            name: "VibresiaBrand",
+            path: "Sources/VibresiaBrand"
+        ),
         .executableTarget(
             name: "AudioVane",
             dependencies: [
-                .product(name: "PostHog", package: "posthog-ios")
+                .product(name: "PostHog", package: "posthog-ios"),
+                "VibresiaBrand",
             ],
             path: "Sources/VisualiserMac",
             swiftSettings: [
@@ -35,6 +44,16 @@ let package = Package(
                 .linkedFramework("Accelerate"),
                 .linkedFramework("CoreVideo")
             ]
+        ),
+        // Draws the website's share pictures for every built-in vibescape.
+        // Not part of the app: it is a build-time tool, run by hand when a
+        // vibescape changes. See scripts/build-share-graphics.sh.
+        .executableTarget(
+            name: "ShareGraphics",
+            dependencies: [
+                "VibresiaBrand"
+            ],
+            path: "Sources/ShareGraphics"
         ),
         // Launched by launchd, not by the user: sits in the bundle as
         // Contents/Helpers and opens Vibresia when Apple Music or Spotify

@@ -1,4 +1,5 @@
 import SwiftUI
+import VibresiaBrand
 
 struct HUDView: View {
     @EnvironmentObject var app: AppState
@@ -134,20 +135,20 @@ struct SourcePicker: View {
     }
 }
 
+/// The Vibresia mark: the wave, in the app's header.
+///
+/// The shape comes from `BrandWave`, which is also what the share pictures
+/// are stamped with and what the website's logo is drawn from. One shape,
+/// three places — otherwise the app and its own share pictures stop looking
+/// like the same product.
 struct BrandMark: View {
     var body: some View {
         Canvas { ctx, size in
             let path = Path { p in
-                let w = size.width
-                let h = size.height
-                p.move(to: CGPoint(x: 0, y: h * 0.5))
-                p.addLine(to: CGPoint(x: w * 0.22, y: h * 0.5))
-                p.addLine(to: CGPoint(x: w * 0.32, y: h * 0.2))
-                p.addLine(to: CGPoint(x: w * 0.45, y: h * 0.8))
-                p.addLine(to: CGPoint(x: w * 0.58, y: h * 0.3))
-                p.addLine(to: CGPoint(x: w * 0.70, y: h * 0.65))
-                p.addLine(to: CGPoint(x: w * 0.78, y: h * 0.5))
-                p.addLine(to: CGPoint(x: w, y: h * 0.5))
+                for (index, point) in BrandWave.points.enumerated() {
+                    let q = CGPoint(x: point.x * size.width, y: point.y * size.height)
+                    index == 0 ? p.move(to: q) : p.addLine(to: q)
+                }
             }
             ctx.stroke(
                 path,

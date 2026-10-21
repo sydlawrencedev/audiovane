@@ -886,7 +886,7 @@ final class OpenGLRenderer: NSObject {
                        intent: .defaultIntent)
     }
 
-    /// One frame of a vibescape, at a chosen moment, as JPEG data.
+    /// One frame of a vibescape, at a chosen moment, as an image.
     ///
     /// This is the picture a share link shows: the same vibescape, at the
     /// same moment, that the share page draws in a browser. The share page
@@ -898,22 +898,49 @@ final class OpenGLRenderer: NSObject {
     /// shaders settle, but here the time is given, so one frame at t=6 is
     /// the same picture as 360 frames ending at t=6 — and it costs one
     /// readback instead of 360.
-    func renderStill(width: Int, height: Int, mode: VibescapeID, time: Double) -> Data? {
+    ///
+    /// An image rather than JPEG data, because the brand goes on top of it
+    /// before it is encoded.
+    func renderStillImage(width: Int, height: Int, mode: VibescapeID, time: Double) -> CGImage? {
         var still: [UInt8] = []
         renderFrames(width: width, height: height, mode: mode, frames: 1,
                      syntheticAudio: true, startTime: time) { _, pixels in
             still = pixels
         }
         guard !still.isEmpty else { return nil }
-        guard let cgImg = makeImage(still, width: width, height: height) else { return nil }
+        return makeImage(still, width: width, height: height)
+    }
+
+    /// The last frame of a run of them, as an image.
+    ///
+    /// The run lets time-driven shaders settle; the caller wants the frame it
+    /// ended on, which is the one worth showing.
+    func renderLastFrameImage(width: Int, height: Int, mode: VibescapeID, frames: Int) -> CGImage? {
+        var last: [UInt8] = []
+        renderFrames(width: width, height: height, mode: mode, frames: frames) { _, pixels in
+            last = pixels
+        }
+        guard !last.isEmpty else { return nil }
+        return makeImage(last, width: width, height: height)
+    }
+
+    /// One frame of a vibescape, at a chosen moment, as JPEG data.
+    func renderStill(width: Int, height: Int, mode: VibescapeID, time: Double) -> Data? {
+        guard let cgImg = renderStillImage(width: width, height: height,
+                                           mode: mode, time: time) else { return nil }
 
         // JPEG rather than PNG: the picture is 1200x630 of smooth gradients,
         // which is exactly what JPEG is good at, and it is a third of the
         // size. A share's picture is stored, and stored pictures are what
         // run the storage down.
+        return encodeJPEG(cgImg, quality: 0.82)
+    }
+
+    /// Encodes an image as JPEG data.
+    func encodeJPEG(_ image: CGImage, quality: CGFloat) -> Data? {
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(dest, cgImg, [kCGImageDestinationLossyCompressionQuality: 0.82] as CFDictionary)
+        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data
     }
