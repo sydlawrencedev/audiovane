@@ -86,7 +86,6 @@ P12_PASS="$(openssl rand -base64 18)"
 P12="$WORK/devid.p12"
 
 say "Combining certificate and key"
-# -legacy matters: OpenSSL 3 and later default to PBES2 with AES-256-CBC and
 # a SHA-256 MAC, and macOS's own keychain reader cannot parse that — it fails
 # with "MAC verification failed during PKCS12 import (wrong password?)",
 # which sends you looking for a password problem that is not there. The
@@ -97,6 +96,69 @@ if ! openssl pkcs12 -export -legacy -inkey "$DEVID_KEY" -in "$CER" \
     openssl pkcs12 -export -inkey "$DEVID_KEY" -in "$CER" -inform der \
         -out "$P12" -passout "pass:$P12_PASS" \
         || die "could not build the p12 from the certificate and the key"
+fi
+
+# The issuing intermediate has to be in the keychain too, or codesign cannot
+# build a chain to a trusted root and refuses the identity with "unable to
+# build chain to self-signed root".
+#
+# macOS does not ship the "Developer ID - G2" intermediate — it ships the
+# older "Developer ID - G1" one, whose authority key identifier is different,
+# so a certificate issued under G2 has no path to a root on a stock macOS.
+# Apple publishes both:
+#
+#   Developer ID - G1  https://www.apple.com/certificateauthority/DeveloperIDCA.cer
+#   Developer ID - G2  https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+#
+# Which one applies is decided by the authority key identifier in the
+# certificate, so fetch both and install the one that matches. With the
+# intermediate in the keychain, codesign embeds it in the signed bundle, and
+# Gatekeeper builds the chain from there — which is what every other
+# Developer ID app does, and what makes the app work on a Mac whose trust
+# store has only the G1 intermediate.
+# Reads a hex identifier (SKID or AKI) out of a certificate. The .cer Apple
+# downloads is sometimes DER and sometimes PEM, and openssl figures out which
+# from the first byte for -text but not for the other subcommands, so both
+# are tried.
+cert_hexid() { # file label
+    local f="$1" label="$2" out
+    for mode in "-in" "-inform der -in"; do
+        # shellcheck disable=SC2086
+        out="$(openssl x509 $mode "$f" -noout -text 2>/dev/null \
+            | grep -A1 "$label" | tail -1 | tr -d ' \r:' )" || true
+        if [ -n "$out" ]; then
+            printf '%s' "$out"
+            return 0
+        fi
+    done
+    return 1
+}
+
+say "Checking the issuing intermediate is available"
+cert_aki="$(cert_hexid "$CER" "Authority Key Identifier")" \
+    || die "could not read the authority key identifier from the certificate"
+
+intermediate_found=0
+for url in \
+    "https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer" \
+    "https://www.apple.com/certificateauthority/DeveloperIDCA.cer"; do
+    name="$(basename "$url")"
+    if [ ! -f "$WORK/$name" ]; then
+        curl -fsSL -o "$WORK/$name" "$url" 2>/dev/null || continue
+    fi
+    skid="$(cert_hexid "$WORK/$name" "Subject Key Identifier")" || continue
+    if [ "$skid" = "$cert_aki" ]; then
+        say "    $name is the issuer — installing it"
+        security import "$WORK/$name" -k "$LOGIN_KEYCHAIN" >/dev/null 2>&1 \
+            || die "could not import $name into the keychain"
+        intermediate_found=1
+        break
+    fi
+done
+if [ "$intermediate_found" -eq 0 ]; then
+    echo "    could not find the intermediate Apple issued this certificate" >&2
+    echo "    under. codesign will not be able to build a chain, so the" >&2
+    echo "    identity will not be usable." >&2
 fi
 
 say "Importing into the login keychain"

@@ -205,7 +205,13 @@ if [ -n "$SIGN_IDENTITY" ]; then
     # Hardened runtime is mandatory for notarization. --timestamp is what ties
     # the signature to a notarized timestamp server, so it survives the
     # certificate expiring.
-    SIGN_OPTS="--force --sign $SIGN_IDENTITY --options runtime --timestamp"
+    #
+    # An array, not a string, because the identity has spaces in it: "Developer
+    # ID Application: ..." as an unquoted string is word-split by the shell and
+    # codesign ends up with --sign Developer and a pile of filenames. That
+    # fails as "ID: No such file or directory", and only with a real
+    # certificate — the ad-hoc sign is a single "-" and splits fine.
+    SIGN_OPTS=(--force --sign "$SIGN_IDENTITY" --options runtime --timestamp)
 else
     echo "==> No Developer ID certificate found — signing ad-hoc." >&2
     echo "    The app runs fine locally and from the zip, but Gatekeeper will" >&2
@@ -213,7 +219,7 @@ else
     # Deliberately no --options runtime here: it buys nothing on an ad-hoc
     # signature, and it is known to make ScreenCaptureKit's permission prompt
     # unreliable, which is the whole reason this script signs at all.
-    SIGN_OPTS="--force --sign -"
+    SIGN_OPTS=(--force --sign -)
 fi
 
 # Inside out. VibresiaWatcher is a separate executable that the app launches as
@@ -222,7 +228,7 @@ fi
 # updater replaces the app out from under a running watcher. Every nested binary
 # is signed before the bundle that contains it.
 if [ -x "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher" ]; then
-    if ! codesign $SIGN_OPTS \
+    if ! codesign "${SIGN_OPTS[@]}" \
             --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" \
             "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher"; then
         echo "ERROR: codesign failed on VibresiaWatcher — the app would not open." >&2
@@ -232,7 +238,7 @@ fi
 
 # Fail loudly if this doesn't work — a broken signature makes macOS refuse to
 # launch the app with "may be damaged or incomplete".
-if ! codesign $SIGN_OPTS \
+if ! codesign "${SIGN_OPTS[@]}" \
         --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" \
         "$APP_BUNDLE"; then
     echo "ERROR: codesign failed — the app would not open." >&2

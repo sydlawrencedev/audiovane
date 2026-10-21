@@ -453,6 +453,24 @@ under `security find-identity`. It refuses to import a certificate whose public
 key does not match `devid.key`, which is the failure that otherwise shows up
 later as "no identity found" with nothing pointing back at the cause.
 
+It also fetches the intermediate Apple issued the certificate under and puts
+that in the keychain, which is not optional. Apple has two Developer ID
+intermediates — "Developer ID - G1", which expires in February 2027, and
+"Developer ID - G2", which expires in 2031 — and macOS ships only the G1 one.
+A certificate issued under G2 therefore has no path to a trusted root on a
+stock macOS, and codesign refuses the identity with "unable to build chain to
+self-signed root" even though the certificate is perfectly valid. The script
+tells the two apart by the authority key identifier in the certificate and
+installs whichever one matches:
+
+    https://www.apple.com/certificateauthority/DeveloperIDCA.cer    (G1)
+    https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer (G2)
+
+With the intermediate in the keychain, `codesign` embeds it in the signed
+bundle, and Gatekeeper builds the chain from there — which is what every
+other Developer ID app does, and what makes the app work on a Mac whose trust
+store has only the G1 intermediate.
+
 The CN has to match the name on the Apple account exactly, or Apple rejects
 the request. For an individual membership that is the account holder's legal
 name; for an organisation it is the organisation's name.
@@ -460,12 +478,14 @@ name; for an organisation it is the organisation's name.
 Store the credentials `notarytool` will need:
 
     xcrun notarytool store-credentials vibresia-notary \
-      --apple-id "syd@blok.uk.com" --team-id TEAMID --password "app-specific"
+      --apple-id "syd@blok.uk.com" --team-id CQQ33F2CDJ
 
-The team ID is in Membership details on the developer account page, and the
-password is an app-specific password from
+Leave `--password` off: `notarytool` then prompts for the app-specific
+password securely, rather than taking it as an argument where it would end up
+in the shell history. The password is an app-specific password from
 [appleid.apple.com](https://appleid.apple.com) — the account's own password
-will not work.
+will not work. The team ID is in Membership details on the developer account
+page.
 
 ### Extended attributes and the archive
 
