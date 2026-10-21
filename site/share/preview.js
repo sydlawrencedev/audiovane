@@ -40,7 +40,8 @@ uniform float uClock;       // wall-clock seconds; keeps running in silence (use
 uniform float uLevelSmooth; // slow loudness, 0..1: rises over ~0.3 s, falls over ~1.5 s
 uniform float uBassSmooth;  // the same slow easing applied to uBass
 uniform float uPresence;    // music presence, 0..1: eases in and out over ~2.3 s, no chatter
-uniform int uGenre;         // the genre of the music: 0 classical … 9 ambient
+uniform int uGenre;         // the genre of the music: 0 classical, 1 electronic, 2 rock,
+                             // 3 pop, 4 hiphop, 5 jazz, 6 blues, 7 country, 8 rnb, 9 ambient
 out vec4 fragColor;
 
 const float PI = 3.14159265;
