@@ -34,6 +34,16 @@ __pycache__/
 # PostHog wizard scratch files
 .posthog-wizard-cache/
 
+# Signing material. The Developer ID private key lives outside the repository
+# (~/.vibresia-devid/), but a stray copy landing in the working tree should
+# never be one `git add -A` away from being published.
+*.key
+*.pem
+*.p12
+*.csr
+*.cer
+*.mobileprovision
+
 # macOS AppleDouble files from editors/sync tools
 ._*
 .!*

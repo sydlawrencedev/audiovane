@@ -429,29 +429,109 @@ Check what you have:
 
     security find-identity -v -p codesigning
 
-A certificate is created at developer.apple.com under Developer ID Application;
-the CSR comes from Keychain Access → Certificate Assistant, or:
+### Setting it up, once
 
-    openssl req -new -newkey rsa:2048 -nodes -keyout devid.key \
-      -out devid.csr \
-      -subj "/email=you@minithlabs.com/commonName=Developer ID Application: Minith Labs"
+The certificate request has already been made — the CSR is at
+`~/.vibresia-devid/devid.csr` and the private key it belongs to is at
+`~/.vibresia-devid/devid.key` (mode 600, outside the repository on purpose: a
+private key in a git working tree is one `git add -A` away from being
+published). Both are for:
+
+    emailAddress=syd@blok.uk.com
+    CN=Stephen Lawrence
+
+Upload `devid.csr` at
+[developer.apple.com/account/resources/certificates](https://developer.apple.com/account/resources/certificates),
+under **Developer ID Application**, and Apple will issue a `.cer`. Download it,
+then:
+
+    ./scripts/install-devid.sh ~/Downloads/Developer_ID_Application_*.cer
+
+That script imports the certificate and its key into the login keychain
+together, gives `codesign` access to the key, and checks the result shows up
+under `security find-identity`. It refuses to import a certificate whose public
+key does not match `devid.key`, which is the failure that otherwise shows up
+later as "no identity found" with nothing pointing back at the cause.
+
+The CN has to match the name on the Apple account exactly, or Apple rejects
+the request. For an individual membership that is the account holder's legal
+name; for an organisation it is the organisation's name.
 
 Store the credentials `notarytool` will need:
 
     xcrun notarytool store-credentials vibresia-notary \
-      --apple-id "you@minithlabs.com" --team-id TEAMID --password "app-specific"
+      --apple-id "syd@blok.uk.com" --team-id TEAMID --password "app-specific"
 
-Then, before a release:
+The team ID is in Membership details on the developer account page, and the
+password is an app-specific password from
+[appleid.apple.com](https://appleid.apple.com) — the account's own password
+will not work.
 
-    ./build-app.sh release
-    ./scripts/notarize.sh          # or --check to rehearse without submitting
+### Extended attributes and the archive
+
+The build machine's extended attributes must not travel with the app.
+`build-app.sh` clears them from the bundle before signing, because
+`com.apple.quarantine` in particular is a leftover from however a file was
+created here — `AppIcon.icns` had it — and a quarantined file inside the
+bundle is something the notary service looks at and something Gatekeeper
+reads as "this came from the internet".
+
+`com.apple.provenance` cannot be cleared: the kernel manages it. So the
+archives are made with `ditto --norsrc`, because ditto otherwise stores
+attributes it cannot fit inside a zip as AppleDouble sidecars, and those
+sidecars land inside the signed bundle when it is unpacked:
+
+    Vibresia.app/Contents/MacOS/._Vibresia
+    Vibresia.app/Contents/Resources/._AppIcon.icns
+    …
+
+`ditto -x` (which `install.sh` uses) understands AppleDouble and restores the
+attributes properly, so the sidecars never appear. `unzip` does not: it writes
+them out as real files inside the bundle, and the signature stops matching —
+`codesign --verify --deep --strict` reports "a sealed resource is missing or
+invalid". `release.sh` unpacks its own zip with `unzip` and verifies the
+result for exactly this reason, and refuses to publish a zip that does not
+survive it.
+
+### Releasing
+
     ./release.sh
 
-`notarize.sh` submits the zip, staples the ticket onto the app in place, and
-rebuilds the zip around the stapled bundle — so the zip `release.sh` attaches is
-the stapled one. `release.sh` warns rather than fails when there is no ticket,
-because an un-notarized release is a legitimate thing to push while the
-certificate is being sorted out.
+That is the whole thing. Notarization is part of the release rather than a
+step to remember, because the order matters in a way that is easy to get
+wrong:
+
+- The stapled ticket is bound to the signature it was issued for. Signing the
+  bundle again — which is what every rebuild does — invalidates it. The ticket
+  blob is still there afterwards, and `codesign -dv` will cheerfully report
+  `Notarization Ticket=stapled`; only `xcrun stapler validate` can be
+  trusted about it.
+- So notarization has to happen *after* the last build and *before* the zip
+  is taken. `release.sh` now does exactly that: it builds, and if the app was
+  signed with a real Developer ID identity it submits it to Apple, staples the
+  ticket onto `build/Vibresia.app` in place, and only then takes the copy and
+  the zip. `ditto` preserves the staple, in both the directory copy and the
+  zip, so the published artifact carries it.
+
+Running `notarize.sh` by hand before `release.sh` is no longer necessary, and
+did not work: `release.sh` rebuilds the app, which threw the notarization away
+again, and the release went out un-notarized.
+
+If the app is signed with a Developer ID identity and notarization fails, the
+release does not go out at all. Signed-but-not-notarized is the worst of the
+two cases — Gatekeeper refuses it with "cannot be opened because the developer
+cannot be verified", and the way past that is in Privacy & Security, rather
+than the one-click override an ad-hoc build gets (which `install.sh` handles by
+clearing the quarantine flag).
+
+With no Developer ID certificate in the keychain, none of this runs: the
+build is signed ad-hoc, `release.sh` warns that the build is not notarized,
+and the release goes out as before. That path has to keep working on a
+machine with neither a certificate nor notary credentials.
+
+To rehearse the packaging without submitting anything:
+
+    ./scripts/notarize.sh --check
 
 `com.apple.security.cs.disable-library-validation` is deliberately **not** in
 `Entitlements.plist`. PostHog bundles PHPLCrashReporter, which reads like a

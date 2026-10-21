@@ -175,6 +175,21 @@ cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 </plist>
 EOF
 
+# The build machine's extended attributes must not travel with the app.
+#
+# com.apple.quarantine is the one that matters: AppIcon.icns picks it up from
+# however it was created here, and a quarantined file inside the bundle is
+# both something the notary service looks at and something Gatekeeper reads
+# as "this came from the internet". It has no business in a release.
+# com.apple.lastuseddate#PS is Spotlight bookkeeping; the rest is noise.
+#
+# com.apple.provenance cannot be removed — the kernel manages it — which is
+# why the archives are made with --norsrc. ditto turns attributes it cannot
+# store inside a zip into AppleDouble sidecars, and those sidecars land
+# inside the signed bundle when it is unpacked, which invalidates the
+# signature. Clearing the quarantine flag here also keeps it out of the pkg.
+xattr -cr "$APP_BUNDLE" 2>/dev/null || true
+
 # Signing identity. A Developer ID certificate is required to notarize, but not
 # to build: with no such certificate in the keychain we sign ad-hoc, which is
 # what this has always done and is enough to run locally and to exercise the

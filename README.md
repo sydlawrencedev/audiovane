@@ -192,5 +192,5 @@ scripts/band-eval.py --only jazz
 ## Releasing
 
 1. Add any new vibescape to `site/index.html` (a card with `data-vibescape="<case name>"`).
-2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `Vibresia.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release.
+2. `VisualiserMac/release.sh` runs both site checks, decides the version from the date, records it in `VisualiserMac/VERSION` and the landing page, builds, zips `Vibresia.app` and publishes GitHub release `v<VERSION>`. The installer and the app's update check always use the latest release. If a Developer ID certificate is in the keychain, the release is notarized as part of this — the ticket is stapled onto the app between the build and the zip, because signing the bundle again would invalidate it. See [Signing and notarization](VisualiserMac/README.md#signing-and-notarization).
 3. `npx wrangler deploy` if the site or worker changed, then re-submit the sitemap. First deploy after cloning needs `npx wrangler secret put DISCORD_WEBHOOK_URL` (see [Download notifications](#download-notifications-discord)).

@@ -43,8 +43,15 @@ die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
 command -v xcrun >/dev/null || die "xcrun is missing — this needs Xcode's command line tools."
 command -v pkgbuild >/dev/null || die "pkgbuild is missing."
 
-IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
-    | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+# The identities are read into a variable first. `head -1` closes the pipe
+# early, sed dies of SIGPIPE, and with pipefail on that reads as a failure of
+# the whole pipeline — so the identity would come back empty and the script
+# would say there is no certificate when there is one.
+IDENTITIES="$(security find-identity -v -p codesigning 2>/dev/null || true)"
+IDENTITY="$(printf '%s\n' "$IDENTITIES" \
+    | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p')"
+# The sed above prints every match, one per line; take the first.
+IDENTITY="${IDENTITY%%$'\n'*}"
 
 say "Developer ID certificate: ${IDENTITY:-<none found>}"
 say "notary profile:          $NOTARY_PROFILE"
@@ -101,8 +108,13 @@ mkdir -p "$here/dist"
 # The zip is what people actually download and what the in-app updater fetches.
 # A .zip cannot be stapled, so the app's ticket goes on the app and the zip is
 # rebuilt around it.
+#
+# --norsrc: ditto otherwise stores attributes it cannot fit in a zip as
+# AppleDouble sidecars, and those sidecars land inside the signed bundle when
+# it is unpacked, which invalidates the signature. The app has no resource
+# forks worth keeping.
 say "Packaging the zip"
-(cd "$here/build" && ditto -c -k --keepParent "$APP_NAME.app" "$WORK/$APP_NAME.zip")
+(cd "$here/build" && ditto -c -k --norsrc --keepParent "$APP_NAME.app" "$WORK/$APP_NAME.zip")
 
 say "Packaging the pkg"
 # Signed only when there is an identity to sign with, so the rehearsal path works
@@ -172,7 +184,7 @@ xcrun stapler staple "$WORK/unzipped/$APP_NAME.app"
 
 say "Rebuilding the zip around the stapled app"
 rm -f "$WORK/$APP_NAME.zip"
-(cd "$WORK/unzipped" && ditto -c -k --keepParent "$APP_NAME.app" "$here/dist/$APP_NAME.zip")
+(cd "$WORK/unzipped" && ditto -c -k --norsrc --keepParent "$APP_NAME.app" "$here/dist/$APP_NAME.zip")
 # The zip in dist/ now contains a stapled app; refresh the working copy too so a
 # second run starts from the same thing rather than the unstapled original.
 rm -rf "$APP"
