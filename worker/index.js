@@ -506,6 +506,72 @@ async function setPublic(env, id, isPublic) {
   }
 }
 
+/// Removes a share.
+///
+/// Used when a share is replaced — somebody changed their name, which makes a
+/// different vibescape, which gets a different link. The old one goes with
+/// it, so the gallery does not fill up with every version of the same
+/// vibescape.
+async function deleteShare(env, id) {
+  if (!isValidShareId(id)) return false;
+  try {
+    const result = await env.SHARES.prepare("DELETE FROM shares WHERE id = ?")
+      .bind(id).run();
+    return (result?.meta?.changes ?? 0) > 0;
+  } catch (error) {
+    console.log(`[share] could not delete ${id}: ${error}`);
+    return false;
+  }
+}
+
+/// A share's details, for the app to check what it has.
+///
+/// The gallery flag in particular: the tickbox in the share sheet has to
+/// show what is true, not what it was set to when the sheet opened.
+async function handleShareGet(request, url, env) {
+  const id = url.pathname.slice("/api/share/".length);
+  if (!isValidShareId(id)) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+  const row = await env.SHARES.prepare(
+    "SELECT id, name, author, is_public, created_at FROM shares WHERE id = ?"
+  ).bind(id).first();
+  if (!row) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+  return Response.json({
+    ok: true,
+    id: row.id,
+    name: row.name || "",
+    author: row.author || "",
+    public: row.is_public === 1,
+    sharedAt: row.created_at,
+  });
+}
+
+/// `PATCH /api/share/<id>` — puts a share in the public gallery, or takes it
+/// out.
+///
+/// The tickbox in the app's share sheet has to do something. It used to be
+/// read only when a share was made, so a share that was already made kept
+/// whatever it was made with — and unticking it did nothing at all.
+async function handleSharePatch(request, url, env) {
+  const token = request.headers.get("x-av-token") || "";
+  if (!env.SHARE_TOKEN || token !== env.SHARE_TOKEN) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+  const id = url.pathname.slice("/api/share/".length);
+  if (!isValidShareId(id)) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: "bad json" }, { status: 400 });
+  }
+  if (typeof body?.public !== "boolean") {
+    return Response.json({ ok: false, error: "public must be true or false" }, { status: 400 });
+  }
+  await setPublic(env, id, body.public);
+  return Response.json({ ok: true, id, public: body.public });
+}
+
 /// `POST /api/share` — the app hands over a vibescape and gets back a short
 /// URL for it.
 ///
@@ -533,6 +599,11 @@ async function handleShareCreate(request, env) {
   const name = typeof body?.name === "string" ? body.name : "";
   const author = typeof body?.author === "string" ? body.author : "";
   const key = typeof body?.key === "string" ? body.key : "";
+  // The share this one replaces, if it replaces one. Somebody changed their
+  // name, which makes a different vibescape, which gets a different link —
+  // and the old one goes, so the gallery does not fill up with every version
+  // of the same vibescape.
+  const replaces = typeof body?.replaces === "string" ? body.replaces : "";
   // Whether it goes in the public gallery. The app asks in the share sheet,
   // and says there that the name and the author are public.
   const isPublic = body?.public === true;
@@ -544,6 +615,9 @@ async function handleShareCreate(request, env) {
   }
   if (key.length > MAX_KEY_CHARS || (key && !KEY_PATTERN.test(key))) {
     return Response.json({ ok: false, error: "bad key" }, { status: 400 });
+  }
+  if (replaces && !isValidShareId(replaces)) {
+    return Response.json({ ok: false, error: "bad replaces id" }, { status: 400 });
   }
 
   // The picture is optional. Without one the share still works — it just
@@ -582,6 +656,7 @@ async function handleShareCreate(request, env) {
       id: existing.id,
       url: `${CANONICAL_SITE}s/${existing.id}`,
       imageUrl: existing.image ? `${CANONICAL_SITE}og/${existing.id}.jpg` : null,
+      public: isPublic,
       existing: true,
     });
   }
@@ -593,11 +668,18 @@ async function handleShareCreate(request, env) {
     const id = randomShareId();
     try {
       await insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic });
+      // The share this one replaces goes now that the new one is in place —
+      // and only now, and only if it is a different share. Replacing a share
+      // with itself would delete the row that was just written.
+      if (replaces && replaces !== id) {
+        await deleteShare(env, replaces);
+      }
       return Response.json({
         ok: true,
         id,
         url: `${CANONICAL_SITE}s/${id}`,
         imageUrl: image ? `${CANONICAL_SITE}og/${id}.jpg` : null,
+        public: isPublic,
         existing: false,
       });
     } catch (error) {
@@ -937,6 +1019,10 @@ export default {
     if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
     if (url.pathname === "/api/share") return handleShareCreate(request, env);
+    if (url.pathname.startsWith("/api/share/")) {
+      if (request.method === "PATCH") return handleSharePatch(request, url, env);
+      return handleShareGet(request, url, env);
+    }
     if (url.pathname === "/api/gallery") return handleGalleryAPI(request, env);
     if (url.pathname === "/vibescapes") return handleGalleryPage(request, url, env);
     if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env);

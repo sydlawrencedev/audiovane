@@ -84,13 +84,18 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
     /// panel gives the built-ins.
     var enabled: Bool
     var modified: Date
-    /// The share this vibescape arrived on, if it arrived on one.
+    /// The share this vibescape has, if it has one.
     ///
     /// Sharing it on hands back that link, rather than making a new one: the
     /// person you got it from sent you a link, and the person you send it to
     /// should get the same one.
+    ///
+    /// It is set on the record whenever a share is made for the vibescape, so
+    /// the vibescape knows its own link without having to ask. It used to
+    /// record only the share a vibescape *arrived* on, which left one of your
+    /// own with no way of knowing the link it had been given.
     var shareID: String?
-    /// The key of the vibescape as it arrived — see `ShareIdentity`.
+    /// The key of the vibescape when it was shared — see `ShareIdentity`.
     ///
     /// Compared with the key of the vibescape as it is now, to tell whether it
     /// has been edited since. Edited means it is a different vibescape and
@@ -98,6 +103,37 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
     var shareKey: String?
 
     var modeID: VibescapeID { .custom(id) }
+
+    /// True when this vibescape came from somebody else.
+    ///
+    /// A vibescape that arrived on a share link belongs to the person who
+    /// wrote it. It cannot be edited — the link is its identity, and editing
+    /// it would make it a different vibescape with a different link — and
+    /// sharing it on hands back the link it arrived on rather than making a
+    /// new one.
+    ///
+    /// The key is the interesting part: a vibescape that arrived on a link
+    /// and has since been edited is no longer the same vibescape, so it is
+    /// not shared any more. It is yours, and it gets its own link.
+    var isShared: Bool {
+        guard shareID != nil else { return false }
+        return isStillShared(as: ShareIdentity.key(name: name, author: author,
+                                                   url: url, shader: shader))
+    }
+
+    /// Whether this vibescape is still the one that was shared.
+    ///
+    /// The key it was shared under, against the key it has now. A share
+    /// made before the author was normalised was keyed on the author's name
+    /// exactly as it was stored — empty, for a vibescape with no author — so
+    /// that one is checked too, or a share made before would stop being
+    /// recognised as itself.
+    func isStillShared(as key: String) -> Bool {
+        guard let shareKey else { return false }
+        if shareKey == key { return true }
+        let raw = ShareIdentity.key(name: name, author: "", url: url, shader: shader)
+        return shareKey == raw
+    }
 
     /// Plain-language summary for the View All panel.
     var subtitle: String {
@@ -172,6 +208,9 @@ struct VibescapeEntry: Identifiable, Hashable {
     /// A short line under the title.
     var subtitle: String?
     var isCustom: Bool
+    /// True when this vibescape came from somebody else. It cannot be
+    /// edited — the link is its identity — but it can be copied.
+    var isShared: Bool = false
     var isEnabled: Bool
     /// True for the "make your own" card at the end of the list.
     var isNewVibescapeCard: Bool = false
@@ -199,6 +238,7 @@ struct VibescapeEntry: Identifiable, Hashable {
         self.glyph = shortcut.map(String.init) ?? ""
         self.subtitle = mode.subtitle
         self.isCustom = true
+        self.isShared = mode.isShared
         self.isEnabled = mode.enabled
         self.isNewVibescapeCard = false
     }

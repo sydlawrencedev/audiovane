@@ -113,6 +113,14 @@ struct NowPlayingCell: View {
                 .foregroundStyle(Color(white: 0.55))
                 .lineLimit(1)
                 .frame(maxWidth: 260, alignment: .leading)
+                // Lifted to sit on the same line as the "🩷 from Minith Labs"
+                // in the bottom-right corner, which is eight points higher:
+                // that label is inside a pill with six points of padding on
+                // it, and the pill's bottom is two points lower than this
+                // strip's, so without this the credit reads as sitting a
+                // little low. An offset rather than padding, so the line
+                // above it stays where it is.
+                .offset(y: -8)
             }
         }
         // fixedSize so the block hugs its text rather than competing with the

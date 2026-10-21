@@ -70,6 +70,13 @@ function makeShares() {
                 if (row) row.is_public = isPublic;
                 return { success: true };
               }
+              if (sql.includes("DELETE FROM shares")) {
+                const id = args[0];
+                const existed = rows.delete(id);
+                for (const [key, value] of byKey) if (value === id) byKey.delete(key);
+                for (const [key, value] of byPayloadHash) if (value === id) byPayloadHash.delete(key);
+                return { success: true, meta: { changes: existed ? 1 : 0 } };
+              }
               return { success: true };
             },
             async first() {
@@ -548,4 +555,104 @@ test("bytes come out of D1 in whichever shape it hands them over", () => {
   assert.deepEqual([...toBytes([1, 2, 3])], [1, 2, 3]);
   assert.equal(toBytes(null), null);
   assert.equal(toBytes(undefined), null);
+});
+
+// --- the gallery tickbox, and replacing a share -----------------------------
+
+test("the gallery tickbox reaches the site", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Ticked", author: "Stephen", key: "ticked1", public: true }),
+  });
+  const { id } = await created.json();
+
+  // Unticking it takes the share out of the gallery, which it never used to
+  // do: the tickbox was only read when a share was made.
+  const patched = await run(`https://vibresia.com/api/share/${id}`, {
+    env,
+    method: "PATCH",
+    headers: { "x-av-token": SHARE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({ public: false }),
+  });
+  assert.equal(patched.status, 200);
+
+  const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(gallery.vibescapes.length, 0, "the share is still in the gallery");
+
+  // And the share says so, so the app's tickbox can show what is true.
+  const details = await (await run(`https://vibresia.com/api/share/${id}`, { env })).json();
+  assert.equal(details.ok, true);
+  assert.equal(details.public, false);
+  assert.equal(details.name, "Ticked");
+});
+
+test("the gallery tickbox needs the token", async () => {
+  const { env } = makeEnv();
+  const response = await run("https://vibresia.com/api/share/aaaaaa", {
+    env,
+    method: "PATCH",
+    headers: { "x-av-token": "wrong", "Content-Type": "application/json" },
+    body: JSON.stringify({ public: false }),
+  });
+  assert.equal(response.status, 401);
+});
+
+test("a share that does not exist is a 404", async () => {
+  const { env } = makeEnv();
+  const response = await run("https://vibresia.com/api/share/aaaaaa", { env });
+  assert.equal(response.status, 404);
+});
+
+test("changing your name replaces the share rather than leaving it behind", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Stephen", key: "before1", public: true }),
+  });
+  const { id: oldId } = await first.json();
+
+  // The name is part of the payload, so a new name is a different vibescape
+  // and gets its own link — and says which share it replaces.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({
+      payload: "QU5PVEhFUi1wYXlsb2Fk", name: "After", author: "Stephen",
+      key: "after1", public: true, replaces: oldId,
+    }),
+  });
+  const { id: newId } = await second.json();
+  assert.notEqual(newId, oldId);
+
+  // The old share is gone, so the gallery does not fill up with every
+  // version of the same vibescape.
+  const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(gallery.vibescapes.length, 1);
+  assert.equal(gallery.vibescapes[0].name, "After");
+  assert.equal((await run(`https://vibresia.com/api/share/${oldId}`, { env })).status, 404);
+});
+
+test("a share that replaces itself is not deleted", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Same", author: "Stephen", key: "same1", public: true }),
+  });
+  const { id } = await created.json();
+
+  // Sharing the same vibescape again finds the share that is already there
+  // rather than making a second one, so the one that is there must survive.
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({
+      payload: PAYLOAD, name: "Same", author: "Stephen",
+      key: "same1", public: true, replaces: id,
+    }),
+  });
+  assert.equal((await run(`https://vibresia.com/api/share/${id}`, { env })).status, 200);
 });

@@ -144,11 +144,6 @@ struct ShareVibescapeView: View {
                 authorSection
                 gallerySection
             }
-
-            Text(recipientHint)
-                .font(.system(size: 11))
-                .foregroundStyle(Color(white: 0.55))
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(22)
         .frame(width: 540)
@@ -170,6 +165,10 @@ struct ShareVibescapeView: View {
     /// The name goes on the link, and — if the gallery is ticked — on the
     /// front page of the site, so the sheet says so rather than leaving it
     /// to be found out.
+    ///
+    /// Read-only for a vibescape somebody sent you. It is theirs, and
+    /// changing it would make it a different vibescape with a different
+    /// link — and the link is the thing everybody who has it is holding.
     private var authorSection: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("YOUR NAME")
@@ -177,30 +176,52 @@ struct ShareVibescapeView: View {
                 .tracking(1.2)
                 .foregroundStyle(Color(white: 0.55))
 
-            TextField("Your name", text: $author)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundStyle(Color.white)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.black)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 6)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
-                .focused($authorFieldFocused)
-                .onSubmit { commitAuthor() }
-                .onChange(of: authorFieldFocused) { _, focused in
-                    if !focused { commitAuthor() }
-                }
+            if isShared {
+                Text(author)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black.opacity(0.4))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            )
+                    )
+                    .help("This vibescape came from somebody else, so the name on it is theirs")
+                Text("This one came from somebody else, so it keeps their name.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(white: 0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                TextField("Your name", text: $author)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundStyle(Color.white)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.black)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                    .focused($authorFieldFocused)
+                    .onSubmit { commitAuthor() }
+                    .onChange(of: authorFieldFocused) { _, focused in
+                        if !focused { commitAuthor() }
+                    }
 
-            Text("This is public. It goes on the link, and on the gallery if you tick the box below.")
-                .font(.system(size: 11))
-                .foregroundStyle(Color(white: 0.55))
-                .fixedSize(horizontal: false, vertical: true)
+                Text("This is public. It goes on the link, and on the gallery if you tick the box below.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(white: 0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
     }
 
@@ -210,7 +231,7 @@ struct ShareVibescapeView: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Public gallery")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                Text("Lists it at vibresia.com/vibescapes, where anybody can find it. Your name goes with it.")
+                Text("Lists it at vibresia.com/vibescapes, where anybody can find it.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(white: 0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -219,6 +240,46 @@ struct ShareVibescapeView: View {
         .toggleStyle(.switch)
         .controlSize(.small)
         .tint(Color(red: 1, green: 0.17, blue: 0.84))
+        // The tickbox has to reach the site. It used to be read only when a
+        // share was made, so unticking it on a share that already existed
+        // did nothing at all — the share stayed in the gallery and the
+        // tickbox just went back to how it was.
+        .onChange(of: inGallery) { _, wanted in
+            pushGallery(wanted)
+        }
+    }
+
+    /// Puts the share in the gallery, or takes it out.
+    ///
+    /// Only once there is a share to do it to. Before that the tick is
+    /// carried into the share that gets made.
+    private func pushGallery(_ wanted: Bool) {
+        guard let shareID = currentShareID else { return }
+        Task {
+            let ok = await ShareLinkStore().setGallery(shareID: shareID, inGallery: wanted)
+            if ok {
+                ShareLinkCache.remember(shareID: shareID, for: currentKey, isPublic: wanted)
+            } else {
+                // The site didn't take it. Put the tick back, rather than
+                // leaving it showing something that isn't true.
+                await MainActor.run { inGallery = !wanted }
+            }
+        }
+    }
+
+    /// The share this vibescape has, if it has one.
+    private var currentShareID: String? {
+        guard case .custom(let id) = vibescape,
+              let mode = app.customVibescape(id: id) else { return nil }
+        return mode.shareID
+    }
+
+    /// The key this vibescape's content makes.
+    private var currentKey: String {
+        guard case .custom(let id) = vibescape,
+              let mode = app.customVibescape(id: id) else { return "" }
+        return ShareIdentity.key(name: mode.name, author: author,
+                                 url: mode.url, shader: mode.shader)
     }
 
     /// Saves the name, and makes the link again.
@@ -235,6 +296,14 @@ struct ShareVibescapeView: View {
         }
         shortLink = nil
         Task { await makeShortLink() }
+    }
+
+    /// True when this vibescape came from somebody else, so it cannot be
+    /// edited and keeps the link it arrived on.
+    private var isShared: Bool {
+        guard case .custom(let id) = vibescape,
+              let mode = app.customVibescape(id: id) else { return false }
+        return mode.isShared
     }
 
     /// The name on the vibescape as it stands.
@@ -402,18 +471,18 @@ struct ShareVibescapeView: View {
         // The name as it is in the sheet, which is the name as it will be
         // published. The key is of the same thing, so that two Macs holding
         // the same vibescape work out the same link.
-        let trimmed = author.trimmingCharacters(in: .whitespacesAndNewlines)
-        let author = trimmed.isEmpty ? VibescapeMetadata.author : trimmed
+        let author = ShareIdentity.shownAuthor(author)
         let key = ShareIdentity.key(name: mode.name, author: author,
-                                    url: mode.url, shader: mode.shader)
+                                     url: mode.url, shader: mode.shader)
 
         // The link this vibescape arrived on, if it arrived on one and
         // hasn't been edited since. Sharing it on hands back that link:
         // the person who sent it to you sent you that link, and the person
         // you send it to should get the same one. Edit it and it's a
         // different vibescape, so it gets its own link.
-        if let shareID = mode.shareID, mode.shareKey == key {
+        if let shareID = mode.shareID, mode.isStillShared(as: key) {
             shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
+            await syncGalleryState(shareID: shareID, key: key)
             return shortLink
         }
 
@@ -421,6 +490,7 @@ struct ShareVibescapeView: View {
         // again would upload the picture again to arrive at a URL we know.
         if let shareID = ShareLinkCache.shareID(for: key) {
             shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
+            inGallery = ShareLinkCache.isPublic(for: key) ?? inGallery
             return shortLink
         }
 
@@ -429,6 +499,10 @@ struct ShareVibescapeView: View {
         let payload = ShareImporter.encodePayload(mode, minify: false)
         let name = mode.name
         let target = vibescape
+        // The share this one supersedes, if there is one. Changing your
+        // name makes a different vibescape, and the old share goes with it
+        // rather than sitting in the gallery for ever.
+        let replaces = mode.shareID
 
         // The picture is rendered off the main thread — it is a GPU job and
         // takes a moment — so the sheet doesn't stutter while it is made.
@@ -438,12 +512,30 @@ struct ShareVibescapeView: View {
 
         let link = await ShareLinkStore().makeLink(
             payload: payload, name: name, author: author, image: image,
-            key: key, inGallery: inGallery)
+            key: key, inGallery: inGallery, replaces: replaces)
         shortLink = link?.url
         if let shareID = link?.id {
-            ShareLinkCache.remember(shareID: shareID, for: key)
+            ShareLinkCache.remember(shareID: shareID, for: key, isPublic: link?.inGallery ?? inGallery)
+            // The vibescape remembers its own link, so that changing your
+            // name later knows which share to replace.
+            app.setCustomVibescapeShare(id: id, shareID: shareID, key: key)
         }
         return shortLink
+    }
+
+    /// Sets the tickbox to what the site actually has.
+    ///
+    /// The sheet opens with the tick on, because a share that has not been
+    /// made yet will be made with the tick on. A share that already exists
+    /// may be the other way round, and the tick has to show what is true.
+    private func syncGalleryState(shareID: String, key: String) async {
+        if let cached = ShareLinkCache.isPublic(for: key) {
+            inGallery = cached
+            return
+        }
+        guard let details = await ShareLinkStore().details(shareID: shareID) else { return }
+        inGallery = details.inGallery
+        ShareLinkCache.remember(shareID: shareID, for: key, isPublic: details.inGallery)
     }
 
     /// The Share button. Waits for the short link if there isn't one yet, so
@@ -615,15 +707,6 @@ struct ShareVibescapeView: View {
             let m = app.customVibescape(id: id)
             let author = m?.author.isEmpty == false ? m!.author : "Minith Labs"
             return "Made with ❤ by \(author) — share it with someone."
-        }
-    }
-
-    private var recipientHint: String {
-        switch vibescape {
-        case .builtin:
-            return "Anyone who clicks it sees a page with the vibescape preview and an “Open in Vibresia” button — works whether they already have the app or not."
-        case .custom:
-            return "Clicking the link adds the vibescape to their list. The link is the same one every time you share it, so you can send it to as many people as you like."
         }
     }
 

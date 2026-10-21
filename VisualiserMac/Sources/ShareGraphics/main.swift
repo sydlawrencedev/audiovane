@@ -122,6 +122,14 @@ func render(slug: String, title: String) -> Data? {
     ctx.stroke(imgRect)
     ctx.draw(cgImage, in: imgRect)
 
+    // How much wash the corners need, measured from the picture as it stands
+    // now — the gradient and the vibescape, before the title and the credit
+    // are on it. The corners of this canvas are a dark gradient whatever the
+    // vibescape is, so the wash here is nearly always unnecessary, and the
+    // app's own share image measures the same way.
+    let wash = ctx.makeImage().map { ShareImageBrand.scrimStrengths(in: $0) }
+        ?? (brand: 0.58, credit: 0.72)
+
     // 3. Subtitle — small uppercase "A vibescape by…" between the title
     //    and the image, in flipped coords that's just above `imgBase + imgH`.
     let subtitleText = "A VIBESCAPE BY \(author.uppercased())"
@@ -153,7 +161,8 @@ func render(slug: String, title: String) -> Data? {
     // 5. The brand and the credit — the same drawing the app puts on the
     //    share image it uploads, so the two don't look like different
     //    products.
-    ShareImageBrand.draw(in: ctx, size: CGSize(width: w, height: h), author: author)
+    ShareImageBrand.draw(in: ctx, size: CGSize(width: w, height: h), author: author,
+                         brandWash: wash.brand, creditWash: wash.credit)
 
     NSGraphicsContext.current = nil
     return rep.representation(using: .jpeg, properties: [

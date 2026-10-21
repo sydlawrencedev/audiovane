@@ -913,6 +913,15 @@ final class AppState: ObservableObject {
         guard let i = customVibescapes.firstIndex(where: { $0.id == id }) else {
             return .failure(ShaderProblem(kind: .compileFailed, message: "That vibescape no longer exists."))
         }
+        // A vibescape somebody sent you is not yours to change. The link is
+        // its identity, and changing it would make it a different vibescape
+        // with a different link — so the copy you get back is the one you
+        // were sent. Make a copy instead if you want to change it.
+        if customVibescapes[i].isShared {
+            return .failure(ShaderProblem(
+                kind: .compileFailed,
+                message: "This vibescape came from somebody else, so it can't be changed. Make a copy of it to change it."))
+        }
         switch renderer.installCustomShader(id: id, body: shader) {
         case .failure(let problem):
             return .failure(problem)
@@ -946,6 +955,35 @@ final class AppState: ObservableObject {
         customVibescapes[i].author = author
         customVibescapes[i].modified = Date()
         try? CustomVibescapeStore.save(customVibescapes[i])
+    }
+
+    /// Records the share a vibescape has, so the vibescape knows its own link.
+    ///
+    /// Without this a vibescape of your own has no way of knowing the link
+    /// it was given, so changing your name left the old share behind in the
+    /// gallery with nothing pointing at it.
+    func setCustomVibescapeShare(id: String, shareID: String, key: String) {
+        guard let i = customVibescapes.firstIndex(where: { $0.id == id }) else { return }
+        guard customVibescapes[i].shareID != shareID || customVibescapes[i].shareKey != key else { return }
+        customVibescapes[i].shareID = shareID
+        customVibescapes[i].shareKey = key
+        try? CustomVibescapeStore.save(customVibescapes[i])
+    }
+
+    /// A copy of a vibescape, as a vibescape of your own.
+    ///
+    /// For a vibescape somebody sent you: it cannot be edited — the link is
+    /// its identity — but it can be copied, and the copy is yours to change
+    /// as much as you like.
+    func duplicateCustomVibescape(id: String) -> Result<CustomVibescape, ShaderProblem> {
+        guard let source = customVibescapes.first(where: { $0.id == id }) else {
+            return .failure(ShaderProblem(kind: .compileFailed,
+                                           message: "That vibescape no longer exists."))
+        }
+        // No share id: this is a different vibescape, and it gets its own
+        // link.
+        return addCustomVibescape(name: source.name, author: source.author,
+                                  url: source.url, shader: source.shader)
     }
 
     /// Puts a vibescape in the list without writing it to disk.

@@ -159,6 +159,7 @@ public enum ShareImageBrand {
     /// most likely to be, so it gets more.
     public static func drawScrim(in ctx: CGContext, corner: CGPoint, radius: CGFloat,
                                   strength: CGFloat = 0.58) {
+        guard strength > 0.01 else { return }
         let colors = [NSColor(white: 0, alpha: strength).cgColor,
                       NSColor(white: 0, alpha: 0).cgColor] as CFArray
         guard let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
@@ -172,12 +173,105 @@ public enum ShareImageBrand {
     ///
     /// The lettering is drawn with AppKit, which is main-thread-only, so
     /// call this on the main thread.
-    public static func draw(in ctx: CGContext, size: CGSize, author: String) {
-        drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4), radius: 190)
+    ///
+    /// `brandWash` and `creditWash` are how much wash each corner gets, which
+    /// is worked out from the picture by `scrimStrengths(in:)`. The defaults
+    /// are the most the wash is ever allowed to be.
+    public static func draw(in ctx: CGContext, size: CGSize, author: String,
+                            brandWash: CGFloat = brandStrength,
+                            creditWash: CGFloat = creditStrength) {
+        drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4),
+                  radius: brandRadius, strength: brandWash)
         drawScrim(in: ctx, corner: CGPoint(x: size.width - 4, y: 4),
-                  radius: 320, strength: 0.72)
+                  radius: creditRadius, strength: creditWash)
         drawBrand(in: ctx, size: size)
         drawCredit(in: ctx, size: size, author: author)
+    }
+
+    // MARK: - How much wash a corner needs
+
+    /// Below this the corner is dark enough on its own and needs no wash.
+    private static let darkEnough = 0.25
+    /// Above this the corner is as bright as it gets and needs all of it.
+    private static let tooBright = 0.75
+    /// The percentile of the corner taken as its brightness.
+    private static let percentile = 0.9
+    /// The width the picture is sampled at. Small, because it is only a
+    /// measure — and drawing it small is what averages it.
+    private static let sampleWidth = 64
+    /// The radius of the wash in the top-left corner, and the bottom-right.
+    private static let brandRadius: CGFloat = 190
+    private static let creditRadius: CGFloat = 320
+    /// The most either wash can be, when the corner is as bright as it gets.
+    public static let brandStrength: CGFloat = 0.58
+    public static let creditStrength: CGFloat = 0.72
+
+    /// How much wash each corner of a picture needs.
+    ///
+    /// The wash is there so the lettering can be read. On a dark vibescape
+    /// there is nothing to read it against, and the wash is just a dark blob
+    /// in the corner of somebody's picture — which is worse than the problem
+    /// it solves. So the corners are measured and each wash is scaled to
+    /// what its corner actually needs.
+    ///
+    /// The measure is a high percentile of the corner's brightness rather
+    /// than its average: one white flash in the corner is enough to swallow
+    /// the credit, and an average would average it away.
+    public static func scrimStrengths(in image: CGImage) -> (brand: CGFloat, credit: CGFloat) {
+        let brand = cornerBrightness(in: image, top: true, left: true, radius: brandRadius)
+        let credit = cornerBrightness(in: image, top: false, left: false, radius: creditRadius)
+        return (scale(brand) * brandStrength, scale(credit) * creditStrength)
+    }
+
+    /// A corner's brightness, as a number between nothing and everything.
+    private static func scale(_ brightness: Double) -> CGFloat {
+        guard brightness > darkEnough else { return 0 }
+        guard brightness < tooBright else { return 1 }
+        // Between the two, a straight ramp. The lettering carries a shadow,
+        // so it stays readable a long way down — the wash is only really
+        // wanted once the corner starts competing with it.
+        return CGFloat((brightness - darkEnough) / (tooBright - darkEnough))
+    }
+
+    /// How bright one corner of a picture is.
+    ///
+    /// The whole picture is drawn into a small bitmap and read back. Drawing
+    /// it small is the averaging: the graphics context scales it down, and
+    /// the bytes that come back are the picture's brightness at that size.
+    private static func cornerBrightness(in image: CGImage, top: Bool, left: Bool,
+                                         radius: CGFloat) -> Double {
+        let w = sampleWidth
+        let h = max(1, Int(Double(image.height) * Double(w) / Double(image.width)))
+        var bytes = [UInt8](repeating: 0, count: w * h * 4)
+        guard let context = CGContext(data: &bytes, width: w, height: h,
+                                      bitsPerComponent: 8, bytesPerRow: w * 4,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return 0
+        }
+        context.interpolationQuality = .low
+        context.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))
+
+        // The corner's block, in samples. A CGImage's first row is its top,
+        // and drawing it into a context that counts y from the bottom puts
+        // that first row at the bottom of the rectangle — so the top of the
+        // picture is the last row in memory.
+        let span = max(1, Int(Double(radius) * Double(w) / Double(image.width)))
+        var luminances: [Double] = []
+        luminances.reserveCapacity(span * span)
+        for row in 0..<span {
+            for column in 0..<span {
+                let x = left ? column : (w - 1 - column)
+                let y = top ? row : (h - 1 - row)
+                let index = (y * w + x) * 4
+                let r = Double(bytes[index]), g = Double(bytes[index + 1]), b = Double(bytes[index + 2])
+                luminances.append((0.2126 * r + 0.7152 * g + 0.0722 * b) / 255.0)
+            }
+        }
+        guard !luminances.isEmpty else { return 0 }
+        luminances.sort()
+        let index = min(luminances.count - 1, Int(Double(luminances.count - 1) * percentile))
+        return luminances[index]
     }
 
     /// A copy of an image with the brand and the credit on it.
@@ -205,7 +299,11 @@ public enum ShareImageBrand {
         // the credit and the mark are measured from.
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
-        draw(in: ctx, size: CGSize(width: width, height: height), author: author)
+        // The wash is measured from the picture, so it is only as strong as
+        // the corner it is over needs it to be.
+        let wash = scrimStrengths(in: image)
+        draw(in: ctx, size: CGSize(width: width, height: height), author: author,
+             brandWash: wash.brand, creditWash: wash.credit)
         NSGraphicsContext.restoreGraphicsState()
 
         return ctx.makeImage()

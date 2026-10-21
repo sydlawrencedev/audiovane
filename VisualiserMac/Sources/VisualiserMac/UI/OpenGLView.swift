@@ -122,6 +122,13 @@ final class GLVisualizerNSView: NSOpenGLView {
     func renderFrame() {
         guard didSetup else { return }
 
+        // An offscreen render — a video export, a share image, a preview —
+        // borrows the renderer's size to draw into its own framebuffer, and
+        // the two would fight over it. The window holds its last frame
+        // until the render is done, which is what stops the canvas appearing
+        // to zoom while one is in flight.
+        if renderer.isRenderingOffscreen { return }
+
         let sourceKind = renderer.audio.sourceKindForRender
         let isIdle = (sourceKind == "idle" || sourceKind == "error")
 

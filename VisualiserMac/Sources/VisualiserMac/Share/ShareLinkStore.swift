@@ -47,8 +47,14 @@ actor ShareLinkStore {
     ///
     /// `inGallery` is whether it goes in the public gallery. The sheet asks,
     /// and says there that the name and the author are public.
+    ///
+    /// `replaces` is the share this one supersedes, if it supersedes one —
+    /// somebody changed their name, which makes a different vibescape, which
+    /// gets a different link. The old share goes with it, so the gallery does
+    /// not fill up with every version of the same vibescape.
     func makeLink(payload: String, name: String, author: String,
-                  image: Data?, key: String, inGallery: Bool) async -> ShareLink? {
+                  image: Data?, key: String, inGallery: Bool,
+                  replaces: String? = nil) async -> ShareLink? {
         guard !payload.isEmpty, !ShareLinkStore.token.isEmpty else { return nil }
 
         var request = URLRequest(url: ShareLinkStore.endpoint)
@@ -65,6 +71,9 @@ actor ShareLinkStore {
             body["key"] = key
         }
         body["public"] = inGallery
+        if let replaces, !replaces.isEmpty {
+            body["replaces"] = replaces
+        }
         if let image, !image.isEmpty {
             body["image"] = image.base64EncodedString()
         }
@@ -75,11 +84,60 @@ actor ShareLinkStore {
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
             guard let url = json["url"] as? String, let id = json["id"] as? String else { return nil }
-            return ShareLink(id: id, url: url)
+            return ShareLink(id: id, url: url, inGallery: json["public"] as? Bool ?? inGallery)
         } catch {
             return nil
         }
     }
+
+    /// Puts a share in the public gallery, or takes it out.
+    ///
+    /// The tickbox in the share sheet has to reach the site. It used to be
+    /// read only when a share was made, so unticking it on a share that
+    /// already existed did nothing at all.
+    func setGallery(shareID: String, inGallery: Bool) async -> Bool {
+        guard !shareID.isEmpty, !ShareLinkStore.token.isEmpty else { return false }
+        guard let url = URL(string: "\(ShareLinkStore.site)/api/share/\(shareID)") else { return false }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "PATCH"
+        request.setValue(ShareLinkStore.token, forHTTPHeaderField: "x-av-token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["public": inGallery])
+
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            return (response as? HTTPURLResponse)?.statusCode == 200
+        } catch {
+            return false
+        }
+    }
+
+    /// What the site knows about a share — in particular whether it is in
+    /// the public gallery, so the tickbox can show what is true.
+    func details(shareID: String) async -> ShareDetails? {
+        guard !shareID.isEmpty else { return nil }
+        guard let url = URL(string: "\(ShareLinkStore.site)/api/share/\(shareID)") else { return nil }
+        do {
+            let (data, response) = try await URLSession.shared.data(from: url)
+            guard (response as? HTTPURLResponse)?.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return nil
+            }
+            return ShareDetails(name: json["name"] as? String ?? "",
+                                author: json["author"] as? String ?? "",
+                                inGallery: json["public"] as? Bool ?? false)
+        } catch {
+            return nil
+        }
+    }
+}
+
+/// What the site knows about a share.
+struct ShareDetails: Equatable {
+    let name: String
+    let author: String
+    let inGallery: Bool
 }
 
 /// A short link the site made, and the share it belongs to.
@@ -89,4 +147,6 @@ struct ShareLink: Equatable {
     let id: String
     /// The link itself.
     let url: String
+    /// Whether the share is in the public gallery, as the site has it.
+    let inGallery: Bool
 }

@@ -149,7 +149,7 @@ struct VibescapesView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.4))
-            Text("Your own vibescapes are marked ★. Add another with the card at the end.")
+            Text("Your own vibescapes are marked ★, and ones somebody sent you are marked ↘. Add another with the card at the end.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.45))
             Spacer()
@@ -198,6 +198,8 @@ private struct VibescapeRow: View {
         let base = VibescapeCard(entry: entry, onEdit: { target in
             guard let mode = app.customVibescape(id: target.id.slug) else { return }
             editor = .editing(mode)
+        }, onDuplicate: { target in
+            duplicate(target)
         }, onCreate: {
             editor = .new
         }, onSelect: { target in
@@ -242,6 +244,25 @@ private struct VibescapeRow: View {
                     // vibescape would land.
                     dropTargetID = targeted ? entry.id : (dropTargetID == entry.id ? nil : dropTargetID)
                 }
+        }
+    }
+
+    /// Makes a copy of a vibescape somebody sent, so it can be changed.
+    ///
+    /// The original cannot be edited — the link is its identity — so a copy
+    /// is the way to get one you can change. The copy is a new vibescape
+    /// with its own name, so it does not collide with the one it came from.
+    private func duplicate(_ entry: VibescapeEntry) {
+        switch app.duplicateCustomVibescape(id: entry.id.slug) {
+        case .success(let copy):
+            Task { await Analytics.shared.track("custom_vibescape_duplicated", [
+                "from": entry.title,
+            ]) }
+            editor = .editing(copy)
+        case .failure(let problem):
+            Task { await Analytics.shared.track("custom_vibescape_failed", [
+                "stage": "duplicate", "kind": problem.analyticsKindName,
+            ]) }
         }
     }
 
@@ -292,6 +313,9 @@ private struct VibescapeCard: View {
     let entry: VibescapeEntry
     /// Called when the card's edit button is pressed.
     var onEdit: ((VibescapeEntry) -> Void)?
+    /// Called when the card's copy button is pressed, for a vibescape
+    /// somebody sent.
+    var onDuplicate: ((VibescapeEntry) -> Void)?
     /// Called when the card is pressed, for the "make your own" card.
     var onCreate: (() -> Void)?
 
@@ -320,10 +344,19 @@ private struct VibescapeCard: View {
                     // Only the user's own vibescapes are marked. The numbers that
                     // sit next to the names in the drop-down are keyboard
                     // shortcuts, and this panel isn't about keys.
-                    Text("★")
+                    //
+                    // A vibescape somebody sent has its own mark, because it
+                    // is not the user's: it cannot be edited, and it keeps
+                    // the link it arrived on.
+                    Text(entry.isShared ? "↘" : "★")
                         .font(.system(size: 9, weight: .bold))
-                        .foregroundStyle(Color(red: 1, green: 0.72, blue: 0.2))
+                        .foregroundStyle(entry.isShared
+                                         ? Color(red: 0.17, green: 0.95, blue: 1.0)
+                                         : Color(red: 1, green: 0.72, blue: 0.2))
                         .frame(width: 14, alignment: .leading)
+                        .help(entry.isShared
+                              ? "This one came from somebody else — it can't be edited"
+                              : "Yours")
                 }
                 Text(entry.title)
                     .font(.system(size: 11, weight: .medium))
@@ -334,17 +367,33 @@ private struct VibescapeCard: View {
                 Spacer(minLength: 4)
                 if entry.isCustom {
                     // Only the user's own vibescapes can be changed. The
-                    // shipped ones are part of the app.
-                    Button {
-                        onEdit?(entry)
-                    } label: {
-                        Image(systemName: "pencil")
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(Color(white: 0.55))
+                    // shipped ones are part of the app, and one somebody
+                    // sent is theirs.
+                    if entry.isShared {
+                        // It cannot be changed, but it can be copied — and
+                        // the copy is yours to change as much as you like.
+                        Button {
+                            onDuplicate?(entry)
+                        } label: {
+                            Image(systemName: "square.on.square")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Color(white: 0.55))
+                        }
+                        .buttonStyle(.plain)
+                        .pointingHand()
+                        .help("Make a copy of this vibescape that you can change")
+                    } else {
+                        Button {
+                            onEdit?(entry)
+                        } label: {
+                            Image(systemName: "pencil")
+                                .font(.system(size: 9, weight: .semibold))
+                                .foregroundStyle(Color(white: 0.55))
+                        }
+                        .buttonStyle(.plain)
+                        .pointingHand()
+                        .help("Edit this vibescape")
                     }
-                    .buttonStyle(.plain)
-                    .pointingHand()
-                    .help("Edit this vibescape")
                     Button {
                         pendingDelete = true
                     } label: {

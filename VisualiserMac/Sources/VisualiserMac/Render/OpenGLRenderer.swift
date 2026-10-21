@@ -592,6 +592,14 @@ final class OpenGLRenderer: NSObject {
     private var currentVibescape: VibescapeID = .builtin(.tunnel)
     private var viewWidth: GLfloat = 1.0
     private var viewHeight: GLfloat = 1.0
+    /// True while an offscreen render is in flight.
+    ///
+    /// The window draws on this same renderer, and the offscreen render
+    /// borrows the renderer's size to draw into its own framebuffer. The
+    /// window holds its last frame while that is happening, rather than
+    /// drawing with a size that is not the window's — which is what made the
+    /// canvas appear to zoom during a video export.
+    private(set) var isRenderingOffscreen = false
 
     // Tunnel CPU buffer
     private var tunnelVerts: [TunnelVertex]
@@ -960,10 +968,31 @@ final class OpenGLRenderer: NSObject {
         }
         ctx.makeCurrentContext()
 
+        // The size and the vibescape are the renderer's, and the window is
+        // drawing with them while this runs. The size has to be put back
+        // afterwards: the window's own size is only re-applied when the
+        // window next draws, so leaving it at the offscreen size leaves the
+        // canvas drawing as if it were a different shape — which reads as
+        // the picture zooming in.
+        //
+        // The flag goes up first, so the window stops drawing before the
+        // size changes underneath it. The window re-applies its own size on
+        // every frame it draws, so without the flag the two would fight
+        // over it for the length of the render and the canvas would be at
+        // the wrong scale.
         let saveVibescape = currentVibescape
+        let saveWidth = viewWidth
+        let saveHeight = viewHeight
+        isRenderingOffscreen = true
         currentVibescape = mode
         viewWidth = GLfloat(width)
         viewHeight = GLfloat(height)
+        defer {
+            currentVibescape = saveVibescape
+            viewWidth = saveWidth
+            viewHeight = saveHeight
+            isRenderingOffscreen = false
+        }
 
         // create FBO
         var fbo: GLuint = 0
@@ -1067,8 +1096,6 @@ final class OpenGLRenderer: NSObject {
         glDeleteTextures(1, &colorTex)
         glDeleteFramebuffers(1, &snapTarget.fbo)
         glDeleteTextures(1, &snapTarget.tex)
-
-        currentVibescape = saveVibescape
     }
 
     /// Capture the current screen backbuffer to a PNG. Reads from the front
