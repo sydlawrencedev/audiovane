@@ -35,15 +35,18 @@ struct ContentView: View {
                     .offset(y: chromeVisible ? 0 : -110)
                     .opacity(chromeVisible ? 1 : 0)
                 Spacer()
+                // The footer does not slide away with the rest of the chrome.
+                // It carries the vibescape's name, its author and the way to
+                // share it — the three things the person watching needs, and
+                // none of them are ours to hide while they watch.
                 FooterView()
                     .padding(.leading, 28)
                     // Leave room for the credits button in the corner.
                     .padding(.trailing, 215)
                     .padding(.bottom, 14)
-                    .offset(y: chromeVisible ? 0 : 80)
-                    .opacity(chromeVisible ? 1 : 0)
             }
             .animation(.easeInOut(duration: 0.35), value: chromeVisible)
+            // Only the header animates; see above for the footer.
             .opacity(app.showIntro ? 0 : 1)
             .allowsHitTesting(!app.showIntro)
             // The open drop-down list lives inside HUDView, and zIndex only

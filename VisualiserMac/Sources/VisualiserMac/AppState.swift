@@ -507,6 +507,17 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Who made the vibescape that's on screen, for the credit line in the
+    /// footer.
+    ///
+    /// Empty when there is nobody to name: a custom vibescape with the author
+    /// field blank, which is the common case — the field is optional and most
+    /// people writing a shader don't fill it in. The built-ins are all
+    /// Minith Labs, so they always have one.
+    func authorName(for id: VibescapeID) -> String {
+        allVibescapes.first { $0.id == id }?.author ?? ""
+    }
+
     /// What the Custom Vibescape sheet is doing: making a new one, or editing
     /// one the user already has. One sheet, so the two can't both be up.
     enum CustomVibescapeSheet: Identifiable {

@@ -2,66 +2,69 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// "Share this vibescape" pill, under the VIBRESIA wordmark in the chrome.
+/// "Share this vibescape" pill, in the bottom-left strip beside the name and
+/// the credit.
 ///
-/// A small button that opens `ShareVibescapeView`. Built into the HUD so it
-/// rides the existing chrome (slides out with the rest of the bar when the
-/// pointer leaves the window). At the tiny layout tier it drops entirely —
-/// the keyboard shortcut on the existing `Visualizer` menu still works, and
-/// the URL scheme `vibresia://open?p=…` covers deep links.
+/// It used to sit under the VIBRESIA wordmark in the header, where it rode the
+/// chrome and slid away with it. That made it useless for the one job it has:
+/// someone watching a vibescape someone else wrote, who wants to send it on.
+/// If it isn't there, it isn't there, and the only other route is a keyboard
+/// shortcut nobody knows about. So it lives with the name now, and stays.
 ///
 /// Two visuals to keep parity with the rest of the chrome:
 ///   - same rounded-rectangle fill/stroke as `SourcePicker` / `BPM`
-///   - uses `app.layout.showsPillText` so the label drops at the narrow tier,
-///     same as the other pills, instead of cramping the brand mark.
+///   - uses `app.layout.showsPillText` so the label drops at the narrow tier
+///
+/// The button itself is never hidden, at any width — it's the affordance the
+/// name and credit sit next to, and dropping it would leave the strip reading
+/// as a caption with no action attached.
 struct ShareVibescapeButton: View {
     @EnvironmentObject var app: AppState
     @State private var hovering = false
     @State private var showingSheet = false
 
     var body: some View {
-        if app.layout.showsPills {
-            Button {
-                showingSheet = true
-                Task { await Analytics.shared.track("share_pill_clicked", [
-                    "kind": kindFor(app.activeVibescape)
-                ]) }
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "square.and.arrow.up")
+        Button {
+            showingSheet = true
+            Task { await Analytics.shared.track("share_pill_clicked", [
+                "kind": kindFor(app.activeVibescape)
+            ]) }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 11, weight: .semibold))
+                if app.layout.showsPillText {
+                    Text("Share")
                         .font(.system(size: 11, weight: .semibold))
-                    if app.layout.showsPillText {
-                        Text("Share this vibescape")
-                            .font(.system(size: 11, weight: .semibold))
-                            .tracking(0.4)
-                    }
+                        .tracking(0.4)
                 }
-                .foregroundStyle(hovering
-                                 ? Color.white
-                                 : Color(red: 0.65, green: 0.95, blue: 1.0))
-                .padding(.horizontal, app.layout.showsPillText ? 12 : 9)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: 100)
-                        .fill(Color.black.opacity(0.45))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 100)
-                                .stroke(
-                                    (hovering ? Color.white.opacity(0.25)
-                                              : Color.white.opacity(0.08)),
-                                    lineWidth: 1
-                                )
-                        )
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 100))
             }
-            .buttonStyle(.plain)
-            .onHover { hovering = $0 }
-            .help("Share this vibescape with someone")
-            .sheet(isPresented: $showingSheet) {
-                ShareVibescapeView(vibescape: app.activeVibescape)
-                    .environmentObject(app)
-            }
+            .foregroundStyle(hovering
+                             ? Color.white
+                             : Color(red: 0.65, green: 0.95, blue: 1.0))
+            .padding(.horizontal, app.layout.showsPillText ? 12 : 9)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 100)
+                    .fill(Color.black.opacity(0.45))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 100)
+                            .stroke(
+                                (hovering ? Color.white.opacity(0.25)
+                                          : Color.white.opacity(0.08)),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 100))
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .onHover { hovering = $0 }
+        .help("Share this vibescape with someone")
+        .sheet(isPresented: $showingSheet) {
+            ShareVibescapeView(vibescape: app.activeVibescape)
+                .environmentObject(app)
         }
     }
 

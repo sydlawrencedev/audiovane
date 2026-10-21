@@ -11,9 +11,11 @@ struct HUDView: View {
 
     var body: some View {
         HStack(alignment: .center) {
-            // brand + share pill (the share pill rides the chrome too, so it
-            // hides when the rest of the chrome does — Auto Scan aside, sharing
-            // a vibescape needs the same focus the rest of the bar needs)
+            // Brand only. The share pill used to sit under the wordmark here,
+            // riding the chrome and sliding away with it — which meant the one
+            // control for passing a vibescape on was only there when you were
+            // already moving the mouse. It lives in the footer strip now,
+            // beside the name and credit, and never hides.
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 12) {
                     BrandMark()
@@ -33,7 +35,6 @@ struct HUDView: View {
                             .textCase(.uppercase)
                     }
                 }
-                ShareVibescapeButton()
             }
 
             Spacer()
