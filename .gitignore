@@ -26,3 +26,7 @@ VisualiserMac/Tests/eval-results/
 
 # Local git worktrees
 .worktrees/
+
+# Python bytecode from scripts/
+__pycache__/
+*.pyc

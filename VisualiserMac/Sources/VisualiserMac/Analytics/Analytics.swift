@@ -218,7 +218,15 @@ actor Analytics {
     }
 
     /// Sends everything queued, then any per-session tallies. Returns whether
-    /// PostHog took it — crash reports only get deleted from disk on a `true`.
+    /// PostHog's edge accepted the batch.
+    ///
+    /// Accepted is not recorded, and nothing here can tell the two apart.
+    /// `/batch/` answers 200 {"status":"Ok"} for *any* syntactically valid
+    /// `phc_` key — a rotated or deleted one included — and only 401s when the
+    /// payload has no api_key at all. So a `true` from this function is the
+    /// network's answer, never the project's, and must not be logged or read as
+    /// evidence that an event was stored. `scripts/check-posthog-live.py` is
+    /// what actually confirms that, by reading an event back.
     @discardableResult
     func flush() async -> Bool {
         flushTask = nil
@@ -259,13 +267,20 @@ actor Analytics {
         request.httpBody = try? JSONSerialization.data(withJSONObject: batch)
 
         do {
-            let (_, response) = try await URLSession.shared.data(for: request)
+            let (data, response) = try await URLSession.shared.data(for: request)
             let code = (response as? HTTPURLResponse)?.statusCode ?? 0
             if (200..<300).contains(code) {
-                NSLog("[analytics] sent \(batch.count) event(s)")
+                // Deliberately says "posted", not "sent". See flush()'s doc
+                // comment: 200 here says the edge took the bytes, which it does
+                // even for a project key that records nothing. "sent N" read as
+                // "N events recorded" is how an empty project survived several
+                // releases while the log looked healthy.
+                let body = String(data: data, encoding: .utf8) ?? ""
+                NSLog("[analytics] posted \(batch.count) event(s) to \(host), "
+                      + "HTTP \(code) \(body) — accepted, not confirmed recorded")
                 return true
             }
-            NSLog("[analytics] HTTP \(code)")
+            NSLog("[analytics] HTTP \(code): \(String(data: data, encoding: .utf8) ?? "")")
             return false
         } catch {
             // Fire and forget. Failed sends are dropped rather than retried:
