@@ -36,27 +36,35 @@ enum ShareIdentity {
 enum ShareLinkCache {
     private static let defaultsKey = "vibresia.shareLinks"
 
+    /// One remembered share.
+    private struct Entry {
+        let key: String
+        let id: String
+    }
+
     /// The share id for a key, if this Mac has made one.
     static func shareID(for key: String) -> String? {
         guard !key.isEmpty else { return nil }
-        return links()[key]
+        return entries().first { $0.key == key }?.id
     }
 
     /// Remembers the share id for a key.
     static func remember(shareID: String, for key: String) {
         guard !key.isEmpty, !shareID.isEmpty else { return }
-        var all = links()
-        all[key] = shareID
-        // A bounded number of them: the most recent shares are the ones
-        // somebody is likely to share again, and this is a convenience, not
-        // a record.
-        if all.count > 64 {
-            all = Dictionary(uniqueKeysWithValues: all.suffix(64))
-        }
-        UserDefaults.standard.set(all, forKey: defaultsKey)
+        var all = entries().filter { $0.key != key }
+        all.append(Entry(key: key, id: shareID))
+        // A bounded number of them, most recent last: the shares somebody
+        // is likely to make again are the ones they have just made. This is
+        // a convenience, not a record.
+        if all.count > 64 { all.removeFirst(all.count - 64) }
+        UserDefaults.standard.set(all.map { [$0.key, $0.id] }, forKey: defaultsKey)
     }
 
-    private static func links() -> [String: String] {
-        UserDefaults.standard.dictionary(forKey: defaultsKey) as? [String: String] ?? [:]
+    private static func entries() -> [Entry] {
+        let stored = UserDefaults.standard.array(forKey: defaultsKey) as? [[String]] ?? []
+        return stored.compactMap { pair in
+            guard pair.count == 2 else { return nil }
+            return Entry(key: pair[0], id: pair[1])
+        }
     }
 }

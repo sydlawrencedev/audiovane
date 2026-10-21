@@ -45,6 +45,11 @@ actor ShazamIdentifier {
 
     /// How much audio a signature is made from.
     ///
+    /// Reading the ring buffer takes the newest samples, and the analyzer
+    /// reads the same buffer, so this is a debug tool rather than something
+    /// to leave running: two readers at once can leave the analyzer short of
+    /// a window.
+    ///
     /// ShazamKit needs a few seconds to say anything useful: less and the
     /// signature is too thin to match, and the app's ring buffer holds about
     /// five and a half seconds.

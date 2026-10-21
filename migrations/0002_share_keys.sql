@@ -14,3 +14,21 @@
 ALTER TABLE shares ADD COLUMN key TEXT;
 
 CREATE UNIQUE INDEX IF NOT EXISTS shares_key ON shares (key) WHERE key IS NOT NULL;
+
+-- The hash of the payload, so a share can be found by what it holds
+-- without reading every row in the table.
+--
+-- A payload is too long to index — SQLite caps an index key at about a page
+-- — and looking for one by value means a scan of the whole table, which D1
+-- charges for row by row. The hash is the same length as the key and
+-- indexes like it.
+--
+-- Nullable, because the rows that existed before this column did have no
+-- hash; the Worker falls back to the payload itself for those, and there
+-- are only a handful of them.
+--
+-- Backfill the rows that are already there with:
+--   scripts/backfill-share-payload-hashes.sh
+ALTER TABLE shares ADD COLUMN payload_hash TEXT;
+
+CREATE INDEX IF NOT EXISTS shares_payload_hash ON shares (payload_hash);

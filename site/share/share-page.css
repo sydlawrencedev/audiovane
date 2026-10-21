@@ -129,6 +129,17 @@ code, .mono {
   overflow-y: auto;
 }
 
+/* `hidden` has to win.
+ *
+ * The browser's own rule is `[hidden] { display: none }`, and any rule that
+ * sets `display` beats it — a `display: flex` here beats it whatever the
+ * specificity, because the UA sheet loses to the author sheet. So an
+ * element with `hidden` on it was still being shown, which meant the
+ * "Open in Vibresia" button was on the page before there was anything to
+ * open, and on a link with no payload there were two of them.
+ */
+[hidden] { display: none !important; }
+
 .cta-row {
   display: flex; flex-wrap: wrap;
   gap: 14px;

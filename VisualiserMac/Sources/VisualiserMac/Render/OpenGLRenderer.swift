@@ -924,27 +924,6 @@ final class OpenGLRenderer: NSObject {
         return makeImage(last, width: width, height: height)
     }
 
-    /// One frame of a vibescape, at a chosen moment, as JPEG data.
-    func renderStill(width: Int, height: Int, mode: VibescapeID, time: Double) -> Data? {
-        guard let cgImg = renderStillImage(width: width, height: height,
-                                           mode: mode, time: time) else { return nil }
-
-        // JPEG rather than PNG: the picture is 1200x630 of smooth gradients,
-        // which is exactly what JPEG is good at, and it is a third of the
-        // size. A share's picture is stored, and stored pictures are what
-        // run the storage down.
-        return encodeJPEG(cgImg, quality: 0.82)
-    }
-
-    /// Encodes an image as JPEG data.
-    func encodeJPEG(_ image: CGImage, quality: CGFloat) -> Data? {
-        let out = NSMutableData()
-        guard let dest = CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil) else { return nil }
-        CGImageDestinationAddImage(dest, image, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
-        guard CGImageDestinationFinalize(dest) else { return nil }
-        return out as Data
-    }
-
     /// The offscreen draw loop, handing every graded frame to `eachFrame`.
     private func renderFrames(width: Int, height: Int, mode: VibescapeID, frames: Int,
                               syntheticAudio: Bool = false, fps: Double = 60,

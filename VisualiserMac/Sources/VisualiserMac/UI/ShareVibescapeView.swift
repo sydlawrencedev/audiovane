@@ -38,6 +38,9 @@ struct ShareVibescapeView: View {
     /// for good if the site could not be reached.
     @State private var shortLink: String?
     @State private var makingLink = false
+    /// The make that is running, so the Share button can wait for it rather
+    /// than starting a second one.
+    @State private var linkTask: Task<String?, Never>?
 
     /// Off by default, and not because minifying is bad at it — it roughly
     /// halves the payload again. Because it is the one part of a share that costs
@@ -137,11 +140,13 @@ struct ShareVibescapeView: View {
             Task { await makeShortLink() }
         }
         .onChange(of: minifyLink) { _ in
-            // The payload that was stored was the one made with the old
-            // setting, so the link has to be made again — otherwise the
-            // toggle would claim to do something it no longer does.
-            shortLink = nil
-            Task { await makeShortLink() }
+            // The short link is the same length either way — the vibescape is
+            // stored on the site, not in the URL — so there is nothing to
+            // remake and no reason to show the long one for a moment. The
+            // long fallback link does change, and it is computed on the spot.
+            if shortLink == nil {
+                Task { await makeShortLink() }
+            }
         }
     }
 
@@ -313,15 +318,20 @@ struct ShareVibescapeView: View {
     /// Most of the time nothing is asked of the site at all: a vibescape
     /// keeps the link it has, and the same link is the answer however many
     /// times it is shared.
-    private func makeShortLink() async {
-        guard vibescape.isCustom, shortLink == nil, !makingLink else { return }
+    @discardableResult
+    private func makeShortLink() async -> String? {
+        guard vibescape.isCustom, shortLink == nil, !makingLink else { return shortLink }
         guard case .custom(let id) = vibescape,
-              let mode = app.customVibescape(id: id) else { return }
+              let mode = app.customVibescape(id: id) else { return nil }
 
         makingLink = true
         defer { makingLink = false }
 
-        let key = ShareIdentity.key(name: mode.name, author: mode.author,
+        // The credit names the author, or the app's own name when the
+        // vibescape doesn't say — and the key is of the same thing, so that
+        // two Macs holding the same vibescape work out the same link.
+        let author = mode.author.isEmpty ? VibescapeMetadata.author : mode.author
+        let key = ShareIdentity.key(name: mode.name, author: author,
                                     url: mode.url, shader: mode.shader)
 
         // The link this vibescape arrived on, if it arrived on one and
@@ -331,31 +341,25 @@ struct ShareVibescapeView: View {
         // different vibescape, so it gets its own link.
         if let shareID = mode.shareID, mode.shareKey == key {
             shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
-            return
+            return shortLink
         }
 
         // A share this Mac has already made for this vibescape. Asking
         // again would upload the picture again to arrive at a URL we know.
         if let shareID = ShareLinkCache.shareID(for: key) {
             shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
-            return
+            return shortLink
         }
 
         let payload = ShareImporter.encodePayload(mode, minify: minifyLink)
         let name = mode.name
-        let author = mode.author.isEmpty ? "Minith Labs" : mode.author
         let target = vibescape
 
-        // Rendering is a GPU job and takes a moment, so it happens off the
-        // main thread — otherwise the sheet would stutter while the user is
-        // looking at it.
-        let image: Data? = await withCheckedContinuation { continuation in
-            DispatchQueue.global(qos: .userInitiated).async {
-                continuation.resume(returning: ShareImageBuilder.jpeg(
-                    renderer: app.renderer, mode: target,
-                    width: 1200, height: 630, time: 6.0, author: author))
-            }
-        }
+        // The picture is rendered off the main thread — it is a GPU job and
+        // takes a moment — so the sheet doesn't stutter while it is made.
+        let image = await ShareImageBuilder.jpeg(
+            renderer: app.renderer, mode: target,
+            width: 1200, height: 630, time: 6.0, author: author)
 
         let link = await ShareLinkStore().makeLink(
             payload: payload, name: name, author: author, image: image, key: key)
@@ -363,23 +367,37 @@ struct ShareVibescapeView: View {
         if let shareID = link?.id {
             ShareLinkCache.remember(shareID: shareID, for: key)
         }
+        return shortLink
     }
 
     /// The Share button. Waits for the short link if there isn't one yet, so
     /// the link that goes into the chat is the short one — but shares the
     /// long one if the site can't be reached, rather than doing nothing.
+    ///
+    /// It waits for the link that is already being made rather than
+    /// starting another: two makes at once would race, and the slower one
+    /// would win.
     private func shareTapped() {
-        if vibescape.isCustom && shortLink == nil {
-            Task { @MainActor in
-                await makeShortLink()
-                isSharing = true
+        Task { @MainActor in
+            if vibescape.isCustom {
+                _ = await shortLinkWhenReady()
             }
-        } else {
             isSharing = true
         }
         Task { await Analytics.shared.track("share_sheet_opened", [
             "kind": vibescape.isCustom ? "custom" : "builtin"
         ]) }
+    }
+
+    /// The short link, waiting for the one being made if there is one.
+    private func shortLinkWhenReady() async -> String? {
+        if let shortLink { return shortLink }
+        if let linkTask { return await linkTask.value }
+        let task = Task { await makeShortLink() }
+        linkTask = task
+        let link = await task.value
+        linkTask = nil
+        return link
     }
 
     private func copyLink() {
@@ -406,30 +424,28 @@ struct ShareVibescapeView: View {
         // Render against the same renderer that powers the live display —
         // 1280x720 is the existing snapshot size and a reasonable attachment
         // for chats that don't show link previews.
-        DispatchQueue.global(qos: .userInitiated).async {
-            let data = ShareImageBuilder.png(
+        Task { @MainActor in
+            let data = await ShareImageBuilder.png(
                 renderer: app.renderer, mode: vibescape,
                 width: 1280, height: 720, frames: 60, author: author)
-            DispatchQueue.main.async {
-                savingPreview = false
-                guard let data else {
-                    Task { await Analytics.shared.track("share_preview_failed", [
-                        "kind": vibescape.isCustom ? "custom" : "builtin"
-                    ]) }
-                    return
-                }
-                do {
-                    try data.write(to: url, options: .atomic)
-                } catch {
-                    NSLog("[SHARE] could not write the preview image: \(error)")
-                    return
-                }
-                savedPreviewPath = url.path
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-                Task { await Analytics.shared.track("share_preview_saved", [
+            savingPreview = false
+            guard let data else {
+                Task { await Analytics.shared.track("share_preview_failed", [
                     "kind": vibescape.isCustom ? "custom" : "builtin"
                 ]) }
+                return
             }
+            do {
+                try data.write(to: url, options: .atomic)
+            } catch {
+                NSLog("[SHARE] could not write the preview image: \(error)")
+                return
+            }
+            savedPreviewPath = url.path
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+            Task { await Analytics.shared.track("share_preview_saved", [
+                "kind": vibescape.isCustom ? "custom" : "builtin"
+            ]) }
         }
     }
 

@@ -59,9 +59,6 @@ actor SongIdentifier {
     /// answer is not worth holding anything up for.
     private static let timeout: TimeInterval = 6
 
-    /// The song the app last worked out.
-    private(set) var current: Song?
-
     /// Looks a song up by name.
     ///
     /// Returns nil when the catalogue doesn't know it, when the answer is
@@ -117,7 +114,6 @@ actor SongIdentifier {
             artist: best.artistName ?? cleanArtist,
             catalogueGenre: catalogueGenre,
             genre: GenreMapping.genre(for: catalogueGenre))
-        current = song
         return song
     }
 

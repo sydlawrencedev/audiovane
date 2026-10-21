@@ -69,10 +69,27 @@ enum ShareImporter {
             // `s` is which share this arrived from, when the link knows it:
             // the page puts it in the deep link so the vibescape can remember
             // the link it arrived on and hand the same one back.
-            return decodePayload(d, shareID: value("s"))
+            return decodePayload(d, shareID: shareID(from: value("s")))
         }
         return .malformed("URL has no p or d parameter")
     }
+
+    /// The share a link came from, if it is one.
+    ///
+    /// A deep link is not something to trust: `s` can be empty, or anything
+    /// at all, and it ends up in a link other people click. The Worker makes
+    /// ids out of six characters from an alphabet with no l, 1 or 0 in it —
+    /// the same alphabet is in `worker/index.js` — so anything else is not a
+    /// share id and is treated as if there wasn't one.
+    private static func shareID(from value: String?) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return value.range(of: shareIDPattern, options: .regularExpression) != nil
+            ? value
+            : nil
+    }
+
+    /// The shape of a share id.
+    private static let shareIDPattern = "^[abcdefghijkmnopqrstuvwxyz23456789]{6}$"
 
     /// Decode the base64 payload in `d=...` into a `Request`. Mirror of
     /// `encodePayload` below; the round-trip is exercised by

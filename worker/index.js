@@ -383,7 +383,11 @@ export function buildSharePage(html, { id, payload, name, author, url }) {
   out = out.replace("</head>", `${injected}\n</head>`);
 
   const swap = (pattern, value) => {
-    out = out.replace(pattern, value);
+    // A function, not a string: `String.replace` treats `$&` and `` $` `` in a
+    // string replacement as patterns, and the replacement here is the name
+    // somebody typed. A name with a dollar in it would otherwise paste the
+    // page's own markup into the middle of the title.
+    out = out.replace(pattern, () => value);
   };
   swap(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`);
   swap(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${escapeHtml(url)}">`);
@@ -402,22 +406,91 @@ export function buildSharePage(html, { id, payload, name, author, url }) {
 }
 
 /// Finds a share that already holds this vibescape.
-async function findExistingShare(env, { key, payload }) {
+async function findExistingShare(env, { key, payloadHash, payload }) {
   // By key first: that is the app's hash of the content, so it finds the
   // share whoever made it — including one made by somebody else, which is
   // the point: the same vibescape gets the same link.
   if (key) {
-    const byKey = await env.SHARES.prepare(
-      "SELECT id, image FROM shares WHERE key = ?"
-    ).bind(key).first();
+    const byKey = await query(
+      env,
+      "SELECT id, image FROM shares WHERE key = ?",
+      [key],
+    );
     if (byKey) return byKey;
   }
-  // By payload, for a share made before the key existed — or by an app
-  // version that doesn't send one.
-  const byPayload = await env.SHARES.prepare(
-    "SELECT id, image FROM shares WHERE payload = ?"
-  ).bind(payload).first();
+  // By payload hash, for a share made before the key existed — or by an app
+  // version that doesn't send one. The hash rather than the payload itself:
+  // a payload is too long to index, and looking for it by value means
+  // reading every row in the table, which D1 charges for.
+  if (payloadHash) {
+    const byHash = await query(
+      env,
+      "SELECT id, image FROM shares WHERE payload_hash = ?",
+      [payloadHash],
+    );
+    if (byHash) return byHash;
+  }
+  // Last resort: the payload itself. Only for rows made before the hash
+  // column existed, which is a handful of rows for the life of the site.
+  const byPayload = await query(
+    env,
+    "SELECT id, image FROM shares WHERE payload = ?",
+    [payload],
+  );
   return byPayload || null;
+}
+
+/// Runs a query, treating a failure as "not found".
+///
+/// The columns this asks about are added by a migration. If the migration
+/// hasn't been applied yet, the query throws, and a share that can still be
+/// made is better than no sharing at all.
+async function query(env, sql, bindings) {
+  try {
+    return await env.SHARES.prepare(sql).bind(...bindings).first();
+  } catch (error) {
+    console.log(`[share] query failed (${sql.split(" ").slice(0, 3).join(" ")}…): ${error}`);
+    return null;
+  }
+}
+
+/// Gives a share its picture, if it hasn't got one.
+async function ensureImage(env, row, image) {
+  if (!image || row.image) return;
+  try {
+    await env.SHARES.prepare("UPDATE shares SET image = ? WHERE id = ?")
+      .bind(image, row.id).run();
+    row.image = image;
+  } catch (error) {
+    console.log(`[share] could not add the picture to ${row.id}: ${error}`);
+  }
+}
+
+/// The hash of a payload, for finding a share that holds it.
+async function hashPayload(payload) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(payload));
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+/// Stores a share.
+///
+/// The key and the payload hash are columns added by a migration. If the
+/// database hasn't been migrated yet, the share is stored the old way
+/// instead — every share its own row, which is what happened before.
+async function insertShare(env, { id, payload, payloadHash, name, author, image, key }) {
+  const created = Date.now();
+  try {
+    await env.SHARES.prepare(
+      "INSERT INTO shares (id, payload, name, author, image, key, payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(id, payload, name, author, image, key || null, payloadHash || null, created).run();
+  } catch (error) {
+    if (!String(error).includes("no such column")) throw error;
+    await env.SHARES.prepare(
+      "INSERT INTO shares (id, payload, name, author, image, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+    ).bind(id, payload, name, author, image, created).run();
+  }
 }
 
 /// `POST /api/share` — the app hands over a vibescape and gets back a short
@@ -479,23 +552,17 @@ async function handleShareCreate(request, env) {
   // twice gave you two URLs, and re-sharing one somebody sent you gave you
   // a third. The key is a hash of the vibescape's content, so a share that
   // already exists is found rather than made again.
-  const existing = await findExistingShare(env, { key, payload });
+  const payloadHash = await hashPayload(payload);
+  const existing = await findExistingShare(env, { key, payloadHash, payload });
   if (existing) {
     // A share made while the picture was missing gets one now, if this
     // request has it. The link stays the same either way.
-    if (image && !existing.image) {
-      try {
-        await env.SHARES.prepare("UPDATE shares SET image = ? WHERE id = ?")
-          .bind(image, existing.id).run();
-      } catch (error) {
-        console.log(`[share] could not add the picture to ${existing.id}: ${error}`);
-      }
-    }
+    await ensureImage(env, existing, image);
     return Response.json({
       ok: true,
       id: existing.id,
       url: `${CANONICAL_SITE}s/${existing.id}`,
-      imageUrl: existing.image || image ? `${CANONICAL_SITE}og/${existing.id}.jpg` : null,
+      imageUrl: existing.image ? `${CANONICAL_SITE}og/${existing.id}.jpg` : null,
       existing: true,
     });
   }
@@ -506,9 +573,7 @@ async function handleShareCreate(request, env) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = randomShareId();
     try {
-      await env.SHARES.prepare(
-        "INSERT INTO shares (id, payload, name, author, image, key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
-      ).bind(id, payload, name, author, image, key || null, Date.now()).run();
+      await insertShare(env, { id, payload, payloadHash, name, author, image, key });
       return Response.json({
         ok: true,
         id,
@@ -520,13 +585,17 @@ async function handleShareCreate(request, env) {
       // Two devices sharing the same vibescape at the same moment: one of
       // them won the race, and its link is the link.
       if (String(error).includes("UNIQUE constraint failed")) {
-        const raced = await findExistingShare(env, { key, payload });
+        const raced = await findExistingShare(env, { key, payloadHash, payload });
         if (raced) {
+          // The winner may have been made without a picture — by an older
+          // app, or by a render that came back empty. This one has a
+          // picture, so it goes in.
+          await ensureImage(env, raced, image);
           return Response.json({
             ok: true,
             id: raced.id,
             url: `${CANONICAL_SITE}s/${raced.id}`,
-            imageUrl: raced.image || image ? `${CANONICAL_SITE}og/${raced.id}.jpg` : null,
+            imageUrl: raced.image ? `${CANONICAL_SITE}og/${raced.id}.jpg` : null,
             existing: true,
           });
         }

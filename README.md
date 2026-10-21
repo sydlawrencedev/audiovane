@@ -217,7 +217,15 @@ stops is a script creating shares to burn the daily write quota.
 ```bash
 npx wrangler secret put SHARE_TOKEN        # once; the same value goes in VisualiserMac/.env
 npx wrangler d1 migrations apply vibresia-shares --remote
+node scripts/backfill-share-payload-hashes.mjs
 ```
+
+**The order matters.** The migration adds the columns the Worker looks shares
+up by, and the backfill fills in the hashes for the shares that were made
+before the columns existed. Run the migration first, then the backfill, then
+deploy the Worker. The Worker survives a database that hasn't been migrated
+— it falls back to storing every share on its own, which is what it used to
+do — but the same-link behaviour needs the new columns.
 
 `SHARE_TOKEN` is a credential in the same class as `NOTIFY_TOKEN`, so
 `scripts/check-no-webhook-leak.sh` fails if it ends up in the tree.

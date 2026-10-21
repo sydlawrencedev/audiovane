@@ -44,7 +44,8 @@
       // the vibescape's contents instead, which usually lands on the same
       // answer — but "usually" is not "always", and the id is free.
       var s = window.__VIBRESIA_SHARE__ && window.__VIBRESIA_SHARE__.id;
-      return "vibresia://open?d=" + d + (s ? "&s=" + encodeURIComponent(s) : "");
+      return "vibresia://open?d=" + encodeURIComponent(d)
+        + (s ? "&s=" + encodeURIComponent(s) : "");
     }
     return null;
   }

@@ -30,11 +30,12 @@ public enum BrandWave {
     /// The same wave as an SVG path in a 32-unit box — the shape the
     /// website's favicon and its header use.
     ///
-    /// Inset by 1.6 units at each end so the stroke has room: a 32-unit box
-    /// with a wave that starts at 0 has half its stroke outside the box, and
-    /// the favicon is drawn from that box.
+    /// The wave is drawn in a square, inset in the box, because that is what
+    /// the canvas draws it in: a shape that is a different aspect on the
+    /// website than in the app is a shape that has drifted. The inset leaves
+    /// the stroke room inside the box.
     public static let svgPath =
-        "M1.6 16 L7.94 16 L10.82 6.4 L14.56 25.6 L18.3 9.6 L21.76 20.8 L24.06 16 L30.4 16"
+        "M1.6 16 L7.94 16 L10.82 7.36 L14.56 24.64 L18.3 10.24 L21.76 20.32 L24.06 16 L30.4 16"
 
     /// The wave as a path in a rect.
     ///
@@ -168,6 +169,9 @@ public enum ShareImageBrand {
     }
 
     /// The brand and the credit over a picture, with the scrims behind them.
+    ///
+    /// The lettering is drawn with AppKit, which is main-thread-only, so
+    /// call this on the main thread.
     public static func draw(in ctx: CGContext, size: CGSize, author: String) {
         drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4), radius: 190)
         drawScrim(in: ctx, corner: CGPoint(x: size.width - 4, y: 4),

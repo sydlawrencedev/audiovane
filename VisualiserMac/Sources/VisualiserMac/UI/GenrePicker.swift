@@ -68,10 +68,11 @@ struct GenrePicker: View {
     /// waveform and guessing. Both are called "auto" from here, and it is
     /// worth saying which one is answering.
     private var genreSource: String {
+        guard app.genreIsAuto else { return "picked by hand" }
         if app.nowPlaying?.genre != nil {
             return "from the song's genre in the catalogue"
         }
-        return "from the sound"
+        return app.genreIsDecided ? "from the sound" : "still deciding"
     }
 
     /// Confidence bar in the pill. Cyan when the detector has committed,

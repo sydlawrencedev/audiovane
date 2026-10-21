@@ -71,7 +71,7 @@ actor ShareLinkStore {
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
             guard let url = json["url"] as? String, let id = json["id"] as? String else { return nil }
-            return ShareLink(id: id, url: url, imageURL: json["imageUrl"] as? String)
+            return ShareLink(id: id, url: url)
         } catch {
             return nil
         }
@@ -85,6 +85,4 @@ struct ShareLink: Equatable {
     let id: String
     /// The link itself.
     let url: String
-    /// The picture behind it, if the share has one.
-    let imageURL: String?
 }

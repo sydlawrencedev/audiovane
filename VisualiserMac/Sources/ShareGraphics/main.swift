@@ -163,30 +163,36 @@ func render(slug: String, title: String) -> Data? {
 
 // MARK: - Go
 
-var wrote = 0
-var missing: [String] = []
-for builtIn in manifest.builtIns {
-    let modeURL = modesDir.appendingPathComponent("\(builtIn.slug).jpg")
-    if !FileManager.default.fileExists(atPath: modeURL.path) {
-        missing.append(builtIn.slug)
-        continue
+// The drawing uses AppKit for the lettering, which is main-thread-only.
+// Top-level code runs on the main thread, so this is the right place for it.
+func drawAll() {
+    var wrote = 0
+    var missing: [String] = []
+    for builtIn in manifest.builtIns {
+        let modeURL = modesDir.appendingPathComponent("\(builtIn.slug).jpg")
+        if !FileManager.default.fileExists(atPath: modeURL.path) {
+            missing.append(builtIn.slug)
+            continue
+        }
+        guard let data = render(slug: builtIn.slug, title: builtIn.title) else {
+            print("[share-graphics] failed to draw \(builtIn.slug)")
+            exit(1)
+        }
+        let url = shareDir.appendingPathComponent("\(builtIn.slug).jpg")
+        do {
+            try data.write(to: url, options: .atomic)
+            wrote += 1
+        } catch {
+            print("[share-graphics] failed to write \(url.lastPathComponent): \(error)")
+            exit(1)
+        }
+        print("[share-graphics] wrote \(builtIn.slug).jpg (\(data.count) bytes)")
     }
-    guard let data = render(slug: builtIn.slug, title: builtIn.title) else {
-        print("[share-graphics] failed to draw \(builtIn.slug)")
+    if !missing.isEmpty {
+        print("[share-graphics] FAILED: missing source images: \(missing.joined(separator: ", "))")
         exit(1)
     }
-    let url = shareDir.appendingPathComponent("\(builtIn.slug).jpg")
-    do {
-        try data.write(to: url, options: .atomic)
-        wrote += 1
-    } catch {
-        print("[share-graphics] failed to write \(url.lastPathComponent): \(error)")
-        exit(1)
-    }
-    print("[share-graphics] wrote \(builtIn.slug).jpg (\(data.count) bytes)")
+    print("[share-graphics] \(wrote) share graphics written to \(shareDir.path)")
 }
-if !missing.isEmpty {
-    print("[share-graphics] FAILED: missing source images: \(missing.joined(separator: ", "))")
-    exit(1)
-}
-print("[share-graphics] \(wrote) share graphics written to \(shareDir.path)")
+
+drawAll()

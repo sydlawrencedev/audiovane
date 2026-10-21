@@ -16,22 +16,30 @@ const PAYLOAD = "TZDNbsMgEIRfZcUJYoqIU6dtqjxCT63USy8oIcESBosfK1GUd-8CVZWLBd_M7oy
 function makeShares() {
   const rows = new Map();
   const byKey = new Map();
+  const byPayloadHash = new Map();
   return {
     rows,
     byKey,
+    byPayloadHash,
     prepare(sql) {
       const statement = {
         bind(...args) {
           return {
             async run() {
               if (sql.includes("INSERT INTO shares")) {
-                const [id, payload, name, author, image, key] = args;
+                const [id, payload, name, author, image, key, payloadHash] = args;
                 if (rows.has(id)) throw new Error("UNIQUE constraint failed: shares.id");
                 if (key && byKey.has(key)) {
                   throw new Error("UNIQUE constraint failed: shares.key");
                 }
-                rows.set(id, { id, payload, name, author, image, key: key || null, created_at: 1_700_000_000_000 });
+                rows.set(id, {
+                  id, payload, name, author, image,
+                  key: key || null,
+                  payload_hash: payloadHash || null,
+                  created_at: 1_700_000_000_000,
+                });
                 if (key) byKey.set(key, id);
+                if (payloadHash) byPayloadHash.set(payloadHash, id);
                 return { success: true };
               }
               if (sql.includes("UPDATE shares SET image")) {
@@ -45,6 +53,12 @@ function makeShares() {
             async first() {
               if (sql.includes("WHERE key = ?")) {
                 const id = byKey.get(args[0]);
+                if (!id) return null;
+                const row = rows.get(id);
+                return { ...row, image: row.image ? Array.from(row.image) : null };
+              }
+              if (sql.includes("WHERE payload_hash = ?")) {
+                const id = byPayloadHash.get(args[0]);
                 if (!id) return null;
                 const row = rows.get(id);
                 return { ...row, image: row.image ? Array.from(row.image) : null };
@@ -366,6 +380,28 @@ test("a name with markup in it is escaped, not pasted in", async () => {
 
   assert.ok(!html.includes("<script>alert(1)</script>"), "markup was not escaped");
   assert.ok(html.includes("&lt;script&gt;"));
+});
+
+test("a name with a dollar in it does not paste the page into itself", async () => {
+  // `String.replace` treats `$&` and `$'` in a replacement as patterns, and
+  // the replacement here is a name somebody typed. Without a function
+  // replacement, "evil$'x" pasted the page's own title into the middle of
+  // the new one.
+  const { env } = makeEnv();
+  for (const name of ["evil$&x", "evil$`x", "evil$'x", "$$", "a$1b"]) {
+    resetRateLimiter();
+    const created = await run("https://vibresia.com/api/share", {
+      env,
+      ...shareRequest({ payload: PAYLOAD, name, author: "x" }),
+    });
+    const { id } = await created.json();
+    const html = await (await run(`https://vibresia.com/s/${id}`, { env })).text();
+
+    const title = html.match(/<title>([^<]*)<\/title>/);
+    assert.ok(title, `no title for ${JSON.stringify(name)}`);
+    assert.ok(!title[1].includes("<"), `the title was mangled: ${title[1]}`);
+    assert.equal((html.match(/<title>/g) || []).length, 1, "the title was duplicated");
+  }
 });
 
 test("a share that does not exist is a 404, and so is a nonsense id", async () => {

@@ -256,6 +256,7 @@ final class AppState: ObservableObject {
         // genre-lock bookkeeping is the AppState's concern.
         Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
             self?.reEvaluateAutoGenre()
+            self?.expireSongIfNeeded()
             self?.pumpAutoGenre()
             self?.refreshNowPlaying()
             self?.syncScanTarget()
@@ -1299,15 +1300,22 @@ final class AppState: ObservableObject {
         songLookupChange = tracks.changeCount
         // A new song: the old one's genre is about a different song.
         songGenre = nil
+        songGenreUntil = nil
         nowPlaying = nil
 
-        guard let title = tracks.nowPlayingTitle, !title.isEmpty else { return }
-        let artist = tracks.nowPlayingArtist ?? ""
+        // "?" is what the watcher puts in when the notification didn't say.
+        let title = (tracks.nowPlayingTitle ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let artist = (tracks.nowPlayingArtist ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != "?" else { return }
+        let change = tracks.changeCount
         Task { [weak self] in
-            guard let song = await SongIdentifier.shared.identify(title: title, artist: artist) else {
+            guard let song = await SongIdentifier.shared.identify(
+                title: title, artist: artist == "?" ? "" : artist) else {
                 return
             }
-            await MainActor.run { self?.applySong(song) }
+            await MainActor.run { self?.applySong(song, forChange: change) }
         }
     }
 
@@ -1320,8 +1328,27 @@ final class AppState: ObservableObject {
         songGenre = .rock
     }
 
+    /// When the song's genre stops applying.
+    ///
+    /// The catalogue says what genre a song is, but only while that song is
+    /// playing. The app hears about a track changing, and if nothing changes
+    /// after that — playback stopped, or the music moved to something that
+    /// posts no notifications — the answer is about a song that isn't playing
+    /// any more. So it expires, and the sound decides again after it.
+    private var songGenreUntil: Date?
+
+    /// How long a song's genre lasts when the app doesn't know how long the
+    /// song is.
+    private static let songGenreFallbackLifetime: TimeInterval = 360
+
     /// Takes what the catalogue said and puts it on the stage.
-    private func applySong(_ song: SongIdentifier.Song) {
+    ///
+    /// `change` is the track change the lookup was for: a lookup can take
+    /// seconds, and by the time it answers the person may have skipped to
+    /// another song, in which case the answer is about a song that isn't
+    /// playing any more.
+    private func applySong(_ song: SongIdentifier.Song, forChange change: Int) {
+        guard change == songLookupChange else { return }
         // A song we already know about: the same track change can be seen
         // more than once, and the answer won't have changed.
         guard nowPlaying?.title != song.title || nowPlaying?.artist != song.artist else {
@@ -1329,6 +1356,11 @@ final class AppState: ObservableObject {
         }
         nowPlaying = song
         songGenre = song.genre
+        // The song's own length, with a little room after it, so the genre
+        // doesn't outlive the song.
+        let lifetime = audio.tracks.duration.map { $0 + 30 }
+            ?? Self.songGenreFallbackLifetime
+        songGenreUntil = song.genre == nil ? nil : Date().addingTimeInterval(lifetime)
         if let genre = song.genre, genreIsAuto, genre != self.genre {
             self.genre = genre
         }
@@ -1339,6 +1371,15 @@ final class AppState: ObservableObject {
                 "known": song.genre != nil,
             ])
         }
+    }
+
+    /// Forgets the song when it is over, so the band goes back to following
+    /// the sound.
+    private func expireSongIfNeeded() {
+        guard let until = songGenreUntil, until <= Date() else { return }
+        songGenre = nil
+        songGenreUntil = nil
+        nowPlaying = nil
     }
 }
 

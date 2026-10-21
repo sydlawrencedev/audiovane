@@ -595,20 +595,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 exit(1)
             }
             let author = app.customVibescape(id: mode.slug)?.author ?? VibescapeMetadata.author
-            guard let data = ShareImageBuilder.jpeg(
-                renderer: app.renderer, mode: mode,
-                width: 1200, height: 630, time: 6.0,
-                author: author.isEmpty ? VibescapeMetadata.author : author) else {
-                NSLog("[SHARE-IMAGE] could not render")
-                exit(1)
-            }
-            do {
-                try data.write(to: URL(fileURLWithPath: out), options: .atomic)
-                NSLog("[SHARE-IMAGE] saved=\(out) bytes=\(data.count)")
-                exit(0)
-            } catch {
-                NSLog("[SHARE-IMAGE] could not write: \(error)")
-                exit(1)
+            Task { @MainActor in
+                guard let data = await ShareImageBuilder.jpeg(
+                    renderer: app.renderer, mode: mode,
+                    width: 1200, height: 630, time: 6.0,
+                    author: author.isEmpty ? VibescapeMetadata.author : author) else {
+                    NSLog("[SHARE-IMAGE] could not render")
+                    exit(1)
+                }
+                do {
+                    try data.write(to: URL(fileURLWithPath: out), options: .atomic)
+                    NSLog("[SHARE-IMAGE] saved=\(out) bytes=\(data.count)")
+                    exit(0)
+                } catch {
+                    NSLog("[SHARE-IMAGE] could not write: \(error)")
+                    exit(1)
+                }
             }
         }
     }
