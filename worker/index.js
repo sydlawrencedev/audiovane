@@ -791,6 +791,29 @@ async function handleGalleryAPI(request, env) {
   });
 }
 
+/// The built-in vibescapes, from the manifest the share pages are made from.
+///
+/// They are in the gallery because they are shareable: each one has a page
+/// of its own, with a picture and a video, that anybody can open.
+async function builtinRows(env, url) {
+  try {
+    const asset = await env.ASSETS.fetch(
+      new Request(new URL("/share/manifest.json", url)));
+    if (!asset.ok) return [];
+    const manifest = JSON.parse(await asset.text());
+    const builtins = Array.isArray(manifest?.built_ins) ? manifest.built_ins : [];
+    return builtins
+      .filter((entry) => entry && typeof entry.slug === "string")
+      .map((entry) => ({
+        slug: entry.slug,
+        name: typeof entry.title === "string" ? entry.title : entry.slug,
+      }));
+  } catch (error) {
+    console.log(`[gallery] could not read the manifest: ${error}`);
+    return [];
+  }
+}
+
 /// `GET /vibescapes` — the gallery, as a page.
 ///
 /// The cards are built here rather than in the browser: the page is a list of
@@ -798,6 +821,7 @@ async function handleGalleryAPI(request, env) {
 /// a crawler never sees.
 async function handleGalleryPage(request, url, env) {
   const rows = await galleryRows(env);
+  const builtins = await builtinRows(env, url);
 
   // "/vibescapes" rather than "/vibescapes.html": the asset service answers
   // a file with a ".html" on the end with a redirect, and a redirect is not
@@ -809,7 +833,7 @@ async function handleGalleryPage(request, url, env) {
   }
   const html = await asset.text();
 
-  const cards = rows.map((row) => {
+  const shared = rows.map((row) => {
     const name = escapeHtml(row.name || "A vibescape");
     const author = escapeHtml(row.author || "");
     const id = escapeHtml(row.id);
@@ -825,14 +849,30 @@ async function handleGalleryPage(request, url, env) {
       </a>`;
   }).join("\n");
 
+  const ours = builtins.map((entry) => {
+    const slug = escapeHtml(entry.slug);
+    const name = escapeHtml(entry.name);
+    return `      <a class="card" href="/share/${slug}">
+        <img src="/share/${slug}.jpg" alt="${name}" loading="lazy" width="1200" height="630">
+        <span class="card-name">${name}</span>
+        <span class="card-by">by Minith Labs</span>
+      </a>`;
+  }).join("\n");
+
   const empty = rows.length === 0
-    ? `      <p class="gallery-empty">Nothing here yet. Share a vibescape from the app and tick it into the gallery.</p>`
+    ? `      <p class="gallery-empty">None yet. Share a vibescape from the app and tick it into the gallery.</p>`
     : "";
 
+  const count = builtins.length + rows.length;
+  const summary = [
+    builtins.length ? `${builtins.length} from Vibresia` : "",
+    rows.length ? `${rows.length} shared by people` : "",
+  ].filter(Boolean).join(", ");
+
   const page = html
-    .replace("<!-- gallery:cards -->", cards + "\n" + empty)
-    .replace("<!-- gallery:count -->",
-      `${rows.length} vibescape${rows.length === 1 ? "" : "s"}`);
+    .replace("<!-- gallery:cards -->", shared + "\n" + empty)
+    .replace("<!-- gallery:builtin-cards -->", ours)
+    .replace("<!-- gallery:count -->", summary || "nothing here yet");
 
   return new Response(page, {
     headers: {

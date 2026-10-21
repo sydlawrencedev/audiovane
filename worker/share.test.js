@@ -22,12 +22,27 @@ function makeShares() {
     byKey,
     byPayloadHash,
     prepare(sql) {
+      // `.all()` is called without bindings — the gallery's query has no
+      // parameters — so it lives on the statement as well as on the bound
+      // one.
+      const all = async () => {
+        if (sql.includes("is_public")) {
+          const wanted = sql.includes("is_public = 1");
+          return {
+            results: [...rows.values()].filter(
+              (row) => (row.is_public ? 1 : 0) === (wanted ? 1 : 0)),
+          };
+        }
+        return { results: [...rows.values()] };
+      };
       const statement = {
+        all,
         bind(...args) {
           return {
+            all,
             async run() {
               if (sql.includes("INSERT INTO shares")) {
-                const [id, payload, name, author, image, key, payloadHash] = args;
+                const [id, payload, name, author, image, key, payloadHash, isPublic] = args;
                 if (rows.has(id)) throw new Error("UNIQUE constraint failed: shares.id");
                 if (key && byKey.has(key)) {
                   throw new Error("UNIQUE constraint failed: shares.key");
@@ -36,6 +51,7 @@ function makeShares() {
                   id, payload, name, author, image,
                   key: key || null,
                   payload_hash: payloadHash || null,
+                  is_public: isPublic ? 1 : 0,
                   created_at: 1_700_000_000_000,
                 });
                 if (key) byKey.set(key, id);
@@ -46,6 +62,12 @@ function makeShares() {
                 const [image, id] = args;
                 const row = rows.get(id);
                 if (row) row.image = image;
+                return { success: true };
+              }
+              if (sql.includes("UPDATE shares SET is_public")) {
+                const [isPublic, id] = args;
+                const row = rows.get(id);
+                if (row) row.is_public = isPublic;
                 return { success: true };
               }
               return { success: true };
@@ -107,6 +129,8 @@ function makeEnv(overrides = {}) {
 <meta name="twitter:title" content="A vibescape was shared with you — Vibresia">
 <meta name="twitter:description" content="Someone shared a Vibresia vibescape with you.">
 <meta name="twitter:image" content="https://vibresia.com/media/share.jpg">
+<!-- gallery:builtin-cards -->
+<!-- gallery:cards -->
 </head><body>hi</body></html>`,
             { status: 200 }
           ),
@@ -419,6 +443,75 @@ test("a share with no picture has no picture, rather than a broken one", async (
   });
   const { id } = await created.json();
   assert.equal((await run(`https://vibresia.com/og/${id}.jpg`, { env })).status, 404);
+});
+
+// --- the gallery ------------------------------------------------------------
+
+test("the gallery lists the shares that were ticked into it", async () => {
+  const { env } = makeEnv();
+  // A public share and a private one.
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "In The Gallery", author: "Stephen", key: "gallery1", public: true }),
+  });
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: "Zm91ci1vdGhlci1wYXlsb2Fk", name: "Kept Out", author: "Nobody", key: "hidden1", public: false }),
+  });
+
+  const api = await run("https://vibresia.com/api/gallery", { env });
+  const body = await api.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.vibescapes.length, 1);
+  assert.equal(body.vibescapes[0].name, "In The Gallery");
+  assert.equal(body.vibescapes[0].author, "Stephen");
+});
+
+test("a share is only in the gallery if it was ticked in", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Quiet", author: "Nobody", key: "quiet1" }),
+  });
+  const body = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(body.vibescapes.length, 0);
+});
+
+test("sharing it again with the tickbox on puts it in the gallery", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1" }),
+  });
+  let body = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(body.vibescapes.length, 0);
+
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1", public: true }),
+  });
+  body = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(body.vibescapes.length, 1);
+  assert.equal(body.vibescapes[0].name, "Later");
+});
+
+test("the gallery page is a page, with the shares on it", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "On The Page", author: "Stephen", key: "page1", public: true }),
+  });
+  const response = await run("https://vibresia.com/vibescapes", { env });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.ok(html.includes("On The Page"), "the share was not on the page");
+  assert.ok(html.includes("/s/"), "the share was not linked");
 });
 
 // --- the pure parts --------------------------------------------------------
