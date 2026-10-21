@@ -43,7 +43,27 @@ fi
 # The version is passed on rather than recomputed, so the app in the zip
 # carries the same number as the tag.
 VERSION_OVERRIDE="$VERSION" REQUIRE_WATCHER=1 ./build-app.sh release
-rm -rf dist && mkdir dist
+
+# Notarization is a separate step, on purpose: it needs an Apple Developer
+# identity and notary credentials, and this release path has to keep working on
+# a machine that has neither. Run scripts/notarize.sh before this, and it staples
+# the ticket onto build/Vibresia.app in place — so the zip made below carries it.
+#
+# Without a stapled ticket the app still works for whoever built it, and Gate-
+# keeper will open it on anyone else's Mac only after Apple is reachable and has
+# notarized it. Say so rather than fail: an unsigned release is a legitimate
+# thing to push while the certificate is being sorted out.
+if ! xcrun stapler validate build/Vibresia.app >/dev/null 2>&1; then
+    echo "" >&2
+    echo "NOTE: this build is NOT notarized. Gatekeeper will ask people to" >&2
+    echo "      override it on first launch." >&2
+    echo "      Run scripts/notarize.sh first to sign and staple properly." >&2
+fi
+
+# Only the things this script replaces. `rm -rf dist` would throw away the
+# notarized pkg notarize.sh leaves there.
+mkdir -p dist
+rm -rf dist/Vibresia.app dist/Vibresia.zip
 ditto build/Vibresia.app dist/Vibresia.app
 (cd dist && ditto -c -k --keepParent Vibresia.app Vibresia.zip)
 

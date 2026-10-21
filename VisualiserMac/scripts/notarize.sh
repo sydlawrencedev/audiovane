@@ -1,0 +1,211 @@
+#!/bin/bash
+# Packages the built app, submits it to Apple's notary service, and staples the
+# ticket on.
+#
+# Split out of build-app.sh so the build stays runnable without any Apple
+# credentials: build-app.sh signs ad-hoc when there's no Developer ID
+# certificate, and this script is the only thing that needs one.
+#
+#   ./scripts/notarize.sh            package, submit, staple
+#   ./scripts/notarize.sh --check    everything except the submission
+#
+# --check exists so the packaging can be rehearsed before the certificate
+# arrives. It builds the pkg, and reports exactly what is missing to go the rest
+# of the way, rather than failing at the first notarytool call with a message
+# about credentials.
+#
+# Needs a Developer ID Application certificate in the keychain
+# (`security find-identity -v -p codesigning`) and notary credentials stored
+# under $NOTARY_PROFILE — see `xcrun notarytool store-credentials`.
+
+set -euo pipefail
+
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # VisualiserMac
+site="$(cd "$here/.." && pwd)"                              # repo root
+cd "$here"
+
+APP_NAME="Vibresia"
+BUNDLE_ID="com.minithlabs.visualiser"
+APP="$here/build/$APP_NAME.app"
+PKG="$here/dist/$APP_NAME.pkg"
+WORK="$(mktemp -d)"
+trap 'rm -rf "$WORK"' EXIT
+
+NOTARY_PROFILE="${NOTARY_PROFILE:-vibresia-notary}"
+CHECK_ONLY=0
+[ "${1:-}" = "--check" ] && CHECK_ONLY=1
+
+say() { printf '==> %s\n' "$*"; }
+die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
+
+# ---------------------------------------------------------------- preflight
+
+command -v xcrun >/dev/null || die "xcrun is missing — this needs Xcode's command line tools."
+command -v pkgbuild >/dev/null || die "pkgbuild is missing."
+
+IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+
+say "Developer ID certificate: ${IDENTITY:-<none found>}"
+say "notary profile:          $NOTARY_PROFILE"
+
+if [ -z "$IDENTITY" ]; then
+    cat >&2 <<'EOF'
+
+Nothing here can be notarized without a Developer ID Application certificate.
+
+  1. Apple Developer Program membership (paid) is required.
+  2. Create a CSR:  Keychain Access -> Certificate Assistant -> Create a
+     Certificate -> Developer ID Application. Or:
+       openssl req -new -newkey rsa:2048 -nodes -keyout devid.key \
+         -out devid.csr -subj "/email=YOU@minithlabs.com/commonName=Developer ID Application: Minith Labs"
+  3. Upload the .csr at developer.apple.com/account/resources/certificates,
+     under Developer ID Application.
+  4. Download the .cer and double-click it to install into the login keychain.
+  5. Confirm:  security find-identity -v -p codesigning
+
+EOF
+    [ "$CHECK_ONLY" -eq 1 ] || die "no Developer ID certificate."
+    # Keep going in --check mode: the packaging below is still worth proving out.
+fi
+
+if [ ! -d "$APP" ]; then
+    die "no built app at $APP — run ./build-app.sh release first."
+fi
+
+# The bundle has to be signed with hardened runtime and a real identity before
+# it is worth submitting. Catching it here beats Apple's rejection email.
+if [ -n "$IDENTITY" ]; then
+    flags="$(codesign -dv --verbose=4 "$APP" 2>&1 || true)"
+    echo "$flags" | grep -q 'flags=.*runtime' \
+        || die "the app is not signed with hardened runtime. Re-run ./build-app.sh release."
+    echo "$flags" | grep -q "Authority=$IDENTITY" \
+        || die "the app is not signed with '$IDENTITY'."
+fi
+
+# ------------------------------------------------------- verify the signature
+
+say "Verifying signature"
+codesign --verify --deep --strict --verbose=2 "$APP"
+
+if [ -x "$APP/Contents/Helpers/VibresiaWatcher" ]; then
+    # Separately, because a bundle can verify while a helper inside it is
+    # unsigned — which is the single most common notarization rejection.
+    codesign --verify --strict --verbose=2 "$APP/Contents/Helpers/VibresiaWatcher"
+fi
+
+# ------------------------------------------------------------------- packaging
+
+mkdir -p "$here/dist"
+
+# The zip is what people actually download and what the in-app updater fetches.
+# A .zip cannot be stapled, so the app's ticket goes on the app and the zip is
+# rebuilt around it.
+say "Packaging the zip"
+(cd "$here/build" && ditto -c -k --keepParent "$APP_NAME.app" "$WORK/$APP_NAME.zip")
+
+say "Packaging the pkg"
+# Signed only when there is an identity to sign with, so the rehearsal path works
+# before the certificate lands.
+if [ -n "$IDENTITY" ]; then
+    PKGBUILD_SIGN=(--sign "$IDENTITY" --timestamp)
+else
+    PKGBUILD_SIGN=()
+fi
+# The ${arr+...} dance rather than plain "${arr[@]}": macOS ships bash 3.2, which
+# treats expanding an *empty* array under `set -u` as an unbound variable. That
+# is the rehearsal path, so it is the one that has to work before the cert lands.
+pkgbuild --component "$APP" \
+         --install-location /Applications \
+         --identifier "$BUNDLE_ID" \
+         ${PKGBUILD_SIGN[@]+"${PKGBUILD_SIGN[@]}"} \
+         "$PKG"
+
+say "Built $(basename "$PKG") ($(du -h "$PKG" | cut -f1))"
+say "Built $APP_NAME.zip ($(du -h "$WORK/$APP_NAME.zip" | cut -f1))"
+
+if [ "$CHECK_ONLY" -eq 1 ]; then
+    cat <<EOF
+
+--- rehearsal only, nothing submitted ---
+
+To finish notarization:
+
+  xcrun notarytool store-credentials $NOTARY_PROFILE \\
+      --apple-id "you@minithlabs.com" --team-id TEAMID --password "app-specific"
+
+  ./scripts/notarize.sh
+
+EOF
+    exit 0
+fi
+
+[ -n "$IDENTITY" ] || die "refusing to submit an ad-hoc-signed build."
+xcrun notarytool history >/dev/null 2>&1 || \
+    die "no notary credentials under '$NOTARY_PROFILE' — see xcrun notarytool store-credentials."
+
+# --------------------------------------------------------------- submission
+
+# --wait blocks until Apple finishes, and exits non-zero on rejection. The log
+# is what says *why*, and Apple's message for most rejections points at a nested
+# binary rather than anything obvious in the app itself.
+submit() {
+    local file="$1" label="$2"
+    say "Submitting $label to Apple…"
+    if xcrun notarytool submit "$file" --keychain-profile "$NOTARY_PROFILE" --wait; then
+        return 0
+    fi
+    printf 'ERROR: %s was rejected. Apple says:\n' "$label" >&2
+    xcrun notarytool log "$file" --keychain-profile "$NOTARY_PROFILE" >&2 \
+        || echo "(could not fetch the log — is the network up?)" >&2
+    return 1
+}
+
+submit "$WORK/$APP_NAME.zip" "$APP_NAME.zip"
+submit "$PKG" "$APP_NAME.pkg"
+
+# ------------------------------------------------------------------ stapling
+
+say "Stapling the ticket to the app"
+ditto -x -k "$WORK/$APP_NAME.zip" "$WORK/unzipped"
+xcrun stapler staple "$WORK/unzipped/$APP_NAME.app"
+
+say "Rebuilding the zip around the stapled app"
+rm -f "$WORK/$APP_NAME.zip"
+(cd "$WORK/unzipped" && ditto -c -k --keepParent "$APP_NAME.app" "$here/dist/$APP_NAME.zip")
+# The zip in dist/ now contains a stapled app; refresh the working copy too so a
+# second run starts from the same thing rather than the unstapled original.
+rm -rf "$APP"
+ditto "$WORK/unzipped/$APP_NAME.app" "$APP"
+
+say "Stapling the ticket to the pkg"
+xcrun stapler staple "$PKG"
+
+# --------------------------------------------------------------------- verify
+
+say "Verifying the stapled ticket"
+xcrun stapler validate "$APP"
+xcrun stapler validate "$PKG"
+
+say "Checking Gatekeeper's own view"
+# spctl is the authority that matters at the user's end: it's what double-clicking
+# the app goes through, so it catches a signature Gatekeeper rejects even though
+# notarization succeeded.
+if spctl --assess --type execute --verbose=4 "$APP" 2>&1 | grep -q 'accepted'; then
+    echo "    Gatekeeper: accepted"
+else
+    echo "    Gatekeeper did not accept it yet — this is normal on the first" >&2
+    echo "    run after stapling, and on a machine with no network. Re-run this" >&2
+    echo "    script's checks later, or ask someone else to try the download." >&2
+fi
+
+cat <<EOF
+
+==> Notarized and stapled
+
+    $here/dist/$APP_NAME.pkg
+    $here/dist/$APP_NAME.zip
+
+    The zip is what release.sh attaches and what the in-app updater fetches.
+    The pkg is there for anyone who would rather install through Installer.
+EOF

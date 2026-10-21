@@ -149,8 +149,15 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-# Add the screen-capture entitlement so SCK can capture system audio
-mkdir -p "$APP_BUNDLE/Contents/Resources"
+# The entitlements the app actually needs: system-audio capture and the
+# microphone.
+#
+# com.apple.security.cs.disable-library-validation used to be here, for PostHog's
+# bundled PHPLCrashReporter. It isn't needed: PHPLCrashReporter is compiled
+# statically into the binary rather than loaded as a framework, and macOS's
+# library validation only applies to dynamically-loaded code. Leaving it in
+# would be a blanket relaxation of a security boundary that notarization
+# scrutinises, for a library validation has no opinion about.
 cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -158,8 +165,6 @@ cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 <dict>
     <key>com.apple.security.app-sandbox</key>
     <false/>
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
     <key>com.apple.security.device.audio-input</key>
     <true/>
     <key>com.apple.security.screen-capture</key>
@@ -170,10 +175,51 @@ cat > "$APP_BUNDLE/Contents/Resources/Entitlements.plist" <<EOF
 </plist>
 EOF
 
-# codesign ad-hoc so ScreenCaptureKit permission prompts work reliably.
-# Fail loudly if this doesn't work — a broken signature makes macOS refuse
-# to launch the app with "may be damaged or incomplete".
-if ! codesign --force --sign - --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" "$APP_BUNDLE"; then
+# Signing identity. A Developer ID certificate is required to notarize, but not
+# to build: with no such certificate in the keychain we sign ad-hoc, which is
+# what this has always done and is enough to run locally and to exercise the
+# build. Override with CODESIGN_IDENTITY=... to name a specific one.
+SIGN_IDENTITY="${CODESIGN_IDENTITY:-}"
+if [ -z "$SIGN_IDENTITY" ]; then
+    SIGN_IDENTITY="$(security find-identity -v -p codesigning 2>/dev/null \
+        | sed -n 's/.*"\(Developer ID Application:[^"]*\)".*/\1/p' | head -1)"
+fi
+
+if [ -n "$SIGN_IDENTITY" ]; then
+    echo "==> Signing with: $SIGN_IDENTITY"
+    # Hardened runtime is mandatory for notarization. --timestamp is what ties
+    # the signature to a notarized timestamp server, so it survives the
+    # certificate expiring.
+    SIGN_OPTS="--force --sign $SIGN_IDENTITY --options runtime --timestamp"
+else
+    echo "==> No Developer ID certificate found — signing ad-hoc." >&2
+    echo "    The app runs fine locally and from the zip, but Gatekeeper will" >&2
+    echo "    refuse to open it on anyone else's Mac until it is notarized." >&2
+    # Deliberately no --options runtime here: it buys nothing on an ad-hoc
+    # signature, and it is known to make ScreenCaptureKit's permission prompt
+    # unreliable, which is the whole reason this script signs at all.
+    SIGN_OPTS="--force --sign -"
+fi
+
+# Inside out. VibresiaWatcher is a separate executable that the app launches as
+# a LaunchAgent, and a hardened-runtime bundle with an unsigned helper inside it
+# is a notarization rejection — and a runtime crash on update, because the
+# updater replaces the app out from under a running watcher. Every nested binary
+# is signed before the bundle that contains it.
+if [ -x "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher" ]; then
+    if ! codesign $SIGN_OPTS \
+            --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" \
+            "$APP_BUNDLE/Contents/Helpers/VibresiaWatcher"; then
+        echo "ERROR: codesign failed on VibresiaWatcher — the app would not open." >&2
+        exit 1
+    fi
+fi
+
+# Fail loudly if this doesn't work — a broken signature makes macOS refuse to
+# launch the app with "may be damaged or incomplete".
+if ! codesign $SIGN_OPTS \
+        --entitlements "$APP_BUNDLE/Contents/Resources/Entitlements.plist" \
+        "$APP_BUNDLE"; then
     echo "ERROR: codesign failed — the app would not open." >&2
     exit 1
 fi

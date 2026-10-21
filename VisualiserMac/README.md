@@ -417,3 +417,44 @@ SNAPSHOT_DIR=/tmp/viz_snapshots ./build/Vibresia.app/Contents/MacOS/Vibresia --s
 ```
 
 This renders one frame of each vibescape to PNG and exits.
+
+## Signing and notarization
+
+`build-app.sh` signs the app. With a **Developer ID Application** certificate in
+the keychain it signs with that identity and the hardened runtime; without one
+it signs ad-hoc, which is enough to run it locally but means Gatekeeper will
+refuse to open it on anyone else's Mac.
+
+Check what you have:
+
+    security find-identity -v -p codesigning
+
+A certificate is created at developer.apple.com under Developer ID Application;
+the CSR comes from Keychain Access → Certificate Assistant, or:
+
+    openssl req -new -newkey rsa:2048 -nodes -keyout devid.key \
+      -out devid.csr \
+      -subj "/email=you@minithlabs.com/commonName=Developer ID Application: Minith Labs"
+
+Store the credentials `notarytool` will need:
+
+    xcrun notarytool store-credentials vibresia-notary \
+      --apple-id "you@minithlabs.com" --team-id TEAMID --password "app-specific"
+
+Then, before a release:
+
+    ./build-app.sh release
+    ./scripts/notarize.sh          # or --check to rehearse without submitting
+    ./release.sh
+
+`notarize.sh` submits the zip, staples the ticket onto the app in place, and
+rebuilds the zip around the stapled bundle — so the zip `release.sh` attaches is
+the stapled one. `release.sh` warns rather than fails when there is no ticket,
+because an un-notarized release is a legitimate thing to push while the
+certificate is being sorted out.
+
+`com.apple.security.cs.disable-library-validation` is deliberately **not** in
+`Entitlements.plist`. PostHog bundles PHPLCrashReporter, which reads like a
+reason to need it, but it is compiled statically into the binary rather than
+loaded as a framework, and macOS's library validation only applies to
+dynamically-loaded code.
