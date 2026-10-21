@@ -78,14 +78,18 @@ struct CustomVibescapeView: View {
 
     private var chooseStep: some View {
         VStack(alignment: .leading, spacing: 0) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Make your own vibescape")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("A world of your own, drawn by your music. Write it yourself, or let an AI write it for you.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(white: 0.55))
-                    .fixedSize(horizontal: false, vertical: true)
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Make your own vibescape")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text("A world of your own, drawn by your music. Write it yourself, or let an AI write it for you.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(white: 0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 8)
+                SheetCloseButton()
             }
             .padding(.horizontal, 22)
             .padding(.top, 20)
@@ -143,6 +147,17 @@ struct CustomVibescapeView: View {
             .padding(.vertical, 14)
         }
     }
+
+    /// What you'd actually type to an agent once it's wired up.
+    ///
+    /// Short on purpose. The long `CustomVibescapeGuide.agentPrompt` is for the
+    /// copy-and-paste route on the step before; with an agent connected you are
+    /// having a conversation, not pasting a brief, and a wall of rules makes no
+    /// sense to say out loud. This is the shape of a first ask — and it is
+    /// worth being able to copy, because retyping an example is how it gets
+    /// subtly wrong.
+    private static let sampleAsk =
+        "\"Make a vibescape of slow blue smoke that swirls to the bass.\""
 
     // MARK: - Step two: the code
 
@@ -202,6 +217,11 @@ struct CustomVibescapeView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
+            // The bar already has a back arrow, which steps back through the
+            // flow rather than closing it — on the last step, and when editing,
+            // it does close. That conditional is the problem: whether there's a
+            // way out depends on which step you're on. The ✕ always closes.
+            SheetCloseButton()
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
@@ -546,17 +566,13 @@ struct CustomVibescapeView: View {
                 Text("Then just ask it for what you want")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
-                Text("""
-                "Make a vibescape of slow blue smoke that swirls to the bass."
-                """)
-                .font(.system(size: 10.5, design: .monospaced))
-                .foregroundStyle(Color(white: 0.8))
-                .padding(9)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 7)
-                        .fill(Color.black.opacity(0.35))
-                )
+                // A CopyableRow, like the setup command above and like the
+                // prompt on the step before. This was the one piece of text in
+                // the flow you could only read and then retype, which is a
+                // strange thing to ask of an example — people copy it rather
+                // than remember it, and retyping it exactly is the one way to
+                // get a subtly wrong prompt.
+                CopyableRow(text: Self.sampleAsk, help: "Copy this example")
                 Text("""
                 It can also ask what you're hearing right now — the suspected \
                 genre and instruments, the tempo, the levels — so it can write \

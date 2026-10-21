@@ -132,10 +132,16 @@ struct ShareVibescapeView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("SHARE THIS VIBESCAPE")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .tracking(2.2)
-                .foregroundStyle(.white)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text("SHARE THIS VIBESCAPE")
+                    .font(.system(size: 13, weight: .bold, design: .monospaced))
+                    .tracking(2.2)
+                    .foregroundStyle(.white)
+                Spacer(minLength: 8)
+                // This sheet used to have no visible way out at all. Escape
+                // worked, which is not the same as being able to see it.
+                SheetCloseButton()
+            }
             Text(secondaryTitle)
                 .font(.system(size: 11, weight: .regular, design: .monospaced))
                 .tracking(0.6)

@@ -113,16 +113,7 @@ struct VibescapesView: View {
                     .pointingHand()
                     .help("Put the vibescapes back in their original order")
             }
-            Button("Done") { dismiss() }
-                .buttonStyle(.plain)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color(white: 0.85))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 5)
-                .background(
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.white.opacity(0.08))
-                )
+            SheetCloseButton()
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 14)
