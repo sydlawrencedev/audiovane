@@ -56,6 +56,21 @@ IDENTITY="${IDENTITY%%$'\n'*}"
 say "Developer ID certificate: ${IDENTITY:-<none found>}"
 say "notary profile:          $NOTARY_PROFILE"
 
+# The installer is a separate certificate from the application. A pkg is
+# signed with a "Developer ID Installer" identity, and pkgbuild refuses an
+# application identity outright: "Could not find appropriate signing identity
+# ... An installer signing identity (not an application signing identity) is
+# required for signing flat-style products."
+#
+# The pkg is the optional extra — for anyone who would rather install
+# through Installer than unzip the app. The zip is what release.sh attaches
+# and what install.sh and the in-app updater fetch, so a missing installer
+# certificate must not stop the zip from being notarized.
+INSTALLER_IDENTITY="$(printf '%s\n' "$IDENTITIES" \
+    | sed -n 's/.*"\(Developer ID Installer:[^"]*\)".*/\1/p')"
+INSTALLER_IDENTITY="${INSTALLER_IDENTITY%%$'\n'*}"
+say "installer certificate:   ${INSTALLER_IDENTITY:-<none found — the pkg will be skipped>}"
+
 if [ -z "$IDENTITY" ]; then
     cat >&2 <<'EOF'
 
@@ -116,24 +131,25 @@ mkdir -p "$here/dist"
 say "Packaging the zip"
 (cd "$here/build" && ditto -c -k --norsrc --keepParent "$APP_NAME.app" "$WORK/$APP_NAME.zip")
 
-say "Packaging the pkg"
-# Signed only when there is an identity to sign with, so the rehearsal path works
-# before the certificate lands.
-if [ -n "$IDENTITY" ]; then
-    PKGBUILD_SIGN=(--sign "$IDENTITY" --timestamp)
+# The pkg needs a "Developer ID Installer" certificate, which is a different
+# certificate from the application one and is not issued with it. Without it
+# there is no signed pkg, so the pkg is skipped and the zip is notarized on
+# its own — the zip is the artifact that matters.
+if [ -n "$INSTALLER_IDENTITY" ]; then
+    say "Packaging the pkg"
+    pkgbuild --component "$APP" \
+             --install-location /Applications \
+             --identifier "$BUNDLE_ID" \
+             --sign "$INSTALLER_IDENTITY" --timestamp \
+             "$PKG"
+    say "Built $(basename "$PKG") ($(du -h "$PKG" | cut -f1))"
 else
-    PKGBUILD_SIGN=()
+    say "Skipping the pkg — no Developer ID Installer certificate." >&2
+    say "    That is a separate certificate from the application one, and it" >&2
+    say "    is the only thing the .pkg is for. The zip is what people" >&2
+    say "    actually download, so it gets notarized on its own." >&2
+    rm -f "$PKG"
 fi
-# The ${arr+...} dance rather than plain "${arr[@]}": macOS ships bash 3.2, which
-# treats expanding an *empty* array under `set -u` as an unbound variable. That
-# is the rehearsal path, so it is the one that has to work before the cert lands.
-pkgbuild --component "$APP" \
-         --install-location /Applications \
-         --identifier "$BUNDLE_ID" \
-         ${PKGBUILD_SIGN[@]+"${PKGBUILD_SIGN[@]}"} \
-         "$PKG"
-
-say "Built $(basename "$PKG") ($(du -h "$PKG" | cut -f1))"
 say "Built $APP_NAME.zip ($(du -h "$WORK/$APP_NAME.zip" | cut -f1))"
 
 if [ "$CHECK_ONLY" -eq 1 ]; then
@@ -153,8 +169,14 @@ EOF
 fi
 
 [ -n "$IDENTITY" ] || die "refusing to submit an ad-hoc-signed build."
-xcrun notarytool history >/dev/null 2>&1 || \
-    die "no notary credentials under '$NOTARY_PROFILE' — see xcrun notarytool store-credentials."
+# The profile has to be named here, or the check looks for a default profile
+# that does not exist and reports that there are no credentials when there
+# are — the credentials are stored under $NOTARY_PROFILE and nowhere else.
+xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1 || \
+    die "no notary credentials under '$NOTARY_PROFILE'. Create them with:
+  xcrun notarytool store-credentials $NOTARY_PROFILE \\
+      --apple-id \"you@minithlabs.com\" --team-id TEAMID
+(notarytool prompts for the app-specific password.)"
 
 # --------------------------------------------------------------- submission
 
@@ -174,7 +196,9 @@ submit() {
 }
 
 submit "$WORK/$APP_NAME.zip" "$APP_NAME.zip"
-submit "$PKG" "$APP_NAME.pkg"
+if [ -f "$PKG" ]; then
+    submit "$PKG" "$APP_NAME.pkg"
+fi
 
 # ------------------------------------------------------------------ stapling
 
@@ -190,14 +214,18 @@ rm -f "$WORK/$APP_NAME.zip"
 rm -rf "$APP"
 ditto "$WORK/unzipped/$APP_NAME.app" "$APP"
 
-say "Stapling the ticket to the pkg"
-xcrun stapler staple "$PKG"
+if [ -f "$PKG" ]; then
+    say "Stapling the ticket to the pkg"
+    xcrun stapler staple "$PKG"
+fi
 
 # --------------------------------------------------------------------- verify
 
 say "Verifying the stapled ticket"
 xcrun stapler validate "$APP"
-xcrun stapler validate "$PKG"
+if [ -f "$PKG" ]; then
+    xcrun stapler validate "$PKG"
+fi
 
 say "Checking Gatekeeper's own view"
 # spctl is the authority that matters at the user's end: it's what double-clicking
@@ -215,9 +243,27 @@ cat <<EOF
 
 ==> Notarized and stapled
 
-    $here/dist/$APP_NAME.pkg
     $here/dist/$APP_NAME.zip
+EOF
+
+if [ -f "$PKG" ]; then
+    cat <<EOF
+    $here/dist/$APP_NAME.pkg
+EOF
+fi
+
+cat <<EOF
 
     The zip is what release.sh attaches and what the in-app updater fetches.
+EOF
+
+if [ -f "$PKG" ]; then
+    cat <<EOF
     The pkg is there for anyone who would rather install through Installer.
 EOF
+else
+    cat <<EOF
+    There is no pkg: signing one needs a Developer ID Installer certificate,
+    which is a separate certificate from the application one.
+EOF
+fi
