@@ -28,8 +28,8 @@
 
   // --- URL construction --------------------------------------------------
 
-  function deepLinkURL() {
-    var open = $("[data-share-open]");
+  function deepLinkURL(button) {
+    var open = button || $("[data-share-open]");
     if (!open) return null;
     var slug = open.getAttribute("data-share-slug");
     if (slug) return "vibresia://open?p=" + encodeURIComponent(slug);
@@ -88,31 +88,32 @@
   // --- Download CTA ------------------------------------------------------
 
   function showDownloadFallback() {
-    var dl = $("[data-share-download]");
-    if (dl) dl.hidden = false;
+    var dls = $$("[data-share-download]");
+    dls.forEach(function (dl) { dl.hidden = false; });
   }
 
   function hideDownloadForever() {
-    var dl = $("[data-share-download]");
-    if (dl) dl.remove();
+    var dls = $$("[data-share-download]");
+    dls.forEach(function (dl) { dl.remove(); });
   }
 
-  // --- Main --------------------------------------------------------------
+  // --- Wiring the button ---------------------------------------------------
 
-  function init() {
-    // Hide the download CTA if the user has clearly used Open successfully
-    // before. localStorage may be unavailable in some embed contexts, so
-    // wrap the read defensively.
-    var alreadyInstalled = false;
-    try { alreadyInstalled = localStorage.getItem(INSTALL_KEY) === "1"; } catch (_) {}
-    if (alreadyInstalled) hideDownloadForever();
-
-    var open = $("[data-share-open]");
-    if (!open) return;
-    var url = deepLinkURL();
+  /* Attaches the click handler to a button, once.
+   *
+   * The handler is attached by id rather than by a flag the page sets, because
+   * the page and this script are separate files and either could reasonably
+   * change: this script may run before the page has built its button, and the
+   * page may replace the button afterwards. Whichever happens, the button ends
+   * up wired exactly once.
+   */
+  function wire(button) {
+    if (!button || button.dataset.vibresiaWired === "1") return;
+    var url = deepLinkURL(button);
     if (!url) return;
 
-    open.addEventListener("click", function (event) {
+    button.dataset.vibresiaWired = "1";
+    button.addEventListener("click", function (event) {
       event.preventDefault();
       tryOpenAndDetect(url).then(function (installed) {
         if (installed) {
@@ -125,6 +126,50 @@
         }
       });
     });
+  }
+
+  /* Wires every button on the page, now and later.
+   *
+   * The button is normally in the markup, so the first pass finds it at
+   * DOMContentLoaded. The watcher is for the other case: a page that builds
+   * its button after the payload has been decoded. That is exactly what the
+   * custom share page used to do, and it is why "Open in Vibresia" stopped
+   * opening the app — the decoder became async, so the button arrived after
+   * this script had already looked for it and given up.
+   */
+  function wireAll(root) {
+    var buttons = $$("[data-share-open]", root || document);
+    buttons.forEach(wire);
+  }
+
+  // --- Main --------------------------------------------------------------
+
+  function init() {
+    // Hide the download CTA if the user has clearly used Open successfully
+    // before. localStorage may be unavailable in some embed contexts, so
+    // wrap the read defensively.
+    var alreadyInstalled = false;
+    try { alreadyInstalled = localStorage.getItem(INSTALL_KEY) === "1"; } catch (_) {}
+    if (alreadyInstalled) hideDownloadForever();
+
+    wireAll();
+
+    // A button that appears later still gets wired. Cheap: the observer only
+    // fires when the DOM changes, and the check inside it is a query.
+    if (window.MutationObserver && document.body) {
+      var observer = new MutationObserver(function (mutations) {
+        for (var i = 0; i < mutations.length; i++) {
+          var added = mutations[i].addedNodes;
+          for (var j = 0; j < added.length; j++) {
+            var node = added[j];
+            if (node.nodeType !== 1) continue;
+            if (node.matches && node.matches("[data-share-open]")) wire(node);
+            wireAll(node);
+          }
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+    }
   }
 
   if (document.readyState === "loading") {

@@ -57,8 +57,25 @@
     <p class="lede" id="lede" hidden></p>
   </section>
 
-  <div id="content">
-    <!-- Populated by share-page.js once the URL has been parsed. -->
+  <!-- The skeleton is static, and the script fills the parts of it that need
+       the payload. That is not tidiness: the "Open in Vibresia" button has to
+       be in the markup, because share-page.js wires it once, at
+       DOMContentLoaded — and the payload decoder is async, so a button built
+       by the decoder arrives after that and is never wired to anything. The
+       symptom was a dead button on every custom share. -->
+  <div id="preview">
+    <!-- The drawn vibescape, once the payload has been read. -->
+  </div>
+
+  <div class="cta-row" id="cta" hidden>
+    <a class="btn primary" href="#" data-share-open data-share-custom>Open in Vibresia</a>
+    <a class="btn coffee" href="/download?src=share_fallback" data-share-download hidden>Download for Mac</a>
+  </div>
+
+  <p class="share-cta" id="cta-hint" hidden><small>Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small></p>
+
+  <div id="code">
+    <!-- The shader, once the payload has been read. -->
   </div>
 
   <p class="credit">Made with ❤ by <span id="credit-author">Minith Labs</span></p>
@@ -93,13 +110,16 @@
     // (/share/?d=…). The short form (/s/<id>) has the Worker inline it as a
     // global instead, so the URL a recipient sees stays short.
     var d = params.get("d") || (window.__VIBRESIA_SHARE__ && window.__VIBRESIA_SHARE__.d) || null;
-    var content = document.getElementById("content");
+    var preview = document.getElementById("preview");
+    var code = document.getElementById("code");
+    var cta = document.getElementById("cta");
+    var ctaHint = document.getElementById("cta-hint");
     var lede = document.getElementById("lede");
     var creditAuthor = document.getElementById("credit-author");
     var worldOwner = document.getElementById("world-owner");
 
     if (!d) {
-      content.innerHTML = noPayloadContent();
+      preview.innerHTML = noPayloadContent();
       return;
     }
 
@@ -107,7 +127,7 @@
     try {
       payload = await decodePayload(d);
     } catch (e) {
-      content.innerHTML = errorCard("Couldn't read this share link. Ask the sender to resend it — the URL may have been truncated.");
+      preview.innerHTML = errorCard("Couldn't read this share link. Ask the sender to resend it — the URL may have been truncated.");
       return;
     }
 
@@ -122,28 +142,34 @@
     // the author is whatever the sender typed.
     if (payload.author) worldOwner.textContent = possessive(payload.author) + " world.";
 
-    content.innerHTML =
+    // The picture goes in one box and the shader in another, so neither of
+    // them replaces the button — the button is in the markup, and the script
+    // that listens for clicks on it runs before this finishes.
+    preview.innerHTML =
       '<div class="shot" id="shot" hidden>' +
         '<canvas id="shot-canvas" width="1200" height="630" ' +
           'role="img" aria-label="This vibescape, drawn"></canvas>' +
-      '</div>' +
-      '<div class="cta-row">' +
-        '<a class="btn primary" href="#" data-share-open data-share-custom>Open in Vibresia</a>' +
-        '<a class="btn coffee" href="/download?src=share_fallback" data-share-download hidden>Download for Mac</a>' +
-      '</div>' +
-      '<p class="share-cta"><small>Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small></p>' +
-      // The shader last. Someone sent you this vibescape and you want to open
-      // it; the source is the interesting bit after that, not the thing being
-      // asked for. It was above the button, which put a wall of code between the
-      // reader and the one action the page exists to offer.
+      '</div>';
+
+    // The shader last. Someone sent you this vibescape and you want to open
+    // it; the source is the interesting bit after that, not the thing being
+    // asked for. It was above the button, which put a wall of code between the
+    // reader and the one action the page exists to offer.
+    code.innerHTML =
       '<div class="code-preview">' +
         '<header><span>The shader</span>' +
           '<button type="button" class="copy" data-copy-shader>Copy</button></header>' +
         '<pre><code></code></pre>' +
       '</div>';
 
-    content.querySelector("code").textContent = payload.shader;
-    wireCopyButton(content.querySelector("[data-copy-shader]"));
+    code.querySelector("code").textContent = payload.shader;
+    wireCopyButton(code.querySelector("[data-copy-shader]"));
+
+    // Only now that there is something to open. The button was wired when the
+    // page loaded; unhiding it cannot break that.
+    cta.hidden = false;
+    ctaHint.hidden = false;
+
     drawShot(payload);
   })();
 
