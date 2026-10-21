@@ -13,7 +13,9 @@ If a user asks you to "install vibresia from https://vibresia.com":
    curl -fsSL https://vibresia.com/install.sh | bash
    ```
 
-   It downloads the latest release (`Vibresia.zip`) from https://github.com/sydlawrencedev/vibresia/releases/latest, installs `Vibresia.app` into `/Applications` (or `~/Applications` if `/Applications` isn't writable), clears the macOS download-quarantine flag (the app is ad-hoc signed, not notarised, so Gatekeeper would otherwise block it), and opens it.
+   It downloads the latest release (`Vibresia.zip`) from https://github.com/sydlawrencedev/vibresia/releases/latest, installs `Vibresia.app` into `/Applications` (or `~/Applications` if `/Applications` isn't writable), clears the macOS download-quarantine flag, and opens it.
+
+   The app is signed with a Developer ID certificate and notarised by Apple, so Gatekeeper opens it without asking for an override. The quarantine flag is still cleared because macOS runs a quarantined app from a temporary copy of itself, which is a confusing place for an app to be running from — and because it makes the app look downloaded every time it is moved or replaced.
 
    To install by hand instead: download https://github.com/sydlawrencedev/vibresia/releases/latest/download/Vibresia.zip, unzip it, move `Vibresia.app` to `/Applications`, run `xattr -dr com.apple.quarantine /Applications/Vibresia.app`, then open it.
 3. Tell the user: in Vibresia, click **Share System Audio** and allow system audio recording when macOS asks. Audio is analysed on the Mac only, never recorded or uploaded.

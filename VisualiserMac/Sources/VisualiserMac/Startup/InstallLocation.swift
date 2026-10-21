@@ -21,8 +21,14 @@ enum InstallLocation {
     enum Status: Equatable {
         /// In /Applications or ~/Applications: where it belongs.
         case installed
-        /// Running from somewhere else, and it can be put right.
-        case elsewhere(current: URL, translocated: Bool)
+        /// Running from the Downloads folder — the app somebody downloaded.
+        /// `source` is the copy in Downloads, which is not always the one
+        /// running: macOS runs a quarantined app from a temporary copy of
+        /// itself.
+        case inDownloads(source: URL)
+        /// Somewhere else. Not worth interrupting anybody about: a build
+        /// directory, a disk image, a folder on the desktop.
+        case elsewhere
     }
 
     enum Failure: LocalizedError {
@@ -44,6 +50,11 @@ enum InstallLocation {
 
     static var bundleURL: URL { Bundle.main.bundleURL }
 
+    /// The bundle identifier, used to check that a file in Downloads is
+    /// really this app and not something else that happens to share its
+    /// name.
+    static var bundleIdentifier: String { Bundle.main.bundleIdentifier ?? "" }
+
     /// The directories an app is expected to live in. The user's own
     /// ~/Applications is here because that is where the installer puts it
     /// when /Applications isn't writable.
@@ -59,7 +70,19 @@ enum InstallLocation {
         return directories
     }
 
-    /// Whether the app is where it should be.
+    /// Where downloads land.
+    static var downloadsDirectory: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Downloads", isDirectory: true)
+    }
+
+    /// Whether the app is where it should be, or in the Downloads folder
+    /// where a download lands.
+    ///
+    /// Only Downloads counts. The app is not worth interrupting somebody
+    /// about because it is in a build directory or on a disk image — and
+    /// offering to move an app out of a disk image is not something it can
+    /// do anyway.
     static var status: Status {
         let bundle = bundleURL
         let parent = bundle.deletingLastPathComponent().standardizedFileURL
@@ -67,7 +90,37 @@ enum InstallLocation {
         where parent == directory.standardizedFileURL {
             return .installed
         }
-        return .elsewhere(current: bundle, translocated: isTranslocated(bundle))
+
+        // The obvious case: the bundle really is in Downloads.
+        if parent == downloadsDirectory.standardizedFileURL {
+            return .inDownloads(source: bundle)
+        }
+
+        // The common case: macOS runs a quarantined app from a temporary
+        // copy of itself, so the path is a temporary folder even when the
+        // app the user downloaded is sitting in Downloads. The copy is the
+        // signal that this came from a download at all, and Downloads is
+        // where a download lands.
+        //
+        // There is no way to ask macOS where the original was — the
+        // temporary copy is a real copy on a read-only mount, not a link
+        // back — so the copy in Downloads is looked for instead.
+        guard isTranslocated(bundle) else { return .elsewhere }
+        guard let source = copyInDownloads() else { return .elsewhere }
+        return .inDownloads(source: source)
+    }
+
+    /// A copy of this app in the Downloads folder, if there is one.
+    static func copyInDownloads() -> URL? {
+        let candidate = downloadsDirectory
+            .appendingPathComponent(bundleURL.lastPathComponent)
+        guard FileManager.default.fileExists(atPath: candidate.path) else { return nil }
+        // Same name is not enough — check it really is this app, so a
+        // different bundle that happens to be called Vibresia.app is not
+        // mistaken for it.
+        let bundle = Bundle(url: candidate)
+        guard bundle?.bundleIdentifier == bundleIdentifier else { return nil }
+        return candidate
     }
 
     /// A quarantined app is run from a copy macOS makes in a temporary
@@ -76,21 +129,15 @@ enum InstallLocation {
         url.path.contains("/AppTranslocation/")
     }
 
-    /// Where the app is now, in words a person can read. The temporary
-    /// folder macOS makes is called out as such rather than printed as a
-    /// path nobody recognises.
+    /// Where the app is now, in words a person can read.
     static func describeCurrentLocation() -> String {
         switch status {
         case .installed:
             return "Applications"
-        case .elsewhere(let current, let translocated):
-            if translocated { return "a temporary folder" }
-            let folder = current.deletingLastPathComponent()
-            let home = FileManager.default.homeDirectoryForCurrentUser.path
-            if folder.path.hasPrefix(home) {
-                return "~" + folder.path.dropFirst(home.count)
-            }
-            return folder.path
+        case .inDownloads:
+            return "Downloads"
+        case .elsewhere:
+            return bundleURL.deletingLastPathComponent().path
         }
     }
 
@@ -159,6 +206,25 @@ enum InstallLocation {
 
         if let displaced { try? FileManager.default.removeItem(at: displaced) }
         return .success(target)
+    }
+
+    /// Removes the copy in Downloads, now that there is one in Applications.
+    ///
+    /// Only ever the copy in Downloads, and only if it really is this app —
+    /// the same bundle identifier — so nothing else that happens to be
+    /// called Vibresia.app is touched.
+    ///
+    /// This is done by the instance running from Applications rather than by
+    /// the one that is moving: the instance that is moving is, in the case
+    /// that matters, running from that very copy, and deleting the files
+    /// under a running application is asking for trouble.
+    static func removeDownloadedCopy() {
+        // Looked for directly rather than through `status`, which is about
+        // where the *running* app is — and by now that is Applications, which
+        // is the whole point.
+        guard let source = copyInDownloads() else { return }
+        guard source != bundleURL else { return }
+        try? FileManager.default.removeItem(at: source)
     }
 
     /// Removes the quarantine flag from a bundle and everything in it.

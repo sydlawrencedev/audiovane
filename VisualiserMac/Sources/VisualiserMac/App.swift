@@ -168,6 +168,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 600_000_000)
             AppState.shared?.checkInstallLocation()
+            // If the app was just moved here from Downloads, this is the
+            // instance that can safely clear the old copy away — it is
+            // running from Applications, not from there.
+            AppState.shared?.clearDownloadsCopyIfPending()
         }
 
         // Look for a newer release on every launch (not in the test vibescapes).

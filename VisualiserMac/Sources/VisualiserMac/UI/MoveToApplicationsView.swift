@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// The prompt shown when the app is running from somewhere it should not be.
+/// The prompt shown when the app is running from the Downloads folder.
 ///
 /// It is a sheet rather than an alert because the app's own windows are
 /// full-bleed visuals, and an alert in the middle of one looks like a
@@ -14,10 +14,6 @@ struct MoveToApplicationsView: View {
     @State private var working = false
     @State private var failure: String?
 
-    private var location: String {
-        InstallLocation.describeCurrentLocation()
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
@@ -26,35 +22,29 @@ struct MoveToApplicationsView: View {
             Divider().overlay(Color.white.opacity(0.08))
             footer
         }
-        .frame(width: 520)
+        .frame(width: 460)
         .background(Color(red: 0.05, green: 0.02, blue: 0.09))
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text("MOVE TO APPLICATIONS?")
-                .font(.system(size: 13, weight: .bold, design: .monospaced))
-                .tracking(2.2)
-                .foregroundStyle(.white)
-            Text("Where Vibresia should live")
-                .font(.system(size: 11, weight: .regular, design: .monospaced))
-                .tracking(0.6)
-                .foregroundStyle(Color(white: 0.6))
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.horizontal, 22)
-        .padding(.top, 20)
-        .padding(.bottom, 16)
+        Text("MOVE TO APPLICATIONS?")
+            .font(.system(size: 13, weight: .bold, design: .monospaced))
+            .tracking(2.2)
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 22)
+            .padding(.top, 20)
+            .padding(.bottom, 16)
     }
 
     private var body_: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Vibresia is running from \(location).")
+        VStack(alignment: .leading, spacing: 10) {
+            Text("Vibresia is in your Downloads folder.")
                 .font(.system(size: 13))
                 .foregroundStyle(Color(white: 0.85))
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text("Applications is where it belongs: it stays put, it can update itself, and it can open with your music. It also stops being run from a temporary copy macOS makes for downloaded apps, which is where a lot of the odd behaviour comes from.")
+            Text("Applications is where it belongs — it stays put, and it can update itself.")
                 .font(.system(size: 12))
                 .foregroundStyle(Color(white: 0.6))
                 .fixedSize(horizontal: false, vertical: true)
@@ -75,9 +65,9 @@ struct MoveToApplicationsView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             Button {
-                // "Not now" means not now, for good. A prompt that comes back
-                // on every launch is a nag, and this is a shareware app that
-                // should not nag anybody about anything.
+                // "Not now" means not now, not never. It is remembered for a
+                // while, so it is not a nag, and asked again later for
+                // somebody who changes their mind.
                 app.declineMoveToApplications()
                 dismiss()
             } label: {
@@ -139,6 +129,12 @@ struct MoveToApplicationsView: View {
         switch result {
         case .success(let url):
             NSLog("[move] installed at \(url.path) — relaunching")
+            // The copy in Downloads has served its purpose — it is what
+            // the user downloaded, and it is the thing that would otherwise
+            // still be sitting there being run from a temporary copy next
+            // time. It is removed by the instance that relaunches in
+            // Applications, because that one is not running from it.
+            app.markDownloadsCopyForRemoval()
             InstallLocation.pendingRelaunch = url
             app.movedToApplications()
             NSApp.terminate(nil)

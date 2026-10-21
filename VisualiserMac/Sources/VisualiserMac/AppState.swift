@@ -1076,10 +1076,12 @@ final class AppState: ObservableObject {
 
     // MARK: - Where the app lives
 
-    /// Key recording that the person has said no to being moved. A prompt
-    /// that comes back on every launch is a nag, and this is a shareware app
-    /// that should not nag anybody about anything.
-    private static let declinedMoveKey = "installLocation.moveDeclined"
+    /// When the person last said no to being moved.
+    private static let declinedMoveKey = "installLocation.moveDeclinedAt"
+
+    /// How long "not now" lasts. Long enough that it is not a nag, and
+    /// short enough that somebody who changes their mind gets asked again.
+    private static let declineInterval: TimeInterval = 90 * 24 * 60 * 60
 
     /// Whether to ask about moving to Applications, which is only a question
     /// if the app is running from somewhere it shouldn't be.
@@ -1092,14 +1094,22 @@ final class AppState: ObservableObject {
     func checkInstallLocation() {
         let tooling = ["--mcp", "--snapshot", "--record", "--video", "--ui-shot"]
         guard !CommandLine.arguments.contains(where: { tooling.contains($0) }) else { return }
-        guard !UserDefaults.standard.bool(forKey: Self.declinedMoveKey) else { return }
-        guard case .elsewhere = InstallLocation.status else { return }
+        if let declinedAt = UserDefaults.standard.object(forKey: Self.declinedMoveKey) as? Date,
+           Date().timeIntervalSince(declinedAt) < Self.declineInterval {
+            return
+        }
+        // Only Downloads. The app is not worth interrupting anybody about
+        // because it is in a build directory or on a disk image, and a disk
+        // image is not somewhere it could be moved from anyway.
+        guard case .inDownloads = InstallLocation.status else { return }
         showMoveToApplications = true
     }
 
-    /// The person said no. Remember it, so they are not asked again.
+    /// The person said not now. Remembered, so they are not asked again
+    /// for a while — but not forever, because a person who has moved the
+    /// app themselves should not find it asking for the rest of their life.
     func declineMoveToApplications() {
-        UserDefaults.standard.set(true, forKey: Self.declinedMoveKey)
+        UserDefaults.standard.set(Date(), forKey: Self.declinedMoveKey)
         showMoveToApplications = false
     }
 
@@ -1107,6 +1117,27 @@ final class AppState: ObservableObject {
     /// now, and the next launch will see that for itself.
     func movedToApplications() {
         showMoveToApplications = false
+    }
+
+    /// Set when the app has just been moved, so the instance that relaunches
+    /// in Applications knows to clear the old copy out of Downloads.
+    private static let pendingCleanupKey = "installLocation.pendingCleanup"
+
+    /// Asks the instance that is about to relaunch in Applications to clear
+    /// up the copy in Downloads.
+    ///
+    /// It has to be that instance and not this one: this one is, in the case
+    /// that matters, running from the very copy that is to be removed.
+    func markDownloadsCopyForRemoval() {
+        UserDefaults.standard.set(true, forKey: Self.pendingCleanupKey)
+    }
+
+    /// Called by the app on launch, once it is running from Applications and
+    /// the copy in Downloads is no longer anything it is using.
+    func clearDownloadsCopyIfPending() {
+        guard UserDefaults.standard.bool(forKey: Self.pendingCleanupKey) else { return }
+        UserDefaults.standard.set(false, forKey: Self.pendingCleanupKey)
+        InstallLocation.removeDownloadedCopy()
     }
 
     /// The single path into `AudioEngine`'s source switching, so the header
