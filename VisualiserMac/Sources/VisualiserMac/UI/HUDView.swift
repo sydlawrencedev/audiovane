@@ -43,6 +43,10 @@ struct HUDView: View {
             // scene is the point, and the same choices are still one keystroke
             // away (1–0, -, [, ], ; and =) or in the Visualizer menu.
             if app.layout.showsPills {
+                // First in the row, and deliberately not part of the picker
+                // below: making a vibescape isn't switching to one.
+                VibeYourOwnButton()
+
                 // vibescape picker (header drop-down)
                 VibescapePicker()
 

@@ -59,15 +59,12 @@ struct VibescapePicker: View {
             title: "",
             isDivider: true
         ))
-        items.append(DropdownEntry(
-            value: .builtin(.autoScan),
-            title: "+ CUSTOM VIBESCAPE",
-            glyph: "+",
-            action: {
-                app.openDropdown = nil
-                app.customVibescapeSheet = .new
-            }
-        ))
+        // "Make your own" used to sit in this list, under a divider, below Auto
+        // Scan. It isn't a vibescape — nothing about it can be selected, and
+        // picking it doesn't change what you are looking at — and it was the
+        // last entry in a list of things you *switch between*, which is the
+        // opposite of what making one is. It lives in the chrome as its own
+        // pill now; see VibeYourOwnButton.
         items.append(DropdownEntry(
             value: .builtin(.autoScan),
             title: "VIEW ALL",
