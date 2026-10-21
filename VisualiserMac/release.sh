@@ -30,6 +30,10 @@ TAG="v$VERSION"
 # The share page embeds a copy of the app's shaders, because a browser can't
 # reach the app to ask for them. That copy has to move with the original.
 ../scripts/check-preview-glsl.py
+# And the two copies of the vibescape reference — the app's MCP server and
+# the website's public one — have to say the same thing, or an agent is told
+# different things depending on which it asked.
+python3 ../scripts/check-mcp-reference.py
 # Every page's navbar and footer come from site/_partials. Nothing enforces
 # that by itself: three definitions of .brand is survivable, three that drift
 # apart quietly is not.

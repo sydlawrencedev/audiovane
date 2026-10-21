@@ -386,10 +386,18 @@ enum CustomVibescapeGuide {
       uLevelSmooth 0..1   overall loudness, eased so it doesn't flicker
       uBassSmooth  0..1   the same, for bass
       uBeatStrength 0..1  how hard the current beat hits
+      uBeat        0..1   one on the beat, zero between — for anything that
+                         should flash on the beat rather than breathe
       uBeats             a beat counter at the detected tempo; it climbs
                          smoothly, it never jumps or runs backwards
       uBands[96]         96 numbers, low to high frequency, each 0..1
       uActive      0..1   0 in silence, eases to 1 when there is sound
+      uIdle       0..1   1 in silence, 0 when there is sound
+      uPresence   0..1   how much music there is, eased in and out over a
+                         couple of seconds, so it does not chatter
+      uScroll           forward-only distance travelled, and it goes faster
+                         when the music is louder — the thing to scroll by
+      uTime             seconds, the same clock the app draws on
       uClock             seconds since launch, keeps running in silence
       uGenre             the genre of the music, as a number:
                          0 classical, 1 electronic, 2 rock, 3 pop, 4 hip-hop,

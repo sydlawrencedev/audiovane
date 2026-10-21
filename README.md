@@ -250,6 +250,40 @@ do — but the same-link behaviour needs the new columns.
 `SHARE_TOKEN` is a credential in the same class as `NOTIFY_TOKEN`, so
 `scripts/check-no-webhook-leak.sh` fails if it ends up in the tree.
 
+## The public MCP server
+
+`https://vibresia.com/mcp` — a remote Model Context Protocol server, so an
+agent running in a browser can write a vibescape without the app being
+installed and without a GPU anywhere.
+
+It is the same idea as the app's own local server, with the parts that need
+a Mac left out: it cannot draw, so it cannot show a preview or check that a
+shader compiles, and it cannot see the music playing on your Mac. What it can
+do is write a vibescape, lint it, and hand back a link.
+
+- **The browser does the drawing.** A shader cannot be run in a Worker, but
+  the share page draws the vibescape live with WebGL, so what comes back from
+  a tool is a link where the world is already running — and it works for
+  whoever opens it, with or without the app.
+- **Making one and sharing it are two acts.** `create_vibescape` makes a
+  share and leaves it unlisted; `share_vibescape` puts it in the public
+  gallery, which is where it belongs because that is what sharing is for.
+- **No authentication.** Both directories offer it, and a server that wanted
+  an account would keep people out of the thing it exists for. The writes are
+  rate-limited per address and land unlisted, so the cost of abuse is bounded
+  and does not reach the gallery.
+- **`/.well-known/mcp.json`** is the discovery file the MCP registry reads,
+  and the way the domain proves it owns the server it claims.
+
+`scripts/check-mcp-reference.py` fails the release if the two copies of the
+vibescape reference — the app's and the website's — drift apart, so an
+agent is not told different things depending on which one it asked.
+
+```bash
+npx wrangler secret put SHARE_TOKEN    # only for the app's own sharing
+python3 scripts/check-mcp-reference.py  # and --write to copy the app's text over
+```
+
 ## Changelog and open issues
 
 Both sections on the landing page read from `api.github.com` at runtime rather

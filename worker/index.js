@@ -7,11 +7,16 @@
 // Everything not listed here falls through to the static assets in ./site,
 // which still get their `_headers` and `_redirects` treatment on the way out.
 //
+// It is also the public MCP server, at /mcp — so that an agent in a chat
+// window can write a vibescape and hand somebody a link to it.
+//
 // The Discord side follows delphina's pattern (plain webhook, embed with a
 // colour per priority, never let a notification failure break the user's
 // path) and adds the three things delphina's own notifications are missing
 // because they run inline in a request: a timeout, one retry, and
 // `ctx.waitUntil` so Discord can never delay a download.
+
+import { handleMcp } from "./mcp.js";
 
 const CANONICAL_HOST = "vibresia.com";
 const CANONICAL_SITE = `https://${CANONICAL_HOST}/`;
@@ -362,12 +367,14 @@ export function escapeHtml(value) {
 /// so a crawler gets a title, a description and a picture for this specific
 /// vibescape instead of the generic ones. Crawlers do not run the page's
 /// JavaScript, so the metadata has to be right in the HTML itself.
-export function buildSharePage(html, { id, payload, name, author, url }) {
+export function buildSharePage(html, { id, payload, name, author, url, hasImage = true }) {
   const title = name ? `${name} — Vibresia` : "A vibescape was shared with you — Vibresia";
   const description = author
     ? `A vibescape called “${name}” by ${author}. Open it in Vibresia, free.`
     : "Someone shared a Vibresia vibescape with you. Open it in Vibresia or download the app.";
-  const image = `${CANONICAL_SITE}og/${id}.jpg`;
+  // A share with no picture of its own gets the general Vibresia one, rather
+  // than a link to a picture that is not there.
+  const image = hasImage ? `${CANONICAL_SITE}og/${id}.jpg` : `${CANONICAL_SITE}media/share.jpg`;
 
   let out = html;
 
@@ -719,7 +726,7 @@ async function handleSharePage(request, url, env) {
   if (!isValidShareId(id)) return new Response("Not found", { status: 404 });
 
   const row = await env.SHARES.prepare(
-    "SELECT payload, name, author FROM shares WHERE id = ?"
+    "SELECT payload, name, author, CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image FROM shares WHERE id = ?"
   ).bind(id).first();
   if (!row) return new Response("Not found", { status: 404 });
 
@@ -741,6 +748,10 @@ async function handleSharePage(request, url, env) {
     payload: row.payload,
     name: row.name,
     author: row.author,
+    // A share made by an agent has no picture, because the server cannot
+    // draw one. Pointing og:image at a picture that is not there would give
+    // the link preview a broken image, so it gets the general one instead.
+    hasImage: row.has_image === 1,
     url: `${CANONICAL_SITE}s/${id}`,
   });
 
@@ -1019,6 +1030,35 @@ export default {
     if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
     if (url.pathname === "/api/share") return handleShareCreate(request, env);
+    if (url.pathname === "/mcp") return handleMcp(request, env);
+    // The MCP registry's discovery file. It is also how the domain is proved
+    // to own the server it claims to.
+    if (url.pathname === "/.well-known/mcp.json") {
+      return Response.json({
+        $schema: "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.schema.json",
+        name: "com.minithlabs.vibresia",
+        description: "Write music visualisations — GLSL vibescapes that draw themselves from the music — and share them as links that play in a browser.",
+        status: "active",
+        version: "1.0.0",
+        repository: {
+          url: "https://github.com/sydlawrencedev/vibresia",
+          source: "github",
+          id: "sydlawrencedev/vibresia",
+        },
+        websiteUrl: "https://vibresia.com",
+        packages: [
+          {
+            registryType: "remote",
+            version: "1.0.0",
+            transport: { type: "streamable-http" },
+            remote: { url: `${CANONICAL_SITE}mcp` },
+            runtimeHint: "node",
+          },
+        ],
+      }, {
+        headers: { "cache-control": "public, max-age=3600" },
+      });
+    }
     if (url.pathname.startsWith("/api/share/")) {
       if (request.method === "PATCH") return handleSharePatch(request, url, env);
       return handleShareGet(request, url, env);

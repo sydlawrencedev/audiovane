@@ -105,7 +105,13 @@ function makeShares() {
                 if (!row) return null;
                 // D1 hands BLOBs back as a plain array of bytes, which is what
                 // the code has to cope with.
-                return { ...row, image: row.image ? Array.from(row.image) : null };
+                // The picture flag comes out of the SELECT, so the fake
+                // works it out rather than reading it off the row.
+                return {
+                  ...row,
+                  image: row.image ? Array.from(row.image) : null,
+                  has_image: row.image ? 1 : 0,
+                };
               }
               return null;
             },
@@ -389,7 +395,8 @@ test("the metadata names the vibescape and points at its own picture", async () 
   const { env } = makeEnv();
   const created = await run("https://vibresia.com/api/share", {
     env,
-    ...shareRequest({ payload: PAYLOAD, name: "My World", author: "Stephen" }),
+    ...shareRequest({ payload: PAYLOAD, name: "My World", author: "Stephen",
+                      image: Buffer.from([0xff, 0xd8, 0xff]).toString("base64") }),
   });
   const { id } = await created.json();
   const html = await (await run(`https://vibresia.com/s/${id}`, { env })).text();
@@ -398,6 +405,22 @@ test("the metadata names the vibescape and points at its own picture", async () 
   assert.ok(html.includes('<meta property="og:title" content="My World — Vibresia">'));
   assert.ok(html.includes(`<meta property="og:image" content="https://vibresia.com/og/${id}.jpg">`));
   assert.ok(html.includes("by Stephen"));
+});
+
+test("a share with no picture of its own gets the general one, not a broken link", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "No Picture", author: "Nobody" }),
+  });
+  const { id } = await created.json();
+  const html = await (await run(`https://vibresia.com/s/${id}`, { env })).text();
+  // An agent's share has no picture, because the server cannot draw one.
+  // Pointing the preview at a picture that is not there would be worse than
+  // the general one.
+  assert.ok(html.includes('<meta property="og:image" content="https://vibresia.com/media/share.jpg">'));
+  assert.ok(!html.includes(`content="https://vibresia.com/og/${id}.jpg"`));
 });
 
 test("a name with markup in it is escaped, not pasted in", async () => {
