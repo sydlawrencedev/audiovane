@@ -1,17 +1,21 @@
 import SwiftUI
+import AppKit
 
 /// The bottom-left strip: what is playing, who made it, the way to send it to
-/// someone, and — when the window is wide enough — the audio numbers.
+/// someone, and — when the window is wide enough and the pointer is inside —
+/// the audio numbers.
 ///
-/// Always on screen. Everything else in the chrome slides away when the
-/// pointer leaves the window, on the reasoning that the visuals are the point
-/// and a bar of diagnostics over them is noise. That reasoning does not extend
-/// to this: someone watching a vibescape they didn't write wants to know whose
-/// it is and to be able to pass it on without hunting for the control. Hiding
-/// that is hiding the one part of the interface that belongs to the person
-/// watching rather than to the app.
+/// Two halves with different rules. The name, the credit and the share button
+/// always stay: someone watching a vibescape they didn't write wants to know
+/// whose it is and wants to be able to pass it on, and both were only available
+/// while they happened to be moving the mouse. The audio numbers are ours, not
+/// the viewer's — diagnostics for the app, not for the person watching — so
+/// they ride the chrome out with everything else.
 struct FooterView: View {
     @EnvironmentObject var app: AppState
+
+    /// Whether the pointer is over the window. Drives the audio numbers only.
+    var chromeVisible: Bool
 
     var body: some View {
         // Subscribe to the throttled display tick (see AudioEngine).
@@ -24,13 +28,9 @@ struct FooterView: View {
 
         HStack(alignment: .bottom, spacing: 16) {
             NowPlayingCell(id: current)
-            ShareVibescapeButton()
 
             Spacer(minLength: 0)
 
-            // The audio numbers are ours, not the viewer's — the vibescape name
-            // above is theirs — so they're the first thing to go when the
-            // window narrows.
             if app.layout.showsFooterNumbers {
                 HStack(spacing: 0) {
                     FooterCell(key: "RMS",  value: String(format: "%.2f", snap.rms))
@@ -42,52 +42,84 @@ struct FooterView: View {
                         : "—",
                                flash: snap.beatStrength > 0.4)
                 }
+                // Hidden outright as well as faded, so the numbers aren't left
+                // in the layout as dead space while they're gone.
+                .offset(y: chromeVisible ? 0 : 80)
+                .opacity(chromeVisible ? 1 : 0)
+                .animation(.easeInOut(duration: 0.35), value: chromeVisible)
             }
         }
     }
 }
 
-/// What is on screen right now, and who made it.
+/// What is on screen right now, who made it, and the way to pass it on.
+///
+/// The share button sits on the title's line rather than beside the block. It
+/// is about *this* vibescape, so it belongs next to the name of this vibescape,
+/// and putting it after the credit put it on a row that only sometimes exists —
+/// so its position moved every time the credit appeared or didn't.
 struct NowPlayingCell: View {
     @EnvironmentObject var app: AppState
     let id: VibescapeID
 
     var body: some View {
-        let author = app.authorName(for: id)
-        VStack(alignment: .leading, spacing: 4) {
+        // nil whenever there's nobody worth naming — a custom vibescape with no
+        // author filled in, or one by Minith Labs, whose name is already in the
+        // bottom-right corner. See AppState.credit(for:).
+        let credit = app.credit(for: id)
+
+        return VStack(alignment: .leading, spacing: 4) {
             Text("VIBESCAPE")
                 .font(.system(size: 9, weight: .regular, design: .monospaced))
                 .tracking(2)
                 .foregroundStyle(Color(white: 0.45))
-            Text(app.displayName(for: id))
-                .font(.system(size: 14, weight: .bold, design: .monospaced))
-                .tracking(0.5)
-                .foregroundStyle(Color.white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                // Capped per line rather than on the VStack, and the VStack is
-                // fixedSize so the whole block hugs its text. Both matter: a
-                // maxWidth on the container reads as permission to grow, and it
-                // grew — competing for leftover space with the audio cells
-                // below and ending up a third of the screen wide, which put the
-                // share button nowhere near the name it belongs to.
-                .frame(maxWidth: 260, alignment: .leading)
-            // Left out entirely rather than shown as a blank line: a custom
-            // vibescape with no author filled in has nobody to credit, and an
-            // empty line where a name should be reads as a bug.
-            if !author.isEmpty {
-                Text(author)
-                    .font(.system(size: 10, weight: .regular, design: .monospaced))
-                    .tracking(0.8)
-                    .foregroundStyle(Color(white: 0.55))
+
+            HStack(alignment: .center, spacing: 12) {
+                Text(app.displayName(for: id))
+                    .font(.system(size: 14, weight: .bold, design: .monospaced))
+                    .tracking(0.5)
+                    .foregroundStyle(Color.white)
                     .lineLimit(1)
-                    .frame(maxWidth: 320, alignment: .leading)
+                    .truncationMode(.tail)
+                    // Capped on the line, not on the container. A maxWidth on
+                    // the container reads as permission to grow, and it grew —
+                    // competing for leftover space with the audio cells and
+                    // ending up a third of the screen wide.
+                    .frame(maxWidth: 260, alignment: .leading)
+
+                ShareVibescapeButton()
+            }
+
+            if let credit {
+                // One Group around both branches so the styling is written
+                // once. Inside the if/else it doesn't compile: the two sides are
+                // different types and neither is a View you can hang a .font()
+                // on.
+                Group {
+                    if let link = credit.link {
+                        Button { NSWorkspace.shared.open(link) } label: {
+                            Text("Made with 💜 by \(credit.author)")
+                                .underline()
+                        }
+                        .buttonStyle(.plain)
+                        .help("\(credit.author) — open their page")
+                    } else {
+                        Text("Made with 💜 by \(credit.author)")
+                            .help(credit.author)
+                    }
+                }
+                .font(.system(size: 10, weight: .regular, design: .monospaced))
+                .tracking(0.8)
+                .foregroundStyle(Color(white: 0.55))
+                .lineLimit(1)
+                .frame(maxWidth: 260, alignment: .leading)
             }
         }
+        // fixedSize so the block hugs its text rather than competing with the
+        // audio cells for leftover space. Both caps above still truncate.
         .fixedSize(horizontal: true, vertical: false)
         .padding(.horizontal, 4)
-        .help(author.isEmpty ? app.displayName(for: id)
-                             : "\(app.displayName(for: id)) by \(author)")
+        .help(app.displayName(for: id))
     }
 }
 

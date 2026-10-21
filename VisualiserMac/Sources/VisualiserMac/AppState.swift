@@ -507,15 +507,24 @@ final class AppState: ObservableObject {
         }
     }
 
-    /// Who made the vibescape that's on screen, for the credit line in the
-    /// footer.
+    /// Who to credit for the vibescape on screen, and where to find them — or nil
+    /// when the credit line has nothing worth saying.
     ///
-    /// Empty when there is nobody to name: a custom vibescape with the author
-    /// field blank, which is the common case — the field is optional and most
-    /// people writing a shader don't fill it in. The built-ins are all
-    /// Minith Labs, so they always have one.
-    func authorName(for id: VibescapeID) -> String {
-        allVibescapes.first { $0.id == id }?.author ?? ""
+    /// nil covers two cases. A custom vibescape with the author field blank,
+    /// which is the common case because the field is optional and most people
+    /// writing a shader don't fill it in.
+    ///
+    /// And Minith Labs, who made the app too. The bottom-right corner already
+    /// says so, and "Made with ❤️ by Minith Labs" sitting beside "🩷 from
+    /// Minith Labs" is the same credit said twice on one screen. Built-ins all
+    /// resolve to this case, which is why the line only ever appears for
+    /// somebody else's work — which is the only time it carries information.
+    func credit(for id: VibescapeID) -> (author: String, link: URL?)? {
+        guard let entry = allVibescapes.first(where: { $0.id == id }) else { return nil }
+        let author = entry.author.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !author.isEmpty else { return nil }
+        guard author.caseInsensitiveCompare(VibescapeMetadata.author) != .orderedSame else { return nil }
+        return (author, entry.link)
     }
 
     /// What the Custom Vibescape sheet is doing: making a new one, or editing

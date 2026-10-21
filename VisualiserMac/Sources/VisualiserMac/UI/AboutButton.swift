@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// The small "Made with ❤️" button in the bottom-right corner.
+/// The small "🩷 from Minith Labs" button in the bottom-right corner.
 ///
 /// Clicking it opens a popover with the credits and a "Buy us a coffee"
 /// button (Stripe's hosted checkout).
@@ -20,7 +20,11 @@ struct AboutButton: View {
             app.showAbout.toggle()
         } label: {
             HStack(spacing: 6) {
-                Text("Made with ❤️ by Minith Labs")
+                // A different heart from the one under the vibescape, on purpose: this is
+                // the maker signing their own work, the other one is the maker
+                // crediting whoever wrote the vibescape you're watching. Saying
+                // the same words in both places made the app credit itself.
+                Text("🩷 from Minith Labs")
                     .font(.system(size: 10, weight: .regular, design: .monospaced))
                     .tracking(0.6)
                     .foregroundStyle(Color(white: 0.62))
