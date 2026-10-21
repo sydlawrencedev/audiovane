@@ -440,6 +440,13 @@ published). Both are for:
     emailAddress=syd@blok.uk.com
     CN=Stephen Lawrence
 
+The email in the request does not have to be the one the Developer
+membership is registered to — Apple uses the CN to check the name against
+the account, and the email for nothing much. The membership here is under
+`syd@minithlabs.com`; the certificate that came back says
+`CN=Developer ID Application: Stephen Lawrence (CQQ33F2CDJ)`, which is what
+matters, and the `(CQQ33F2CDJ)` is the team ID.
+
 Upload `devid.csr` at
 [developer.apple.com/account/resources/certificates](https://developer.apple.com/account/resources/certificates),
 under **Developer ID Application**, and Apple will issue a `.cer`. Download it,
@@ -478,7 +485,7 @@ name; for an organisation it is the organisation's name.
 Store the credentials `notarytool` will need:
 
     xcrun notarytool store-credentials vibresia-notary \
-      --apple-id "syd@blok.uk.com" --team-id CQQ33F2CDJ
+      --apple-id "syd@minithlabs.com" --team-id CQQ33F2CDJ
 
 Leave `--password` off: `notarytool` then prompts for the app-specific
 password securely, rather than taking it as an argument where it would end up
@@ -486,6 +493,15 @@ in the shell history. The password is an app-specific password from
 [appleid.apple.com](https://appleid.apple.com) — the account's own password
 will not work. The team ID is in Membership details on the developer account
 page.
+
+The Apple ID here has to be the one the Developer membership is registered
+to, which is not necessarily the one in the certificate request. The
+membership is under `syd@minithlabs.com` while the CSR's email is
+`syd@blok.uk.com`, and `notarytool` answers "Invalid or inaccessible
+developer team ID for the provided Apple ID" when it is given the wrong one —
+the team is right, the account holding it is a different Apple ID. The Apple
+ID is the one shown at the top right of
+[developer.apple.com](https://developer.apple.com/account) when signed in.
 
 ### Extended attributes and the archive
 
