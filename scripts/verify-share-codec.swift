@@ -7,6 +7,7 @@
 // Run from the repo root:
 //   swift scripts/verify-share-codec.swift
 import Foundation
+import Compression
 
 // MARK: - codec (mirrors ShareImporter)
 
@@ -44,6 +45,79 @@ func base64URLDecode(_ s: String) -> Data? {
     return Data(base64Encoded: t)
 }
 
+// Mirrors ShareImporter.deflate / .inflate — raw DEFLATE via COMPRESSION_ZLIB,
+// which despite the name emits no zlib wrapper. That is what the landing page's
+// DecompressionStream("deflate-raw") expects.
+func deflate(_ input: Data) -> Data? {
+    guard !input.isEmpty else { return nil }
+    var out = [UInt8](repeating: 0, count: input.count + 64)
+    let n = input.withUnsafeBytes { s in
+        out.withUnsafeMutableBufferPointer { d in
+            compression_encode_buffer(d.baseAddress!, d.count,
+                s.bindMemory(to: UInt8.self).baseAddress!, input.count,
+                nil, COMPRESSION_ZLIB)
+        }
+    }
+    return n > 0 ? Data(out[0..<n]) : nil
+}
+
+func inflate(_ input: Data) -> Data? {
+    guard !input.isEmpty else { return nil }
+    var out = [UInt8](repeating: 0, count: input.count * 12 + 4096)
+    let n = input.withUnsafeBytes { s in
+        out.withUnsafeMutableBufferPointer { d in
+            compression_decode_buffer(d.baseAddress!, d.count,
+                s.bindMemory(to: UInt8.self).baseAddress!, input.count,
+                nil, COMPRESSION_ZLIB)
+        }
+    }
+    return (n > 0 && n < out.count) ? Data(out[0..<n]) : nil
+}
+
+// Mirrors ShareImporter.encodePayload.
+func encodePayload(_ p: SharePayload, minify: Bool) -> String {
+    let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]
+    var q = p
+    if minify { q.shader = GLSLMinifierMirror.minify(p.shader) }
+    let json = (try? e.encode(q)) ?? Data()
+    return base64URLEncode(deflate(json) ?? json)
+}
+
+// Mirrors ShareImporter.decodePayload: try JSON, else inflate and retry.
+func decodePayload(_ d: String) -> Request {
+    guard let data = base64URLDecode(d) else { return .malformed("bad base64") }
+    if let p = try? JSONDecoder().decode(SharePayload.self, from: data) {
+        guard !p.name.isEmpty, !p.shader.isEmpty else { return .malformed("missing name or shader") }
+        return .custom(p)
+    }
+    guard let inflated = inflate(data) else { return .malformed("neither JSON nor deflate") }
+    guard let p = try? JSONDecoder().decode(SharePayload.self, from: inflated) else {
+        return .malformed("bad json")
+    }
+    guard !p.name.isEmpty, !p.shader.isEmpty else { return .malformed("missing name or shader") }
+    return .custom(p)
+}
+
+// Mirrors Sources/.../Share/GLSLMinifier.swift.
+enum GLSLMinifierMirror {
+    static func minify(_ source: String) -> String {
+        var noComments = ""
+        for line in source.split(separator: "\n", omittingEmptySubsequences: false) {
+            var l = String(line)
+            while let i = l.range(of: "//") { l = String(l[l.startIndex..<i.lowerBound]) }
+            noComments += l + "\n"
+        }
+        // block comments
+        while let a = noComments.range(of: "/*"), let b = noComments.range(of: "*/", range: a.upperBound..<noComments.endIndex) {
+            noComments = String(noComments[noComments.startIndex..<a.lowerBound]) + String(noComments[b.upperBound...])
+        }
+        return noComments.split(separator: "\n", omittingEmptySubsequences: false)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+}
+
 func decodeURL(_ s: String) -> Request {
     guard let u = URL(string: s) else { return .malformed("not a url") }
     guard u.scheme?.lowercased() == "vibresia" else { return .malformed("wrong scheme") }
@@ -57,11 +131,7 @@ func decodeURL(_ s: String) -> Request {
         return .malformed("unknown slug")
     }
     if let d = v("d"), !d.isEmpty {
-        guard let data = base64URLDecode(d) else { return .malformed("bad base64") }
-        guard let payload = try? JSONDecoder().decode(SharePayload.self, from: data) else {
-            return .malformed("bad json")
-        }
-        return .custom(payload)
+        return decodePayload(d)
     }
     return .malformed("missing p or d")
 }
@@ -111,8 +181,7 @@ check("unknown slug is malformed",
 // 3. Custom URL round-trips a payload.
 let encoder = JSONEncoder()
 encoder.outputFormatting = [.sortedKeys]
-let payloadData = try! encoder.encode(sample)
-let encoded = base64URLEncode(payloadData)
+let encoded = encodePayload(sample, minify: false)
 let got = decodeURL("vibresia://open?d=\(encoded)")
 if case let .custom(p) = got, p == sample {
     print("ok   custom payload round-trips")
@@ -156,21 +225,120 @@ guard let padded = base64URLDecode(stripped) else { fatalError() }
 if padded == standard { print("ok   base64 tolerates missing padding") }
 else { failures += 1; print("FAIL base64 missing-padding tolerance") }
 
-// 9. The URL is short enough to fit in any chat platform. Vibescape-like
-//    shader bodies (typical 1-3KB) plus metadata produce a payload of ~3-5KB
-//    base64-encoded, which Slack/Twitter/iMessage all accept.
+// 9. A legacy link — plain base64 JSON, made before the format changed — still
+//    decodes. These are already in chat threads and will not be re-sent.
+let legacyData = try! encoder.encode(sample)
+let legacyEncoded = base64URLEncode(legacyData)
+if case let .custom(p) = decodeURL("vibresia://open?d=\(legacyEncoded)"), p == sample {
+    print("ok   legacy uncompressed link still decodes")
+} else {
+    failures += 1
+    print("FAIL legacy uncompressed link")
+}
+
+// 10. The same payload, compressed, is materially shorter and round-trips
+//     byte-for-byte — compression is lossless, so the recipient gets back the
+//     code that was actually sent.
+let compressedEncoded = encodePayload(sample, minify: false)
+if case let .custom(p) = decodeURL("vibresia://open?d=\(compressedEncoded)"), p == sample {
+    print("ok   compressed payload round-trips (\(legacyEncoded.count) -> \(compressedEncoded.count) chars)")
+} else {
+    failures += 1
+    print("FAIL compressed round-trip")
+}
+if compressedEncoded.count < legacyEncoded.count {
+    print("ok   compression shrinks the link by \(100 - compressedEncoded.count * 100 / legacyEncoded.count)%")
+} else {
+    failures += 1
+    print("FAIL compression made the link bigger")
+}
+
+// 11. A truncated compressed payload must be malformed rather than half-read.
+//     This is the case that matters: a chat client that cuts a long URL used to
+//     produce JSON that failed to parse, and now produces deflate that fails.
+let truncated = String(compressedEncoded.dropLast(compressedEncoded.count / 5))
+if case .malformed = decodeURL("vibresia://open?d=\(truncated)") {
+    print("ok   truncated compressed link is malformed, not half-decoded")
+} else {
+    failures += 1
+    print("FAIL truncated compressed link was accepted")
+}
+
+// 12. Minify is opt-in and lossy to readability, so it is tested as a separate
+//     path rather than folded into the default round-trip above.
+let minifiedEncoded = encodePayload(sample, minify: true)
+if case let .custom(p) = decodeURL("vibresia://open?d=\(minifiedEncoded)"),
+   !p.shader.contains("//"), p.name == sample.name {
+    print("ok   minified payload drops comments and still round-trips (\(compressedEncoded.count) -> \(minifiedEncoded.count) chars)")
+} else {
+    failures += 1
+    print("FAIL minified round-trip")
+}
+
+// 13. The URL is short enough to fit in any chat platform.
 let smallShader = "vec3 render(vec2 p, float t) { return vec3(uBass); }"
 let small = SharePayload(name: "P", author: "A", url: nil, shader: smallShader)
-let smallData = try! encoder.encode(small)
-let smallEncoded = base64URLEncode(smallData)
+let smallEncoded = encodePayload(small, minify: false)
 print("ok   tiny payload encodes to \(smallEncoded.count) chars (limit 8000)")
 
-// 10. A realistic 2KB shader still fits in 3-4KB.
-let realisticShader = String(repeating: "    float n = uBass * sin(p.x * 3.14) + uTreble * cos(p.y); ", count: 50)
-let realistic = SharePayload(name: "Glitter Path", author: "Syd Lawrence", url: nil, shader: realisticShader)
-let realisticData = try! encoder.encode(realistic)
-let realisticEncoded = base64URLEncode(realisticData)
-print("ok   realistic (~2KB shader) encodes to \(realisticEncoded.count) chars")
+// 14. Real shaders, compared across all three encodings so the size the
+//     feature actually ships is a measured number rather than a hope.
+//
+//     The starter template the app hands people, verbatim.
+let starter = SharePayload(name: "Pink Pulse", author: "Minith Labs", url: nil, shader: """
+    // Your vibescape. Edit the colour, press Test.
+    // Full list of uniforms and helpers: press "What's available?" below.
+    vec3 render(vec2 p, float t)
+    {
+        // A colour that brightens with the bass.
+        float pulse = 0.5 + 0.5 * sin(t * 2.0);
+        float amount = uBass * 0.6 + pulse * 0.2;
+
+        vec3 colour = vec3(1.0, 0.2, 0.8) * amount;   // pink
+        colour += vec3(0.2, 0.9, 1.0) * uTreble;      // cyan on the highs
+
+        // Fade out when there's no music.
+        return colour * uActive;
+    }
+    """)
+
+/// A shader written the way people actually write them: varied, commented,
+/// not one line repeated. The earlier version of this test repeated a single
+/// line fifty times, which DEFLATE compresses to almost nothing and made the
+/// saving look like 96% — a number that would have been true and useless.
+let handwritten = SharePayload(name: "Drifting Smoke", author: "Ada Lovelace",
+                                url: "https://example.com/ada", shader: """
+    // Smoke drifting over a warm floor, reacting to the bass.
+    vec3 render(vec2 p, float t)
+    {
+        // Slow vertical drift so it never looks frozen when nothing is playing.
+        p.y += t * 0.04;
+
+        float n = fbm(p * 7.0 + vec2(0.0, -t * 0.5));
+        n = fbm(p * 7.0 + vec2(n * 1.6, n * 1.6));
+
+        // Warm at the base, cold in the smoke, pulsing with the low end.
+        vec3 warm = vec3(1.0, 0.45, 0.12);
+        vec3 cold = vec3(0.15, 0.35, 0.75);
+        vec3 colour = mix(warm, cold, smoothstep(0.2, 0.9, n));
+
+        colour *= 0.6 + 0.8 * uBass;
+        colour += vec3(0.2, 0.9, 1.0) * uTreble * 0.15 * n;
+
+        // Hold still in silence rather than going black.
+        return mix(colour, colour * 0.5, 1.0 - uActive);
+    }
+    """)
+
+for (label, payload) in [("starter template", starter), ("hand-written", handwritten)] {
+    let plain = base64URLEncode(try! encoder.encode(payload))
+    let real = encodePayload(payload, minify: false)
+    let realMin = encodePayload(payload, minify: true)
+    print("ok   \(label) (\(payload.shader.count) byte shader):")
+    print("       plain base64       \(plain.count) chars")
+    print("       compressed         \(real.count) chars  (\(100 - real.count * 100 / plain.count)% smaller)")
+    print("       compressed+minify  \(realMin.count) chars  (\(100 - realMin.count * 100 / plain.count)% smaller)")
+}
 
 if failures > 0 {
     print("\n\(failures) failure(s)")

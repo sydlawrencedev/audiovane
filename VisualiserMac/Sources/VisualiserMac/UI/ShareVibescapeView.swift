@@ -28,6 +28,17 @@ struct ShareVibescapeView: View {
     @State private var hoverShare = false
     @State private var hoverSave = false
 
+    /// Off by default, and not because minifying is bad at it — it roughly
+    /// halves the link again. Because it is the one part of a share that costs
+    /// the recipient something: the app saves whatever arrives verbatim, so
+    /// turning this on hands them a shader with the comments gone and the
+    /// spacing crushed, and that is what they will be looking at.
+    ///
+    /// Compression is on unconditionally and costs them nothing, which is why it
+    /// isn't behind this switch. This one only exists for links that still
+    /// don't fit in whatever they're being pasted into.
+    @State private var minifyLink = false
+
     init(vibescape: VibescapeID) {
         _vibescape = State(initialValue: vibescape)
     }
@@ -83,10 +94,38 @@ struct ShareVibescapeView: View {
                 .font(.system(size: 11))
                 .foregroundStyle(Color(white: 0.55))
                 .fixedSize(horizontal: false, vertical: true)
+
+            // Only for custom vibescapes: a built-in is a slug in the URL and
+            // has nothing to shorten.
+            if vibescape.isCustom {
+                shorterLinkToggle
+            }
         }
         .padding(22)
         .frame(width: 540)
         .background(Color(red: 0.06, green: 0.03, blue: 0.11))
+    }
+
+
+    /// The one setting in this sheet that trades something away, so it says so
+    /// on its face rather than hiding behind a tooltip. The link is already
+    /// compressed by default — this is what you reach for when it still won't
+    /// fit in whatever it's being pasted into.
+    private var shorterLinkToggle: some View {
+        Toggle(isOn: $minifyLink) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Shorter link")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                Text("Strips the comments and spacing out of the code. Halves the link again — and whoever opens it gets back the stripped version, so only turn this on if the link is being truncated on the way out.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(white: 0.55))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .toggleStyle(.switch)
+        .controlSize(.small)
+        .tint(Color(red: 1, green: 0.17, blue: 0.84))
+        .padding(.top, 2)
     }
 
     // MARK: - Sections
@@ -284,7 +323,7 @@ struct ShareVibescapeView: View {
             guard let mode = app.customVibescape(id: id) else {
                 return URL(string: "https://vibresia.com/share")!
             }
-            let encoded = ShareImporter.encodePayload(mode)
+            let encoded = ShareImporter.encodePayload(mode, minify: minifyLink)
             var comps = URLComponents(string: "https://vibresia.com/share")!
             comps.queryItems = [URLQueryItem(name: "d", value: encoded)]
             return comps.url!

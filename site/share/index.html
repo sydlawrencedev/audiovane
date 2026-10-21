@@ -81,7 +81,10 @@
    *     show the vibescape name and the shader source as a preview. The
    *     opening dance is the same as for built-ins.
    */
-  (function () {
+  // async because decoding may have to inflate a compressed payload, and
+  // DecompressionStream is a stream API. Everything after the await is ordinary
+  // DOM work, which doesn't care that it happens a tick later.
+  (async function () {
     var params = new URL(window.location.href).searchParams;
     var d = params.get("d");
     var content = document.getElementById("content");
@@ -96,7 +99,7 @@
 
     var payload;
     try {
-      payload = decodePayload(d);
+      payload = await decodePayload(d);
     } catch (e) {
       content.innerHTML = errorCard("Couldn't read this share link. Ask the sender to resend it — the URL may have been truncated.");
       return;
@@ -219,14 +222,64 @@
   }
 
   // Mirror of SharePayload on the Swift side (Sources/VisualiserMac/Share/ShareImporter.swift).
-  function decodePayload(s) {
+  //
+  // Two formats, both already in the wild, so this sniffs rather than being
+  // told: links made before the payload was compressed are plain base64 JSON,
+  // and newer ones are raw DEFLATE wrapping the same JSON. JSON is tried first
+  // because it is unambiguous, and because a compressed payload that gets
+  // truncated by a chat client fails the inflate rather than half-parsing.
+  async function decodePayload(s) {
+    var bytes = b64urlToBytes(s);
+    var json = utf8BytesToString(bytes);
 
-    var t = s.replace(/-/g, "+").replace(/_/g, "/");
-    while (t.length % 4 !== 0) t += "=";
-    var json = decodeURIComponent(escape(atob(t)));
-    var obj = JSON.parse(json);
+    // Fast path: not compressed.
+    var parsed = tryParseJSON(json);
+    if (parsed) return finish(parsed);
+
+    // Otherwise it should be raw DEFLATE. DecompressionStream is the browser's
+    // own implementation, so this costs no library and no bytes of page weight.
+    // It is the match for Swift's COMPRESSION_ZLIB, which emits raw DEFLATE
+    // despite the name — the one algorithm in Apple's Compression framework
+    // that a browser can read at all.
+    if (typeof DecompressionStream === "undefined") {
+      throw new Error("This browser cannot decompress share links");
+    }
+    var stream = new Blob([bytes]).stream()
+      .pipeThrough(new DecompressionStream("deflate-raw"));
+    var text = await new Response(stream).text();
+    var inflated = tryParseJSON(text);
+    if (!inflated) throw new Error("payload is neither JSON nor deflate");
+    return finish(inflated);
+  }
+
+  function finish(obj) {
     if (!obj.name || !obj.shader) throw new Error("missing name or shader");
     return obj;
+  }
+
+  function tryParseJSON(text) {
+    try {
+      var o = JSON.parse(text);
+      return o && typeof o === "object" && typeof o.shader === "string" ? o : null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function b64urlToBytes(s) {
+    var t = s.replace(/-/g, "+").replace(/_/g, "/");
+    while (t.length % 4 !== 0) t += "=";
+    var bin = atob(t);
+    var out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+    return out;
+  }
+
+  // TextDecoder rather than the old escape()/atob() dance: it is correct for
+  // multi-byte characters, which is the whole reason a vibescape name can be
+  // someone’s actual name.
+  function utf8BytesToString(bytes) {
+    return new TextDecoder("utf-8").decode(bytes);
   }
 
   function noPayloadContent() {

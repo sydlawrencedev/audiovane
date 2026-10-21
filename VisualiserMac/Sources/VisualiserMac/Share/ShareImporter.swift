@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import Compression
 
 /// Decodes a `vibresia://open?...` URL handed in by macOS and acts on it.
 ///
@@ -73,50 +74,129 @@ enum ShareImporter {
     /// Decode the base64 payload in `d=...` into a `Request`. Mirror of
     /// `encodePayload` below; the round-trip is exercised by
     /// `scripts/verify-share-codec.swift`.
+    ///
+    /// Handles both payload formats, because links made before the format
+    /// changed are already in chat threads and will not be re-sent. Unchanged
+    /// links are plain base64 JSON, so JSON is tried first and deflate is the
+    /// fallback: sniffing rather than a version marker, because it costs
+    /// nothing and needs no coordination with the links already out there.
     static func decodePayload(_ base64url: String) -> Request {
         guard let data = base64URLDecode(base64url) else {
             return .malformed("payload is not valid base64url")
         }
-        let decoder = JSONDecoder()
+        if let payload = try? JSONDecoder().decode(SharePayload.self, from: data) {
+            return vibescape(from: payload)
+        }
+        guard let inflated = inflate(data) else {
+            return .malformed("payload is neither JSON nor deflate")
+        }
         do {
-            let payload = try decoder.decode(SharePayload.self, from: data)
-            guard !payload.name.isEmpty, !payload.shader.isEmpty else {
-                return .malformed("payload missing name or shader")
-            }
-            // The slug is generated from the display name the same way the
-            // store does, so the file lands where the app expects it and
-            // the activeVibescape can address it.
-            let id = CustomVibescapeStore.uniqueSlug(from: payload.name)
-            let mode = CustomVibescape(
-                id: id,
-                name: payload.name,
-                author: payload.author,
-                url: payload.url,
-                shader: payload.shader,
-                enabled: true,
-                modified: Date()
-            )
-            return .custom(mode)
+            return vibescape(from: try JSONDecoder().decode(SharePayload.self, from: inflated))
         } catch {
             return .malformed("payload JSON failed to decode: \(error.localizedDescription)")
         }
     }
 
-    /// Encode a custom vibescape into a URL-safe base64 fragment. Output
-    /// stays around 2-4KB for typical shader sizes, which fits any chat
-    /// platform without complaint.
-    static func encodePayload(_ mode: CustomVibescape) -> String {
+    /// The payload as a vibescape the app can actually use. The slug is
+    /// generated from the display name the same way the store does, so the file
+    /// lands where the app expects it and `activeVibescape` can address it.
+    private static func vibescape(from payload: SharePayload) -> Request {
+        guard !payload.name.isEmpty, !payload.shader.isEmpty else {
+            return .malformed("payload missing name or shader")
+        }
+        return .custom(CustomVibescape(
+            id: CustomVibescapeStore.uniqueSlug(from: payload.name),
+            name: payload.name,
+            author: payload.author,
+            url: payload.url,
+            shader: payload.shader,
+            enabled: true,
+            modified: Date()
+        ))
+    }
+
+    /// Encode a custom vibescape into a URL-safe base64 fragment.
+    ///
+    /// The JSON is compressed with raw DEFLATE before it is base64'd, which
+    /// takes a typical vibescape from around 1.1K characters to 640 — enough
+    /// headroom that a real shader stops being the thing that breaks a share
+    /// link. Compression is lossless, so whoever opens the link gets back the
+    /// exact code that was sent, which minifying would not.
+    ///
+    /// Raw DEFLATE specifically, because it is the one algorithm in Apple's
+    /// Compression framework a browser can read on its own, through
+    /// `DecompressionStream('deflate-raw')`. COMPRESSION_ZLIB sounds like the
+    /// match and is not: it emits raw DEFLATE despite the name, and its LZFSE,
+    /// LZ4 and LZMA siblings are all Apple-proprietary framing with no
+    /// JavaScript decoder at all.
+    ///
+    /// `minify` strips comments and redundant whitespace, which roughly halves
+    /// it again — and hands the recipient unreadable code, saved verbatim to
+    /// their disk. So it is off unless the person sharing asks for it.
+    static func encodePayload(_ mode: CustomVibescape, minify: Bool = false) -> String {
         let payload = SharePayload(
             name: mode.name,
             author: mode.author,
             url: mode.url,
-            shader: mode.shader
+            shader: minify ? GLSLMinifier.minify(mode.shader) : mode.shader
         )
         let encoder = JSONEncoder()
         // Keys sorted and whitespace-free so the round-trip is byte-stable.
         encoder.outputFormatting = [.sortedKeys]
-        let data = (try? encoder.encode(payload)) ?? Data()
+        let json = (try? encoder.encode(payload)) ?? Data()
+        // Compression is an optimisation, never a requirement: if it somehow
+        // fails, an uncompressed payload is still a perfectly good link.
+        let data = deflate(json) ?? json
         return base64URLEncode(data)
+    }
+
+    // MARK: - Compression
+
+    /// Raw DEFLATE, via the one algorithm in the Compression framework that a
+    /// browser can read back without a library.
+    ///
+    /// `COMPRESSION_ZLIB` is named misleadingly — it emits raw DEFLATE, with no
+    /// zlib wrapper — which is exactly what `DecompressionStream('deflate-raw')`
+    /// and `zlib.inflateRawSync` expect. Verified by round-tripping between the
+    /// two, not by reading the name. LZFSE, LZ4 and LZMA are all Apple-only
+    /// framing (`bvx-`, `bv4-`, XZ) and would make the landing page unable to
+    /// read a shared vibescape at all.
+    static func deflate(_ input: Data) -> Data? {
+        guard !input.isEmpty else { return nil }
+        // DEFLATE's worst case is a few bytes over the input. The buffer has to
+        // be that big or the call fails rather than growing.
+        var output = [UInt8](repeating: 0, count: input.count + 64)
+        let written = input.withUnsafeBytes { src in
+            output.withUnsafeMutableBufferPointer { dst in
+                compression_encode_buffer(
+                    dst.baseAddress!, dst.count,
+                    src.bindMemory(to: UInt8.self).baseAddress!, input.count,
+                    nil, COMPRESSION_ZLIB)
+            }
+        }
+        guard written > 0 else { return nil }
+        return Data(output[0..<written])
+    }
+
+    static func inflate(_ input: Data) -> Data? {
+        guard !input.isEmpty else { return nil }
+        // Inflate needs room for the result. Twelve times the input covers
+        // anything a vibescape could compress to well past its original size;
+        // encoding strips comments and the JSON escaping shrinks, so a payload
+        // that inflates to more than this is malformed rather than large.
+        var output = [UInt8](repeating: 0, count: input.count * 12 + 4096)
+        let written = input.withUnsafeBytes { src in
+            output.withUnsafeMutableBufferPointer { dst in
+                compression_decode_buffer(
+                    dst.baseAddress!, dst.count,
+                    src.bindMemory(to: UInt8.self).baseAddress!, input.count,
+                    nil, COMPRESSION_ZLIB)
+            }
+        }
+        // 0 means the buffer was too small; anything less than the full buffer
+        // means it stopped early, which is a truncated or corrupt payload.
+        guard written > 0, written < output.count else { return nil }
+        return Data(output[0..<written])
     }
 
     // MARK: - Apply (main-actor)
