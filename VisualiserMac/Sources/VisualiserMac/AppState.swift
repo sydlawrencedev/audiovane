@@ -870,14 +870,20 @@ final class AppState: ObservableObject {
     }
 
     /// Adds a user's vibescape, once it has been shown to compile.
-    func addCustomVibescape(name: String, author: String, url: String?, shader: String) -> Result<CustomVibescape, ShaderProblem> {
+    ///
+    /// `shareID` and `shareKey` are for a vibescape that arrived on a
+    /// share link: they remember which link it came from, so sharing it on
+    /// hands that link back rather than making a new one.
+    func addCustomVibescape(name: String, author: String, url: String?, shader: String,
+                            shareID: String? = nil, shareKey: String? = nil) -> Result<CustomVibescape, ShaderProblem> {
         let id = CustomVibescapeStore.uniqueSlug(from: name)
         switch renderer.installCustomShader(id: id, body: shader) {
         case .failure(let problem):
             return .failure(problem)
         case .success:
             let mode = CustomVibescape(id: id, name: name, author: author, url: url,
-                                  shader: shader, enabled: true, modified: Date())
+                                  shader: shader, enabled: true, modified: Date(),
+                                  shareID: shareID, shareKey: shareKey)
             do {
                 try CustomVibescapeStore.save(mode)
             } catch {

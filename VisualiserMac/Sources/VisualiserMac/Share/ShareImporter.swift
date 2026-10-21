@@ -66,7 +66,10 @@ enum ShareImporter {
             return .malformed("unknown built-in slug '\(slug)'")
         }
         if let d = value("d"), !d.isEmpty {
-            return decodePayload(d)
+            // `s` is which share this arrived from, when the link knows it:
+            // the page puts it in the deep link so the vibescape can remember
+            // the link it arrived on and hand the same one back.
+            return decodePayload(d, shareID: value("s"))
         }
         return .malformed("URL has no p or d parameter")
     }
@@ -80,18 +83,19 @@ enum ShareImporter {
     /// links are plain base64 JSON, so JSON is tried first and deflate is the
     /// fallback: sniffing rather than a version marker, because it costs
     /// nothing and needs no coordination with the links already out there.
-    static func decodePayload(_ base64url: String) -> Request {
+    static func decodePayload(_ base64url: String, shareID: String? = nil) -> Request {
         guard let data = base64URLDecode(base64url) else {
             return .malformed("payload is not valid base64url")
         }
         if let payload = try? JSONDecoder().decode(SharePayload.self, from: data) {
-            return vibescape(from: payload)
+            return vibescape(from: payload, shareID: shareID)
         }
         guard let inflated = inflate(data) else {
             return .malformed("payload is neither JSON nor deflate")
         }
         do {
-            return vibescape(from: try JSONDecoder().decode(SharePayload.self, from: inflated))
+            return vibescape(from: try JSONDecoder().decode(SharePayload.self, from: inflated),
+                             shareID: shareID)
         } catch {
             return .malformed("payload JSON failed to decode: \(error.localizedDescription)")
         }
@@ -100,7 +104,11 @@ enum ShareImporter {
     /// The payload as a vibescape the app can actually use. The slug is
     /// generated from the display name the same way the store does, so the file
     /// lands where the app expects it and `activeVibescape` can address it.
-    private static func vibescape(from payload: SharePayload) -> Request {
+    ///
+    /// `shareID` is the share this arrived from, if it came from one. It is
+    /// kept on the vibescape so that sharing it on hands back the link it
+    /// arrived on rather than making a new one.
+    private static func vibescape(from payload: SharePayload, shareID: String? = nil) -> Request {
         guard !payload.name.isEmpty, !payload.shader.isEmpty else {
             return .malformed("payload missing name or shader")
         }
@@ -111,7 +119,13 @@ enum ShareImporter {
             url: payload.url,
             shader: payload.shader,
             enabled: true,
-            modified: Date()
+            modified: Date(),
+            shareID: shareID,
+            // The key of what arrived, so the app can tell whether the
+            // vibescape has been edited since. Edited means a new share;
+            // unedited means the same link.
+            shareKey: ShareIdentity.key(name: payload.name, author: payload.author,
+                                        url: payload.url, shader: payload.shader)
         ))
     }
 
@@ -215,7 +229,11 @@ enum ShareImporter {
             Task { await Analytics.shared.track("share_opened", ["kind": "builtin", "slug": mode.rawValue]) }
             completion?(request)
         case .custom(let mode):
-            switch app.addCustomVibescape(name: mode.name, author: mode.author, url: mode.url, shader: mode.shader) {
+            // The share it came from goes with it, so sharing it on hands
+            // back the same link rather than making a new one.
+            switch app.addCustomVibescape(name: mode.name, author: mode.author, url: mode.url,
+                                           shader: mode.shader,
+                                           shareID: mode.shareID, shareKey: mode.shareKey) {
             case .success(let saved):
                 app.setVibescape(saved.modeID)
                 bringAppToFront()

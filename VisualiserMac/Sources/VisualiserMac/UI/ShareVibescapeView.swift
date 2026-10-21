@@ -147,15 +147,19 @@ struct ShareVibescapeView: View {
 
 
     /// The one setting in this sheet that trades something away, so it says so
-    /// on its face rather than hiding behind a tooltip. The link is already
-    /// compressed by default — this is what you reach for when it still won't
-    /// fit in whatever it's being pasted into.
+    /// on its face rather than hiding behind a tooltip.
+    ///
+    /// It used to halve the short link. It doesn't any more: a short link is
+    /// the same length whatever this says, because the vibescape is stored on
+    /// the site rather than carried in the URL. What it still changes is the
+    /// long fallback link — the one that carries the shader itself — and the
+    /// payload the first share of a vibescape stores.
     private var shorterLinkToggle: some View {
         Toggle(isOn: $minifyLink) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Shorter link")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                Text("Strips the comments and spacing out of the code. Halves the link again — and whoever opens it gets back the stripped version, so only turn this on if the link is being truncated on the way out.")
+                Text("Strips the comments and spacing out of the code. The short link is the same length either way — this is for the fallback link, and for the first share of a vibescape. Whoever opens it gets back the stripped version.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(white: 0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -305,12 +309,38 @@ struct ShareVibescapeView: View {
     /// The picture is rendered at the same moment the share page draws its
     /// still — six seconds in, so anything driven by time has reached its
     /// stride — so the preview in a chat is the picture the recipient gets.
+    ///
+    /// Most of the time nothing is asked of the site at all: a vibescape
+    /// keeps the link it has, and the same link is the answer however many
+    /// times it is shared.
     private func makeShortLink() async {
         guard vibescape.isCustom, shortLink == nil, !makingLink else { return }
         guard case .custom(let id) = vibescape,
               let mode = app.customVibescape(id: id) else { return }
 
         makingLink = true
+        defer { makingLink = false }
+
+        let key = ShareIdentity.key(name: mode.name, author: mode.author,
+                                    url: mode.url, shader: mode.shader)
+
+        // The link this vibescape arrived on, if it arrived on one and
+        // hasn't been edited since. Sharing it on hands back that link:
+        // the person who sent it to you sent you that link, and the person
+        // you send it to should get the same one. Edit it and it's a
+        // different vibescape, so it gets its own link.
+        if let shareID = mode.shareID, mode.shareKey == key {
+            shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
+            return
+        }
+
+        // A share this Mac has already made for this vibescape. Asking
+        // again would upload the picture again to arrive at a URL we know.
+        if let shareID = ShareLinkCache.shareID(for: key) {
+            shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
+            return
+        }
+
         let payload = ShareImporter.encodePayload(mode, minify: minifyLink)
         let name = mode.name
         let author = mode.author.isEmpty ? "Minith Labs" : mode.author
@@ -328,9 +358,11 @@ struct ShareVibescapeView: View {
         }
 
         let link = await ShareLinkStore().makeLink(
-            payload: payload, name: name, author: author, image: image)
-        makingLink = false
-        shortLink = link
+            payload: payload, name: name, author: author, image: image, key: key)
+        shortLink = link?.url
+        if let shareID = link?.id {
+            ShareLinkCache.remember(shareID: shareID, for: key)
+        }
     }
 
     /// The Share button. Waits for the short link if there isn't one yet, so
@@ -438,7 +470,7 @@ struct ShareVibescapeView: View {
         case .builtin:
             return "Anyone who clicks it sees a page with the vibescape preview and an “Open in Vibresia” button — works whether they already have the app or not."
         case .custom:
-            return "The shader rides in the link, so it's yours to send without an account or a database. Clicking it adds the vibescape to their list."
+            return "The vibescape is stored on the site, so the link stays short — and it stays the same link however many times you share it. Clicking it adds the vibescape to their list."
         }
     }
 
@@ -453,7 +485,7 @@ struct ShareVibescapeView: View {
             let stable = (mode == .autoScan)
                 ? (app.scanCycle.first?.builtin ?? .tunnel)
                 : mode
-            return URL(string: "https://vibresia.com/share/\(stable.rawValue)")!
+            return URL(string: "\(ShareLinkStore.site)/share/\(stable.rawValue)")!
         case .custom(let id):
             guard let mode = app.customVibescape(id: id) else {
                 return URL(string: "https://vibresia.com/share")!

@@ -318,6 +318,12 @@ const MAX_PAYLOAD_CHARS = 8192;
 const MAX_NAME_CHARS = 120;
 const MAX_AUTHOR_CHARS = 120;
 const MAX_IMAGE_BYTES = 400 * 1024;
+const MAX_KEY_CHARS = 128;
+
+// The key is a hash the app sends: hex, usually. Checking the shape is not
+// much, but it is enough to keep anything that is not a key out of the
+// database.
+const KEY_PATTERN = /^[A-Za-z0-9_-]+$/;
 
 // The payload is base64url of the deflated JSON, so it is base64url
 // characters and nothing else. Checking that is not much, but it is enough
@@ -365,11 +371,15 @@ export function buildSharePage(html, { id, payload, name, author, url }) {
 
   let out = html;
 
-  // The payload. Injected as a global rather than a query parameter so the
-  // URL a recipient sees stays short. `</` is escaped because the payload
-  // ends up inside a <script> element, and the JSON is the only thing that
-  // could close it early.
-  const injected = `<script>window.__VIBRESIA_SHARE__ = ${JSON.stringify({ d: payload }).replace(/</g, "\\u003c")};</script>`;
+  // The payload, and which share it is. Injected as a global rather than a
+  // query parameter so the URL a recipient sees stays short. The id goes
+  // along so the page can put it in the deep link: the app then knows which
+  // link the vibescape came from, and can hand the same link back when it
+  // is shared on.
+  //
+  // `</` is escaped because the payload ends up inside a <script> element,
+  // and the JSON is the only thing that could close it early.
+  const injected = `<script>window.__VIBRESIA_SHARE__ = ${JSON.stringify({ d: payload, id }).replace(/</g, "\\u003c")};</script>`;
   out = out.replace("</head>", `${injected}\n</head>`);
 
   const swap = (pattern, value) => {
@@ -389,6 +399,25 @@ export function buildSharePage(html, { id, payload, name, author, url }) {
   swap(/<meta name="twitter:image" content="[^"]*">/, `<meta name="twitter:image" content="${escapeHtml(image)}">`);
 
   return out;
+}
+
+/// Finds a share that already holds this vibescape.
+async function findExistingShare(env, { key, payload }) {
+  // By key first: that is the app's hash of the content, so it finds the
+  // share whoever made it — including one made by somebody else, which is
+  // the point: the same vibescape gets the same link.
+  if (key) {
+    const byKey = await env.SHARES.prepare(
+      "SELECT id, image FROM shares WHERE key = ?"
+    ).bind(key).first();
+    if (byKey) return byKey;
+  }
+  // By payload, for a share made before the key existed — or by an app
+  // version that doesn't send one.
+  const byPayload = await env.SHARES.prepare(
+    "SELECT id, image FROM shares WHERE payload = ?"
+  ).bind(payload).first();
+  return byPayload || null;
 }
 
 /// `POST /api/share` — the app hands over a vibescape and gets back a short
@@ -417,11 +446,15 @@ async function handleShareCreate(request, env) {
   const payload = typeof body?.payload === "string" ? body.payload : "";
   const name = typeof body?.name === "string" ? body.name : "";
   const author = typeof body?.author === "string" ? body.author : "";
+  const key = typeof body?.key === "string" ? body.key : "";
   if (!payload || payload.length > MAX_PAYLOAD_CHARS || !PAYLOAD_PATTERN.test(payload)) {
     return Response.json({ ok: false, error: "bad payload" }, { status: 400 });
   }
   if (name.length > MAX_NAME_CHARS || author.length > MAX_AUTHOR_CHARS) {
     return Response.json({ ok: false, error: "name too long" }, { status: 400 });
+  }
+  if (key.length > MAX_KEY_CHARS || (key && !KEY_PATTERN.test(key))) {
+    return Response.json({ ok: false, error: "bad key" }, { status: 400 });
   }
 
   // The picture is optional. Without one the share still works — it just
@@ -440,6 +473,33 @@ async function handleShareCreate(request, env) {
     image = bytes;
   }
 
+  // The same vibescape, the same link.
+  //
+  // A share used to be made fresh every time, so sharing the same vibescape
+  // twice gave you two URLs, and re-sharing one somebody sent you gave you
+  // a third. The key is a hash of the vibescape's content, so a share that
+  // already exists is found rather than made again.
+  const existing = await findExistingShare(env, { key, payload });
+  if (existing) {
+    // A share made while the picture was missing gets one now, if this
+    // request has it. The link stays the same either way.
+    if (image && !existing.image) {
+      try {
+        await env.SHARES.prepare("UPDATE shares SET image = ? WHERE id = ?")
+          .bind(image, existing.id).run();
+      } catch (error) {
+        console.log(`[share] could not add the picture to ${existing.id}: ${error}`);
+      }
+    }
+    return Response.json({
+      ok: true,
+      id: existing.id,
+      url: `${CANONICAL_SITE}s/${existing.id}`,
+      imageUrl: existing.image || image ? `${CANONICAL_SITE}og/${existing.id}.jpg` : null,
+      existing: true,
+    });
+  }
+
   // A handful of tries: the id is six characters from a billion, so a
   // collision is a one-in-a-million thing, but it is a primary key and
   // losing the race should not fail the share.
@@ -447,16 +507,31 @@ async function handleShareCreate(request, env) {
     const id = randomShareId();
     try {
       await env.SHARES.prepare(
-        "INSERT INTO shares (id, payload, name, author, image, created_at) VALUES (?, ?, ?, ?, ?, ?)"
-      ).bind(id, payload, name, author, image, Date.now()).run();
+        "INSERT INTO shares (id, payload, name, author, image, key, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      ).bind(id, payload, name, author, image, key || null, Date.now()).run();
       return Response.json({
         ok: true,
         id,
         url: `${CANONICAL_SITE}s/${id}`,
         imageUrl: image ? `${CANONICAL_SITE}og/${id}.jpg` : null,
+        existing: false,
       });
     } catch (error) {
-      if (String(error).includes("UNIQUE constraint failed")) continue;
+      // Two devices sharing the same vibescape at the same moment: one of
+      // them won the race, and its link is the link.
+      if (String(error).includes("UNIQUE constraint failed")) {
+        const raced = await findExistingShare(env, { key, payload });
+        if (raced) {
+          return Response.json({
+            ok: true,
+            id: raced.id,
+            url: `${CANONICAL_SITE}s/${raced.id}`,
+            imageUrl: raced.image || image ? `${CANONICAL_SITE}og/${raced.id}.jpg` : null,
+            existing: true,
+          });
+        }
+        continue;
+      }
       console.log(`[share] insert failed: ${error}`);
       return Response.json({ ok: false, error: "could not save" }, { status: 500 });
     }

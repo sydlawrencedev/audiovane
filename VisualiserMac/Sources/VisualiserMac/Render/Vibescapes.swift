@@ -84,6 +84,18 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
     /// panel gives the built-ins.
     var enabled: Bool
     var modified: Date
+    /// The share this vibescape arrived on, if it arrived on one.
+    ///
+    /// Sharing it on hands back that link, rather than making a new one: the
+    /// person you got it from sent you a link, and the person you send it to
+    /// should get the same one.
+    var shareID: String?
+    /// The key of the vibescape as it arrived — see `ShareIdentity`.
+    ///
+    /// Compared with the key of the vibescape as it is now, to tell whether it
+    /// has been edited since. Edited means it is a different vibescape and
+    /// deserves a different link; unedited means the same one.
+    var shareKey: String?
 
     var modeID: VibescapeID { .custom(id) }
 
@@ -104,10 +116,14 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
         modified = try c.decodeIfPresent(Date.self, forKey: .modified) ?? Date()
         author = try c.decodeIfPresent(String.self, forKey: .author) ?? ""
         url = try c.decodeIfPresent(String.self, forKey: .url)
+        // Both of these arrived after the first release, so a vibescape
+        // written by an older build has neither.
+        shareID = try c.decodeIfPresent(String.self, forKey: .shareID)
+        shareKey = try c.decodeIfPresent(String.self, forKey: .shareKey)
     }
 
     init(id: String, name: String, author: String, url: String?, shader: String,
-         enabled: Bool, modified: Date) {
+         enabled: Bool, modified: Date, shareID: String? = nil, shareKey: String? = nil) {
         self.id = id
         self.name = name
         self.author = author
@@ -115,6 +131,8 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
         self.shader = shader
         self.enabled = enabled
         self.modified = modified
+        self.shareID = shareID
+        self.shareKey = shareKey
     }
 }
 

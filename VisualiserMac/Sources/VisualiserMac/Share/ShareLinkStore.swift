@@ -9,7 +9,7 @@ import Foundation
 ///
 /// Now the payload is stored on the site and the link is `/s/<id>` — short,
 /// on the same domain, and with a picture of the vibescape behind it so the
-/// preview shows the world rather than the generic Vibresia image.
+/// preview shows the world rather than the generic Vibresia one.
 ///
 /// The long link still works, and is what falls back if any of this fails.
 /// Sharing is not allowed to depend on the network.
@@ -24,6 +24,10 @@ actor ShareLinkStore {
             ?? "https://vibresia.com/api/share"
     )!
 
+    /// Where the site lives. The short links point here, and so do the
+    /// built-in ones.
+    static let site = "https://vibresia.com"
+
     /// The token the Worker checks. It ships inside the app, so it is a
     /// speed bump rather than a lock — its job is to stop a script using the
     /// site as free storage, not to keep anyone out.
@@ -35,7 +39,13 @@ actor ShareLinkStore {
     ///
     /// `image` is the picture of the vibescape, as JPEG. It is optional:
     /// without one the link still works, it just has the generic preview.
-    func makeLink(payload: String, name: String, author: String, image: Data?) async -> String? {
+    ///
+    /// `key` is the vibescape's identity — see `ShareIdentity`. The site
+    /// uses it to find the share this vibescape already has rather than
+    /// making a second one, so the same vibescape always gets the same
+    /// link.
+    func makeLink(payload: String, name: String, author: String,
+                  image: Data?, key: String) async -> ShareLink? {
         guard !payload.isEmpty, !ShareLinkStore.token.isEmpty else { return nil }
 
         var request = URLRequest(url: ShareLinkStore.endpoint)
@@ -48,6 +58,9 @@ actor ShareLinkStore {
             "name": String(name.prefix(120)),
             "author": String(author.prefix(120)),
         ]
+        if !key.isEmpty {
+            body["key"] = key
+        }
         if let image, !image.isEmpty {
             body["image"] = image.base64EncodedString()
         }
@@ -57,9 +70,21 @@ actor ShareLinkStore {
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse, http.statusCode == 200 else { return nil }
             guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
-            return json["url"] as? String
+            guard let url = json["url"] as? String, let id = json["id"] as? String else { return nil }
+            return ShareLink(id: id, url: url, imageURL: json["imageUrl"] as? String)
         } catch {
             return nil
         }
     }
+}
+
+/// A short link the site made, and the share it belongs to.
+struct ShareLink: Equatable {
+    /// The share's id — the last part of the URL, and what the app hands
+    /// back when the vibescape is shared on.
+    let id: String
+    /// The link itself.
+    let url: String
+    /// The picture behind it, if the share has one.
+    let imageURL: String?
 }

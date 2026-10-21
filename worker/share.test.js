@@ -12,31 +12,59 @@ import worker, { buildSharePage, toBytes, resetRateLimiter } from "./index.js";
 const SHARE_TOKEN = "share-token-for-tests";
 const PAYLOAD = "TZDNbsMgEIRfZcUJYoqIU6dtqjxCT63USy8oIcESBosfK1GUd-8CVZWLBd_M7oy5EZWT8YHsyGfSs9GOcOLUpBF8XOF";
 
-/** A D1 stand-in: just enough SQL for the two queries the Worker makes. */
+/** A D1 stand-in: just enough SQL for the queries the Worker makes. */
 function makeShares() {
   const rows = new Map();
+  const byKey = new Map();
   return {
     rows,
+    byKey,
     prepare(sql) {
       const statement = {
         bind(...args) {
           return {
             async run() {
               if (sql.includes("INSERT INTO shares")) {
-                const [id, payload, name, author, image] = args;
+                const [id, payload, name, author, image, key] = args;
                 if (rows.has(id)) throw new Error("UNIQUE constraint failed: shares.id");
-                rows.set(id, { id, payload, name, author, image, created_at: 1_700_000_000_000 });
+                if (key && byKey.has(key)) {
+                  throw new Error("UNIQUE constraint failed: shares.key");
+                }
+                rows.set(id, { id, payload, name, author, image, key: key || null, created_at: 1_700_000_000_000 });
+                if (key) byKey.set(key, id);
+                return { success: true };
+              }
+              if (sql.includes("UPDATE shares SET image")) {
+                const [image, id] = args;
+                const row = rows.get(id);
+                if (row) row.image = image;
                 return { success: true };
               }
               return { success: true };
             },
             async first() {
-              if (!sql.includes("FROM shares WHERE id = ?")) return null;
-              const row = rows.get(args[0]);
-              if (!row) return null;
-              // D1 hands BLOBs back as a plain array of bytes, which is what
-              // the code has to cope with.
-              return { ...row, image: row.image ? Array.from(row.image) : null };
+              if (sql.includes("WHERE key = ?")) {
+                const id = byKey.get(args[0]);
+                if (!id) return null;
+                const row = rows.get(id);
+                return { ...row, image: row.image ? Array.from(row.image) : null };
+              }
+              if (sql.includes("WHERE payload = ?")) {
+                for (const row of rows.values()) {
+                  if (row.payload === args[0]) {
+                    return { ...row, image: row.image ? Array.from(row.image) : null };
+                  }
+                }
+                return null;
+              }
+              if (sql.includes("FROM shares WHERE id = ?")) {
+                const row = rows.get(args[0]);
+                if (!row) return null;
+                // D1 hands BLOBs back as a plain array of bytes, which is what
+                // the code has to cope with.
+                return { ...row, image: row.image ? Array.from(row.image) : null };
+              }
+              return null;
             },
           };
         },
@@ -172,6 +200,112 @@ test("a share with a picture gets an image URL, and the picture comes back", asy
   assert.deepEqual([...bytes], [...jpeg]);
 });
 
+// --- the same vibescape, the same link ---------------------------------------
+
+test("the same vibescape shared twice gets the same link", async () => {
+  const { env } = makeEnv();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "My World", author: "Stephen", key: "abc123" }),
+  });
+  const firstBody = await first.json();
+  assert.equal(firstBody.existing, false);
+
+  // One per second, so a person sharing twice in a row is fine but two
+  // requests in the same test are not.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "My World", author: "Stephen", key: "abc123" }),
+  });
+  const secondBody = await second.json();
+  assert.equal(secondBody.existing, true);
+  assert.equal(secondBody.id, firstBody.id);
+  assert.equal(secondBody.url, firstBody.url);
+});
+
+test("the same vibescape without a key still gets the same link", async () => {
+  const { env } = makeEnv();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "My World" }),
+  });
+  const firstBody = await first.json();
+  // One per second, so a person sharing twice in a row is fine but two
+  // requests in the same test are not.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "My World" }),
+  });
+  const secondBody = await second.json();
+  assert.equal(secondBody.id, firstBody.id);
+  assert.equal(secondBody.url, firstBody.url);
+});
+
+test("a different vibescape gets a different link", async () => {
+  const { env } = makeEnv();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "One", key: "key-one" }),
+  });
+  // One per second, so a person sharing twice in a row is fine but two
+  // requests in the same test are not.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: "Zm91ci1vdGhlci1wYXlsb2Fk", name: "Two", key: "key-two" }),
+  });
+  const firstBody = await first.json();
+  const secondBody = await second.json();
+  assert.notEqual(secondBody.id, firstBody.id);
+});
+
+test("a share made without a picture gets one when it is shared again with one", async () => {
+  const { env } = makeEnv();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "A", key: "abc123" }),
+  });
+  const firstBody = await first.json();
+  assert.equal(firstBody.imageUrl, null);
+
+  const jpeg = Uint8Array.from([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+  // One per second, so a person sharing twice in a row is fine but two
+  // requests in the same test are not.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({
+      payload: PAYLOAD, name: "A", key: "abc123",
+      image: Buffer.from(jpeg).toString("base64"),
+    }),
+  });
+  const secondBody = await second.json();
+  assert.equal(secondBody.id, firstBody.id);
+  assert.match(secondBody.imageUrl, /\/og\/[a-z2-9]{6}\.jpg$/);
+
+  const image = await run(secondBody.imageUrl, { env });
+  assert.equal(image.status, 200);
+});
+
+test("a key that isn't a key is refused", async () => {
+  const { env } = makeEnv();
+  for (const key of ["", "x".repeat(200), "not a key!", "../../etc/passwd"]) {
+    resetRateLimiter();
+    const response = await run("https://vibresia.com/api/share", {
+      env,
+      ...shareRequest({ payload: PAYLOAD, name: "A", key }),
+    });
+    // An empty key is simply no key; anything else has to be refused.
+    if (key === "") {
+      assert.equal(response.status, 200);
+    } else {
+      assert.equal(response.status, 400, `should refuse ${JSON.stringify(key)}`);
+    }
+  }
+});
+
 test("creating shares in a loop is rate limited", async () => {
   const { env } = makeEnv();
   let created = 0;
@@ -199,7 +333,10 @@ test("the share page has the payload inlined and the URL stays short", async () 
   const response = await run(`https://vibresia.com/s/${id}`, { env });
   assert.equal(response.status, 200);
   const html = await response.text();
-  assert.ok(html.includes(`window.__VIBRESIA_SHARE__ = {"d":"${PAYLOAD}"}`), "payload not inlined");
+  assert.ok(html.includes(`window.__VIBRESIA_SHARE__ = {"d":"${PAYLOAD}","id":"${id}"}`), "payload not inlined");
+  // The id goes with it, so the page can put it in the deep link and the app
+  // can hand the same link back when the vibescape is shared on.
+  assert.ok(html.includes(`"id":"${id}"`), "the share's id was not inlined");
   assert.ok(html.includes(`<meta property="og:url" content="https://vibresia.com/s/${id}">`));
 });
 
@@ -260,7 +397,7 @@ test("a share with no name still gets a usable title and the payload", () => {
     url: "https://vibresia.com/s/aaaaaa",
   });
   assert.ok(out.includes("<title>A vibescape was shared with you — Vibresia</title>"));
-  assert.ok(out.includes(`window.__VIBRESIA_SHARE__ = {"d":"${PAYLOAD}"}`));
+  assert.ok(out.includes(`window.__VIBRESIA_SHARE__ = {"d":"${PAYLOAD}","id":"aaaaaa"}`));
 });
 
 test("a payload cannot close the script tag it is in", () => {

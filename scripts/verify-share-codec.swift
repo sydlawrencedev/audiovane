@@ -8,6 +8,7 @@
 //   swift scripts/verify-share-codec.swift
 import Foundation
 import Compression
+import CryptoKit
 
 // MARK: - codec (mirrors ShareImporter)
 
@@ -136,6 +137,25 @@ func decodeURL(_ s: String) -> Request {
     return .malformed("missing p or d")
 }
 
+/// Which share a link came from — mirrors ShareImporter.decode reading `s`.
+func shareIDFrom(_ s: String) -> String? {
+    guard let u = URL(string: s),
+          let comps = URLComponents(url: u, resolvingAgainstBaseURL: false) else { return nil }
+    return comps.queryItems?.first { $0.name == "s" }?.value
+}
+
+// MARK: - identity (mirrors ShareIdentity)
+
+/// The key a vibescape's content hashes to — mirrors `ShareIdentity.key`.
+func identityKey(name: String, author: String, url: String?, shader: String) -> String {
+    var text = ""
+    for field in [name, author, url ?? "", shader] {
+        text += "\(field.utf8.count):\(field)"
+    }
+    let digest = SHA256.hash(data: Data(text.utf8))
+    return digest.map { String(format: "%02x", $0) }.joined()
+}
+
 // MARK: - tests
 
 var failures = 0
@@ -145,6 +165,16 @@ func check(_ label: String, _ got: Request, _ want: Request) {
     } else {
         failures += 1
         print("FAIL \(label)\n     got:  \(got)\n     want: \(want)")
+    }
+}
+
+/// A yes-or-no check, for the things that aren't decode results.
+func checkTrue(_ label: String, _ ok: Bool) {
+    if ok {
+        print("ok   \(label)")
+    } else {
+        failures += 1
+        print("FAIL \(label)")
     }
 }
 
@@ -339,6 +369,50 @@ for (label, payload) in [("starter template", starter), ("hand-written", handwri
     print("       compressed         \(real.count) chars  (\(100 - real.count * 100 / plain.count)% smaller)")
     print("       compressed+minify  \(realMin.count) chars  (\(100 - realMin.count * 100 / plain.count)% smaller)")
 }
+
+// MARK: - the link a vibescape keeps
+
+// The point of the key: the same vibescape always gets the same link, so
+// sharing it twice doesn't produce two links, and re-sharing one somebody
+// sent you gives you the link it came with.
+
+let keyOfSample = identityKey(name: sample.name, author: sample.author,
+                               url: sample.url, shader: sample.shader)
+let keyOfSampleAgain = identityKey(name: sample.name, author: sample.author,
+                                    url: sample.url, shader: sample.shader)
+checkTrue("the same vibescape has the same key", keyOfSample == keyOfSampleAgain)
+checkTrue("the key is a hash, not the content", !keyOfSample.contains(sample.shader))
+checkTrue("the key is 64 hex characters",
+          keyOfSample.count == 64 && keyOfSample.allSatisfy { $0.isHexDigit })
+
+let keyOfEdited = identityKey(name: sample.name, author: sample.author,
+                               url: sample.url, shader: sample.shader + "\n// edited")
+checkTrue("an edited vibescape has a different key", keyOfEdited != keyOfSample)
+
+let keyOfOtherAuthor = identityKey(name: sample.name, author: "Somebody Else",
+                                    url: sample.url, shader: sample.shader)
+checkTrue("a different author has a different key", keyOfOtherAuthor != keyOfSample)
+
+// Minifying is a choice about how long the link is, not a different
+// vibescape, so it must not give the same one a second identity. The key
+// comes from the vibescape's own shader, whatever the payload sent happens
+// to be.
+let minifiedPayload = SharePayload(name: sample.name, author: sample.author,
+                                    url: sample.url, shader: GLSLMinifierMirror.minify(sample.shader))
+checkTrue("minifying changes the payload", minifiedPayload.shader != sample.shader)
+checkTrue("the key is the vibescape's, not the payload's",
+          identityKey(name: minifiedPayload.name, author: minifiedPayload.author,
+                      url: minifiedPayload.url, shader: sample.shader) == keyOfSample)
+
+// The link a share arrives on carries which share it was, so the app can
+// hand the same link back.
+let shareURL = "vibresia://open?d=\(encoded)&s=abc123"
+checkTrue("the share a link came from is in the link",
+          shareIDFrom(shareURL) == "abc123")
+checkTrue("a link with no share still decodes",
+          shareIDFrom("vibresia://open?d=\(encoded)") == nil)
+checkTrue("the payload still decodes with a share id in the link",
+          decodeURL(shareURL) == .custom(sample))
 
 if failures > 0 {
     print("\n\(failures) failure(s)")
