@@ -126,6 +126,13 @@ struct ContentView: View {
             CustomVibescapeView(editing: sheet.mode)
                 .environmentObject(app)
         }
+        // The offer to move the app to Applications. Above the other sheets:
+        // it is about where the app lives rather than about what it is
+        // showing, and it should not wait behind a vibescape panel.
+        .sheet(isPresented: $app.showMoveToApplications) {
+            MoveToApplicationsView()
+                .environmentObject(app)
+        }
     }
 }
 

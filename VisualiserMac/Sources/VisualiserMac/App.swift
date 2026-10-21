@@ -162,6 +162,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.regular)
         NSApp.activate(ignoringOtherApps: true)
 
+        // Offer to move the app to Applications, if it isn't already there.
+        // A moment's delay so the window is up before the sheet appears on
+        // top of it.
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            AppState.shared?.checkInstallLocation()
+        }
+
         // Look for a newer release on every launch (not in the test vibescapes).
         let testVibescape = ["--snapshot", "--record", "--video"].contains { CommandLine.arguments.contains($0) }
         if !testVibescape { UpdateChecker.shared.check(userInitiated: false) }
@@ -202,6 +210,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if CommandLine.arguments.contains("--about") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 AppState.shared?.openAbout()
+            }
+        }
+
+        // `--move-prompt` opens the "move to Applications" sheet on launch,
+        // so the panel can be looked at without having to run the app from
+        // somewhere it shouldn't be.
+        if CommandLine.arguments.contains("--move-prompt") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                AppState.shared?.showMoveToApplications = true
             }
         }
 
@@ -332,6 +349,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // straight after the app closes is told the app isn't running, rather
         // than being handed one last frozen frame as though it were live.
         LiveUniforms.clearPublishedFile()
+        // If the app was just moved to Applications, the copy that is
+        // quitting is the old one. Launch the new one on the way out, so
+        // the two never run at once: the app restores whatever audio source
+        // it had last, and two of them after the same capture session would
+        // leave the new one with no sound.
+        if let pending = InstallLocation.pendingRelaunch {
+            InstallLocation.pendingRelaunch = nil
+            InstallLocation.launch(at: pending)
+        }
     }
 
     /// Renders the SwiftUI view tree to a PNG. The OpenGL layer won't appear
@@ -401,16 +427,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     url: "https://minithlabs.com",
                                     shader: CustomVibescapeGuide.starterTemplate,
                                     enabled: true, modified: Date())
-        for (name, view) in [("all-modes", AnyView(VibescapesView(scrollable: false, height: 1400))),
-                             ("all-modes-drop", AnyView(VibescapesView(scrollable: false, height: 1400, dropTargetIndex: 4))),
-                             ("custom-mode", AnyView(CustomVibescapeView())),
-                             ("custom-mode-write", AnyView(CustomVibescapeView(initialStep: .write))),
-                             ("custom-mode-ai", AnyView(CustomVibescapeView(initialStep: .ai, scrollable: false))),
-                             ("custom-mode-edit", AnyView(CustomVibescapeView(editing: sampleVibescape))),
-                             ("custom-mode-mcp", AnyView(CustomVibescapeView(initialStep: .mcp, scrollable: false)))] {
+        for (name, view, width, height) in [
+            ("all-modes", AnyView(VibescapesView(scrollable: false, height: 1400)), CGFloat(720), CGFloat(1400)),
+            ("all-modes-drop", AnyView(VibescapesView(scrollable: false, height: 1400, dropTargetIndex: 4)), CGFloat(720), CGFloat(1400)),
+            ("custom-mode", AnyView(CustomVibescapeView()), CGFloat(720), CGFloat(560)),
+            ("custom-mode-write", AnyView(CustomVibescapeView(initialStep: .write)), CGFloat(720), CGFloat(560)),
+            ("custom-mode-ai", AnyView(CustomVibescapeView(initialStep: .ai, scrollable: false)), CGFloat(720), CGFloat(560)),
+            ("custom-mode-edit", AnyView(CustomVibescapeView(editing: sampleVibescape)), CGFloat(720), CGFloat(560)),
+            ("custom-mode-mcp", AnyView(CustomVibescapeView(initialStep: .mcp, scrollable: false)), CGFloat(720), CGFloat(560)),
+            ("move-to-apps", AnyView(MoveToApplicationsView()), CGFloat(520), CGFloat(360)),
+        ] {
             let renderer = ImageRenderer(content: view
                 .environmentObject(app)
-                .frame(width: 720, height: name.hasPrefix("all-modes") ? 1400 : 560)
+                .frame(width: width, height: height)
                 .background(Color(red: 0.05, green: 0.02, blue: 0.09)))
             renderer.scale = 1
             guard let image = renderer.nsImage,

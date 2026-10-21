@@ -42,6 +42,10 @@ final class AppState: ObservableObject {
     /// Mirrors `audio.activeSource`, so the header pill can say what's flowing.
     @Published var activeSource: AudioSource? = nil
     @Published var showIntro: Bool = true
+    /// Whether to offer to move the app to Applications. Set at launch if
+    /// the app is running from somewhere it shouldn't be, and dismissed for
+    /// good if the person says no.
+    @Published var showMoveToApplications: Bool = false
     @Published var bpm: Double = 0
     @Published var lastBeat: Double = 0
     @Published var isSounding: Bool = false
@@ -1068,6 +1072,41 @@ final class AppState: ObservableObject {
         // arrives with no way to check it, and this is the only line that says
         // what the window is actually doing.
         NSLog("[window] level = %@", alwaysOnTop ? "floating" : "normal")
+    }
+
+    // MARK: - Where the app lives
+
+    /// Key recording that the person has said no to being moved. A prompt
+    /// that comes back on every launch is a nag, and this is a shareware app
+    /// that should not nag anybody about anything.
+    private static let declinedMoveKey = "installLocation.moveDeclined"
+
+    /// Whether to ask about moving to Applications, which is only a question
+    /// if the app is running from somewhere it shouldn't be.
+    ///
+    /// The app is not asked when it is running as a tool server for an
+    /// agent: there is no window to put a prompt in, and no person to
+    /// answer it. Nor in the app's own screenshot and recording modes, which
+    /// are for looking at the app rather than using it — and a sheet would
+    /// sit on top of the very thing they were asked to photograph.
+    func checkInstallLocation() {
+        let tooling = ["--mcp", "--snapshot", "--record", "--video", "--ui-shot"]
+        guard !CommandLine.arguments.contains(where: { tooling.contains($0) }) else { return }
+        guard !UserDefaults.standard.bool(forKey: Self.declinedMoveKey) else { return }
+        guard case .elsewhere = InstallLocation.status else { return }
+        showMoveToApplications = true
+    }
+
+    /// The person said no. Remember it, so they are not asked again.
+    func declineMoveToApplications() {
+        UserDefaults.standard.set(true, forKey: Self.declinedMoveKey)
+        showMoveToApplications = false
+    }
+
+    /// The app has been moved. Nothing to remember — it is in Applications
+    /// now, and the next launch will see that for itself.
+    func movedToApplications() {
+        showMoveToApplications = false
     }
 
     /// The single path into `AudioEngine`'s source switching, so the header
