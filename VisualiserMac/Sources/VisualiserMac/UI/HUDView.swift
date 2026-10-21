@@ -61,14 +61,6 @@ struct HUDView: View {
                 SourcePicker()
             }
 
-            // The song — when the app has worked out what is playing. Only
-            // then: most of the time nobody is playing anything the app can
-            // name, and a pill that appears and disappears is worse than one
-            // that is always there.
-            if let song = app.nowPlaying, app.layout.showsPills {
-                NowPlayingPill(song: song)
-            }
-
             // BPM — the last thing to survive, and only when there's a beat to
             // show.
             if app.bpm > 30 && app.layout.showsPills {
@@ -94,51 +86,6 @@ struct HUDView: View {
                 )
             }
         }
-    }
-}
-
-/// The song that is playing, as a header pill.
-///
-/// The music apps say what they are playing; the app looks it up and puts it
-/// here, because knowing the song is most of the point of knowing its genre
-/// — the band's stage is chosen for this track, and this is the track's
-/// name.
-struct NowPlayingPill: View {
-    let song: SongIdentifier.Song
-
-    var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "music.note")
-                .font(.system(size: 10, weight: .semibold))
-            Text(song.title)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .tracking(1.2)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .frame(maxWidth: 180, alignment: .leading)
-            Text("·")
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .foregroundStyle(Color(white: 0.4))
-            Text(song.artist)
-                .font(.system(size: 10, weight: .regular, design: .monospaced))
-                .tracking(1.2)
-                .lineLimit(1)
-                .truncationMode(.tail)
-                .foregroundStyle(Color(white: 0.65))
-                .frame(maxWidth: 140, alignment: .leading)
-        }
-        .foregroundStyle(Color(white: 0.85))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 7)
-        .background(
-            RoundedRectangle(cornerRadius: 100)
-                .fill(Color.black.opacity(0.45))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 100)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        )
-        .help(song.artist == "" ? song.title : "\(song.title) — \(song.artist)")
     }
 }
 
