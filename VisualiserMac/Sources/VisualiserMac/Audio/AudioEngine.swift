@@ -51,7 +51,10 @@ final class AudioEngine: ObservableObject {
     private var micTapInstalled = false
 
     init() {
-        let rb = AudioRingBuffer(seconds: 1.5, sampleRate: 48000)
+        // Six seconds of history, which is twenty-one once it is rounded up to
+        // a power of two — enough for the ten-second recording the share
+        // sheet makes, and the extra room is four megabytes.
+        let rb = AudioRingBuffer(seconds: 6, sampleRate: 48000)
         self.ringBuffer = rb
         self.analyzer = AudioAnalyzer(ringBuffer: rb)
         rb.onWrite = { [instruments] samples, count in instruments.push(samples, count: count) }
@@ -61,6 +64,27 @@ final class AudioEngine: ObservableObject {
                 self?.fail(reason: "capture stopped", detail: msg)
             }
         }
+    }
+
+    /// The last `seconds` of audio, as much of it as there is.
+    ///
+    /// A recording wants the music that is actually there: ten seconds of it
+    /// if there has been ten seconds of it, and what there is if there isn't.
+    /// The buffer's length is the length of the recording.
+    func recentAudio(upTo seconds: Double) -> AVAudioPCMBuffer? {
+        let sampleRate = 48000.0
+        let wanted = Int(seconds * sampleRate)
+        guard wanted > 0 else { return nil }
+
+        guard let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1),
+              let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(wanted)) else {
+            return nil
+        }
+        guard let samples = buffer.floatChannelData?[0] else { return nil }
+        let got = ringBuffer.readLatestAvailable(into: samples, count: wanted)
+        guard got > 0 else { return nil }
+        buffer.frameLength = AVAudioFrameCount(got)
+        return buffer
     }
 
     /// The last few seconds of audio, as a buffer something else can sign.

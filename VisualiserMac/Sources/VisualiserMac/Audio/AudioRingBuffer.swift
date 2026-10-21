@@ -92,6 +92,34 @@ final class AudioRingBuffer {
         return true
     }
 
+    /// Reads up to `count` of the newest samples, and says how many it got.
+    ///
+    /// `readLatest` wants the whole window and refuses if it isn't there yet.
+    /// A recording wants whatever has been captured: ten seconds of music if
+    /// there has been ten seconds of music, and what there is if there isn't.
+    func readLatestAvailable(into dest: UnsafeMutablePointer<Float>, count: Int) -> Int {
+        let w = writeIndex
+        guard w > 0 else { return 0 }
+        let wanted = min(count, w)
+        let mask = capacity - 1
+        let base = (w - wanted) & mask
+        let firstChunk = min(wanted, capacity - base)
+        storage.withUnsafeBufferPointer { buf in
+            let src1 = buf.baseAddress! + base
+            for i in 0..<firstChunk {
+                dest[i] = src1[i]
+            }
+            if firstChunk < wanted {
+                let src2 = buf.baseAddress!
+                for i in firstChunk..<wanted {
+                    dest[i] = src2[i - firstChunk]
+                }
+            }
+        }
+        readIndex = w
+        return wanted
+    }
+
     /// Total samples ever written: an audio-time clock for the consumer.
     var totalWritten: Int { writeIndex }
 

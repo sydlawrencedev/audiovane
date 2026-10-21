@@ -143,6 +143,27 @@ final class MCPServer {
     `what_i_hear` says what the music currently is — genre, tempo, spectrum — so \
     you can write something that suits it.
 
+    ## The app knows more than the waveform
+
+    The app has three things a shader cannot work out for itself, and they are all \
+    worth using:
+
+    - **The genre.** The app works out what is playing — from the song's own \
+      catalogue entry when the music app says what it is playing, and from the \
+      sound when it cannot. The band vibescape's stage is chosen from it, and \
+      every vibescape can read it as `uGenre`: 0 classical, 1 electronic, 2 rock, \
+      3 pop, 4 hip-hop, 5 jazz, 6 blues, 7 country, 8 r&b, 9 ambient. A shader \
+      that branches on it changes with the music in a way the bass alone cannot \
+      manage.
+    - **The sound itself.** Bass, mids, treble, the level, the beat, and 96 \
+      numbers across the spectrum — all of it live, all of it in `what_i_hear` and \
+      in the snapshot.
+    - **The palette.** The two colours everything is graded through, and why a \
+      colour you wrote comes out shifted.
+
+    Ask `what_i_hear` before you write, not after. A vibescape written for the \
+    music actually playing is a different thing from one written in the abstract.
+
     `get_palette` explains why your colours come out shifted: every vibescape is \
     graded through the current palette after it draws. Pick colours from the \
     palette, or draw with `uPalette` directly, rather than bringing your own and \

@@ -191,6 +191,26 @@ GET  /og/k3f9x2.jpg                                    a picture of this vibesca
   credit onto the picture it uploads, and the built-in pictures on the site
   are drawn by the same code — see `VisualiserMac/Sources/VibresiaBrand`.
 
+## The gallery
+
+`vibresia.com/vibescapes` lists the shares that were ticked into it.
+
+Sharing a vibescape has always made a link anybody can open. The gallery is
+different: it lists them, so anything in it is findable by anybody at all —
+and the name and the author on it are public. The share sheet says so, and
+has a tickbox, on by default.
+
+- **The app asks.** `POST /api/share` takes `public`, and the share sheet
+  has a tickbox next to the name.
+- **The Worker stores it** in an `is_public` column and serves the list at
+  `/vibescapes` (the page) and `/api/gallery` (the same thing as JSON). The
+  cards are built on the server, so the page works with no JavaScript and a
+  crawler sees the list.
+- **The shares that were made before the gallery existed are not in it.**
+  They were never offered the choice, and publishing them without asking
+  would put somebody else's name on the front page of the site. Sharing one
+  again with the tickbox on puts it in.
+
 - **D1, not Workers KV.** KV is eventually consistent — a link opened ten
   seconds after it was shared could reach an edge that hadn't seen the write
   and 404, which is the feature failing at exactly the moment it is used.
@@ -254,6 +274,24 @@ that honest:
 - **The Worker is attached with routes, not custom domains.** `vibresia.com` was pointed at Cloudflare before the Worker existed, so its DNS records are ones Cloudflare didn't make; a custom domain would want to own them and refuses to overwrite them. A route binds the hostname to the Worker and leaves the DNS alone. `run_worker_first` is on for the same reason: the redirects are decided in the Worker, and an asset served straight from the edge would skip them.
 - **Caching** is Cloudflare's default (`max-age=0, must-revalidate`), and a `Cache-Control` rule in `site/_headers` *appends* to that rather than replacing it, so it can't be changed that way. Repeat visits revalidate with a 304 from the ETag instead of re-downloading 5.9MB, which is the part that matters.
 - Page is a single static file: one H1, 16 lazy-loaded images with descriptive alt text, no framework. Keep it that way — LCP measured ~0.08s locally and CLS ~0.005 before any of this.
+
+## Exporting a video
+
+The share sheet can save the last ten seconds of a vibescape, with the music,
+as a movie in Downloads.
+
+The picture is the app's own renderer — the same draw the window is doing,
+over the last ten seconds of its clock — so it is the vibescape rather than
+a picture of it. The sound is the last ten seconds of what the app was
+hearing, which is the music as it was.
+
+The clip is as long as the audio the app has: ten seconds of music if there
+has been ten seconds of music, and what there is if there hasn't. The app
+has to be listening to something for there to be any.
+
+```bash
+./build/Vibresia.app/Contents/MacOS/Vibresia --export-video band /tmp/out.mp4
+```
 
 ## The song, and its genre
 

@@ -92,6 +92,9 @@ final class OpenGLRenderer: NSObject {
         let eventKind, eventAge: GLint
         let active, beats, peaks, scroll, clock: GLint
         let levelSmooth, bassSmooth, presence: GLint
+        /// `uGenre` — the genre of the music, so any vibescape can branch on
+        /// it and not only the band. -1 when absent.
+        let genre: GLint
         /// `uPalette[0]` — vibescapes with deliberate colours read the palette
         /// themselves instead of being duotoned afterwards. -1 when absent.
         let palette: GLint
@@ -886,6 +889,28 @@ final class OpenGLRenderer: NSObject {
                        intent: .defaultIntent)
     }
 
+    /// The vibescape's own clock: the seconds it has been animating for.
+    ///
+    /// It runs on the sound-gated clock, so it stops when the music does and
+    /// a recording of the last ten seconds is ten seconds of the vibescape
+    /// rather than ten seconds of wall clock.
+    var animationTime: Double { danceClock }
+
+    /// A stretch of a vibescape, as images.
+    ///
+    /// The same draw the window is doing, over a stretch of its clock: the
+    /// point of a recording is that it is the real thing and not a picture of
+    /// it.
+    func renderImages(width: Int, height: Int, mode: VibescapeID, frames: Int,
+                      fps: Double, startTime: Double, eachFrame: (Int, CGImage) -> Void) {
+        renderFrames(width: width, height: height, mode: mode, frames: frames,
+                     fps: fps, startTime: startTime) { index, pixels in
+            if let image = makeImage(pixels, width: width, height: height) {
+                eachFrame(index, image)
+            }
+        }
+    }
+
     /// One frame of a vibescape, at a chosen moment, as an image.
     ///
     /// This is the picture a share link shows: the same vibescape, at the
@@ -1190,7 +1215,8 @@ final class OpenGLRenderer: NSObject {
             active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
             scroll: loc("uScroll"), clock: loc("uClock"),
             levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
-            presence: loc("uPresence"), palette: loc("uPalette[0]"))
+            presence: loc("uPresence"), genre: loc("uGenre"),
+            palette: loc("uPalette[0]"))
         return .success(m)
     }
 
@@ -1678,6 +1704,8 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.levelSmooth, Float(levelSmooth))
         glUniform1f(m.bassSmooth, Float(bassSmooth))
         glUniform1f(m.presence, Float(presence))
+        // The genre of the music, for any vibescape that branches on it.
+        glUniform1i(m.genre, GLint(genre.rawValue))
         if m.palette >= 0 { bindPalette(to: m.palette) }
         // Everything drawn from here on is exactly this: the values, the clocks
         // and the palette. Publishing them means an agent tuning a coefficient
@@ -1902,7 +1930,8 @@ final class OpenGLRenderer: NSObject {
                 active: loc("uActive"), beats: loc("uBeats"), peaks: loc("uPeaks[0]"),
                 scroll: loc("uScroll"), clock: loc("uClock"),
                 levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
-                presence: loc("uPresence"), palette: loc("uPalette[0]"))
+                presence: loc("uPresence"), genre: loc("uGenre"),
+            palette: loc("uPalette[0]"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")

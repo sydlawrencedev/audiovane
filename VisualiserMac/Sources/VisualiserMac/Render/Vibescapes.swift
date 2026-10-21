@@ -351,6 +351,9 @@ enum CustomVibescapeGuide {
       uBands[96]         96 numbers, low to high frequency, each 0..1
       uActive      0..1   0 in silence, eases to 1 when there is sound
       uClock             seconds since launch, keeps running in silence
+      uGenre             the genre of the music, as a number:
+                         0 classical, 1 electronic, 2 rock, 3 pop, 4 hip-hop,
+                         5 jazz, 6 blues, 7 country, 8 r&b, 9 ambient
 
     Anything that looks like a cloud, a flame or smoke is `fbm`:
 
@@ -427,7 +430,16 @@ enum CustomVibescapeGuide {
     flicker.
 
     `what_i_hear` says what the music is — genre, instruments, tempo, spectrum —
-    so you can write something that suits it rather than something generic.
+    so you can write something that suits it rather than something generic. Ask it
+    before you write, not after: a vibescape written for the music actually playing
+    is a different thing from one written in the abstract.
+
+    The genre is not only something to read. It is in the shader, as `uGenre`, so
+    a world can change shape with the music in a way the bass alone cannot manage
+    — a stage for jazz, a different sky for ambient, a harder edge for rock. The
+    app works it out from the song's own catalogue entry when the music app says
+    what it is playing, and from the sound when it cannot, so it is right far more
+    often than a guess would be.
 
     ## Colours are graded, and you can see it
 
@@ -473,10 +485,18 @@ enum CustomVibescapeGuide {
     Already available, do not redefine:
       uniforms: uBass uMid uTreble uLevel uLevelSmooth uBassSmooth
                 uBeat uBeatStrength uBands[96] uActive uBeats uClock
+                uGenre
       helpers:  screenP() hash21(p) vnoise(p) fbm(p) bandAt(x) rot(a)
                 sdCircle(p,r) sdBox(p,b) sdRoundBox(p,b,r) sdSeg(p,a,b)
                 fill(d,w) aaw(s)
       GLSL:     mix clamp sin cos fract length dot
+
+    `uGenre` is the genre of the music, as a number: 0 classical, 1 electronic,
+    2 rock, 3 pop, 4 hip-hop, 5 jazz, 6 blues, 7 country, 8 r&b, 9 ambient. The
+    app works it out from the song itself when it can, so a world that branches
+    on it changes with the music in a way the bass alone cannot. Ask what is
+    playing first if you can — the app can tell you the genre, the tempo and the
+    shape of the spectrum — and write for that.
 
     Fade gently in silence by scaling the final colour by uActive.
 

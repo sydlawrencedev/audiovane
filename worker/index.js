@@ -474,22 +474,35 @@ async function hashPayload(payload) {
     .join("");
 }
 
-/// Stores a share.
-///
-/// The key and the payload hash are columns added by a migration. If the
-/// database hasn't been migrated yet, the share is stored the old way
-/// instead — every share its own row, which is what happened before.
-async function insertShare(env, { id, payload, payloadHash, name, author, image, key }) {
+/// The share a vibescape is looked up by, and whether it is in the public
+/// gallery.
+async function insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic }) {
   const created = Date.now();
   try {
     await env.SHARES.prepare(
-      "INSERT INTO shares (id, payload, name, author, image, key, payload_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
-    ).bind(id, payload, name, author, image, key || null, payloadHash || null, created).run();
+      "INSERT INTO shares (id, payload, name, author, image, key, payload_hash, is_public, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    ).bind(id, payload, name, author, image, key || null, payloadHash || null, isPublic, created).run();
   } catch (error) {
     if (!String(error).includes("no such column")) throw error;
     await env.SHARES.prepare(
       "INSERT INTO shares (id, payload, name, author, image, created_at) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(id, payload, name, author, image, created).run();
+  }
+}
+
+/// Whether a share is in the public gallery.
+///
+/// The app asks, in the share sheet: there is a tickbox, on by default, and
+/// it says the name and the author are public. A share made before the
+/// gallery existed is not in it — it was never offered the choice.
+async function setPublic(env, id, isPublic) {
+  try {
+    await env.SHARES.prepare("UPDATE shares SET is_public = ? WHERE id = ?")
+      .bind(isPublic ? 1 : 0, id).run();
+  } catch (error) {
+    // A database without the column yet: the share is still a share, it just
+    // isn't in the gallery.
+    console.log(`[share] could not set the gallery flag on ${id}: ${error}`);
   }
 }
 
@@ -520,6 +533,9 @@ async function handleShareCreate(request, env) {
   const name = typeof body?.name === "string" ? body.name : "";
   const author = typeof body?.author === "string" ? body.author : "";
   const key = typeof body?.key === "string" ? body.key : "";
+  // Whether it goes in the public gallery. The app asks in the share sheet,
+  // and says there that the name and the author are public.
+  const isPublic = body?.public === true;
   if (!payload || payload.length > MAX_PAYLOAD_CHARS || !PAYLOAD_PATTERN.test(payload)) {
     return Response.json({ ok: false, error: "bad payload" }, { status: 400 });
   }
@@ -558,6 +574,9 @@ async function handleShareCreate(request, env) {
     // A share made while the picture was missing gets one now, if this
     // request has it. The link stays the same either way.
     await ensureImage(env, existing, image);
+    // And the gallery follows the tickbox, so a share that was kept out of
+    // it can be put in by sharing it again.
+    await setPublic(env, existing.id, isPublic);
     return Response.json({
       ok: true,
       id: existing.id,
@@ -573,7 +592,7 @@ async function handleShareCreate(request, env) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = randomShareId();
     try {
-      await insertShare(env, { id, payload, payloadHash, name, author, image, key });
+      await insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic });
       return Response.json({
         ok: true,
         id,
@@ -591,6 +610,7 @@ async function handleShareCreate(request, env) {
           // app, or by a render that came back empty. This one has a
           // picture, so it goes in.
           await ensureImage(env, raced, image);
+          await setPublic(env, raced.id, isPublic);
           return Response.json({
             ok: true,
             id: raced.id,
@@ -734,6 +754,94 @@ async function handleNotify(request, env, ctx) {
   return Response.json({ ok: true });
 }
 
+/// The public gallery: the shares that were ticked into it.
+///
+/// A share is a link anybody can open. The gallery is different — it lists
+/// them, so anything in it is findable by anybody at all, and the name and
+/// the author on it are public.
+async function galleryRows(env) {
+  try {
+    // Whether the share has a picture, rather than the picture: the column
+    // is a blob of up to 400KB, and reading all of them to find out whether
+    // they are there would cost more than the gallery is worth.
+    const result = await env.SHARES.prepare(
+      "SELECT id, name, author, created_at, CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image FROM shares WHERE is_public = 1 ORDER BY created_at DESC LIMIT 200"
+    ).all();
+    return result.results || [];
+  } catch (error) {
+    // A database without the column yet: no gallery, rather than an error.
+    console.log(`[gallery] could not read the gallery: ${error}`);
+    return [];
+  }
+}
+
+/// `GET /api/gallery` — the gallery, as JSON.
+async function handleGalleryAPI(request, env) {
+  const rows = await galleryRows(env);
+  return Response.json({
+    ok: true,
+    vibescapes: rows.map((row) => ({
+      id: row.id,
+      name: row.name || "",
+      author: row.author || "",
+      url: `${CANONICAL_SITE}s/${row.id}`,
+      imageUrl: `${CANONICAL_SITE}og/${row.id}.jpg`,
+      sharedAt: row.created_at,
+    })),
+  });
+}
+
+/// `GET /vibescapes` — the gallery, as a page.
+///
+/// The cards are built here rather than in the browser: the page is a list of
+/// things, and a list that only exists once the JavaScript has run is a list
+/// a crawler never sees.
+async function handleGalleryPage(request, url, env) {
+  const rows = await galleryRows(env);
+
+  // "/vibescapes" rather than "/vibescapes.html": the asset service answers
+  // a file with a ".html" on the end with a redirect, and a redirect is not
+  // `ok` — so asking for the file by name looks like a missing asset.
+  const asset = await env.ASSETS.fetch(new Request(new URL("/vibescapes", url), request));
+  if (!asset.ok) {
+    console.log(`[gallery] could not read the gallery page: ${asset.status}`);
+    return new Response("Not found", { status: 404 });
+  }
+  const html = await asset.text();
+
+  const cards = rows.map((row) => {
+    const name = escapeHtml(row.name || "A vibescape");
+    const author = escapeHtml(row.author || "");
+    const id = escapeHtml(row.id);
+    // A share with no picture gets the generic one, rather than a broken
+    // image on a page about pictures.
+    const picture = row.has_image
+      ? `${CANONICAL_SITE}og/${id}.jpg`
+      : `${CANONICAL_SITE}media/share.jpg`;
+    return `      <a class="card" href="/s/${id}">
+        <img src="${picture}" alt="${name}" loading="lazy" width="1200" height="630">
+        <span class="card-name">${name}</span>
+        <span class="card-by">${author ? `by ${author}` : ""}</span>
+      </a>`;
+  }).join("\n");
+
+  const empty = rows.length === 0
+    ? `      <p class="gallery-empty">Nothing here yet. Share a vibescape from the app and tick it into the gallery.</p>`
+    : "";
+
+  const page = html
+    .replace("<!-- gallery:cards -->", cards + "\n" + empty)
+    .replace("<!-- gallery:count -->",
+      `${rows.length} vibescape${rows.length === 1 ? "" : "s"}`);
+
+  return new Response(page, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=0, must-revalidate",
+    },
+  });
+}
+
 function handleHealth(env) {
   return Response.json({
     ok: true,
@@ -789,6 +897,8 @@ export default {
     if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
     if (url.pathname === "/api/share") return handleShareCreate(request, env);
+    if (url.pathname === "/api/gallery") return handleGalleryAPI(request, env);
+    if (url.pathname === "/vibescapes") return handleGalleryPage(request, url, env);
     if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env);
     if (url.pathname.startsWith("/og/")) return handleShareImage(request, url, env);
     // Note: Cloudflare serves a request that matches an existing asset straight

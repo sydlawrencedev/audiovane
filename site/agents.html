@@ -91,8 +91,8 @@
       VIBRESIA
     </a>
     <nav class="site-nav" aria-label="Main">
-      <a href="/#vibescapes">Vibescapes</a>
-      <a href="/#make">Make your own</a>
+      <a href="/vibescapes">Vibescapes</a>
+      <a href="/vibe">Vibe your own</a>
       <a href="/agents">Agents</a>
       <a href="/#install">Install</a>
       <a href="/#changelog">Changelog</a>
@@ -203,7 +203,8 @@ mcp-server-config:
       <div class="fact"><h3>See it</h3><p>It draws a vibescape and gets the picture back, so it can look at what it wrote instead of imagining it. Ask for several frames and it gets the animation, too — a still tunnel and a scrolling tunnel look identical, and one of them is wrong.</p></div>
       <div class="fact"><h3>Point the music anywhere</h3><p>It sets the audio uniforms by hand — bass at 0.9, treble at 0.2 — and draws it again, so it can find out how a vibescape behaves when the music isn't playing. No audio required.</p></div>
       <div class="fact"><h3>Tune to reality</h3><p>It can read the actual uniform values the app is drawing with right now, and the ranges they run in, so it picks coefficients that work on your music instead of guesses that do nothing.</p></div>
-      <div class="fact"><h3>Hear what you hear</h3><p>Ask what Vibresia is hearing at that moment — the suspected genre and instruments, the tempo, the levels, the shape of the spectrum — and write something that suits the track in front of you.</p></div>
+      <div class="fact"><h3>Hear what you hear</h3><p>Ask what Vibresia is hearing at that moment — the genre, the instruments, the tempo, the levels, the shape of the spectrum — and write something that suits the track in front of you.</p></div>
+      <div class="fact"><h3>Know the genre</h3><p>Vibresia works out what is playing: from the song's own catalogue entry when the music app says what it is playing, and from the sound when it cannot. The band vibescape's stage is chosen from it, and every vibescape can read it as <code>uGenre</code> — so a world can change shape with the music in a way the bass alone cannot manage.</p></div>
       <div class="fact"><h3>Get the colours right</h3><p>It can read the current palette and see how hard the app tints over what a vibescape draws, so it stops picking colours that come out as something else.</p></div>
       <div class="fact"><h3>Check before saving</h3><p>Nothing is saved unless it compiles, and code that doesn't work comes back as an error in words with the line number — not a blank picture.</p></div>
       <div class="fact"><h3>Save, and compare</h3><p>Write a new vibescape or replace one that exists, and see the picture of exactly what it saved. When rewriting something, put the old and new side by side under the same music.</p></div>
@@ -224,9 +225,10 @@ mcp-server-config:
     return colour * uActive;                   // fades out in silence
 }</code></pre>
       <h3>What it can use</h3>
-      <p>The music, as numbers: <code>uBass</code>, <code>uMid</code>, <code>uTreble</code>, <code>uLevel</code>, <code>uBeat</code>, <code>uBeatStrength</code>, <code>uBands[96]</code> (the whole spectrum), <code>uBeats</code> (a beat counter), <code>uActive</code> (how much is playing), <code>uTime</code>, <code>uClock</code>. Plus helpers for shapes, colour and noise.</p>
+      <p>The music, as numbers: <code>uBass</code>, <code>uMid</code>, <code>uTreble</code>, <code>uLevel</code>, <code>uBeat</code>, <code>uBeatStrength</code>, <code>uBands[96]</code> (the whole spectrum), <code>uBeats</code> (a beat counter), <code>uActive</code> (how much is playing), <code>uTime</code>, <code>uClock</code>. Plus <code>uGenre</code> — the genre of the music, as a number: 0 classical, 1 electronic, 2 rock, 3 pop, 4 hip-hop, 5 jazz, 6 blues, 7 country, 8 r&amp;b, 9 ambient. And helpers for shapes, colour and noise.</p>
       <h3>What it can ask</h3>
-      <p>Your agent doesn't have to guess what the music is doing. <code>what_i_hear</code> reports what Vibresia is hearing at that moment: the suspected genre, the instruments it thinks are playing, the tempo, the levels, and the shape of the spectrum. It can write a vibescape that suits the track in front of you rather than one that suits music in general.</p>
+      <p>Your agent doesn't have to guess what the music is doing. <code>what_i_hear</code> reports what Vibresia is hearing at that moment: the genre, the instruments it thinks are playing, the tempo, the levels, and the shape of the spectrum. It can write a vibescape that suits the track in front of you rather than one that suits music in general.</p>
+      <p>Asking <em>before</em> it writes is what makes the difference. The genre is a fact about the song rather than a guess about the sound, and a world written for the track in front of you is a different thing from one written in the abstract.</p>
       <p><code>get_uniform_snapshot</code> goes one level lower and returns the numbers themselves — what <code>uBeatStrength</code> and <code>uBass</code> are actually reading right now, and how far they reach. It's the difference between multiplying by 0.5 because it sounds right and multiplying by 2 because you can see the range.</p>
       <p class="note">The full list of uniforms and helpers is one call away, so it never has to remember it.</p>
     </div>

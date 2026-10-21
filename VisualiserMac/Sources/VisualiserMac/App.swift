@@ -194,6 +194,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Video export — record the last ten seconds of the vibescape, with
+        // the music, and say where it went.
+        if CommandLine.arguments.contains("--export-video") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.runExportVideo()
+            }
+        }
+
         // Song lookup — ask the catalogue what a song is, and say. Used to
         // check the lookup without a music app in the picture.
         if CommandLine.arguments.contains("--song-lookup") {
@@ -467,6 +475,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                                     url: "https://minithlabs.com",
                                     shader: CustomVibescapeGuide.starterTemplate,
                                     enabled: true, modified: Date())
+        // The share sheet for a vibescape the user wrote, so the name and the
+        // gallery tickbox can be looked at. In memory only — nothing is
+        // written to the user's folder by a screenshot.
+        let sampleAuthor = "Syd Lawrence"
+        let sampleForShare = CustomVibescape(
+            id: "shot", name: "My Mode", author: sampleAuthor,
+            url: "https://minithlabs.com",
+            shader: CustomVibescapeGuide.starterTemplate,
+            enabled: true, modified: Date())
+        app.previewVibescape(sampleForShare)
+
         for (name, view, width, height) in [
             ("all-modes", AnyView(VibescapesView(scrollable: false, height: 1400)), CGFloat(720), CGFloat(1400)),
             ("all-modes-drop", AnyView(VibescapesView(scrollable: false, height: 1400, dropTargetIndex: 4)), CGFloat(720), CGFloat(1400)),
@@ -476,6 +495,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ("custom-mode-edit", AnyView(CustomVibescapeView(editing: sampleVibescape)), CGFloat(720), CGFloat(560)),
             ("custom-mode-mcp", AnyView(CustomVibescapeView(initialStep: .mcp, scrollable: false)), CGFloat(720), CGFloat(560)),
             ("move-to-apps", AnyView(MoveToApplicationsView()), CGFloat(520), CGFloat(360)),
+            ("share", AnyView(ShareVibescapeView(vibescape: .builtin(.band))), CGFloat(540), CGFloat(620)),
+            ("share-custom", AnyView(ShareVibescapeView(vibescape: .custom("shot"))), CGFloat(540), CGFloat(760)),
         ] {
             let renderer = ImageRenderer(content: view
                 .environmentObject(app)
@@ -611,6 +632,70 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     NSLog("[SHARE-IMAGE] could not write: \(error)")
                     exit(1)
                 }
+            }
+        }
+    }
+
+    /// Records the last ten seconds of the vibescape, with the music, and
+    /// writes it to a movie.
+    ///
+    ///   Vibresia --export-video [slug] [out.mp4]
+    ///
+    /// The same code the share sheet uses, so what comes out here is what
+    /// comes out there.
+    private func runExportVideo() {
+        let args = CommandLine.arguments
+        func value(_ flag: String, _ fallback: String) -> String {
+            if let i = args.firstIndex(of: flag), i + 1 < args.count { return args[i + 1] }
+            return fallback
+        }
+        let slug = value("--export-video", "tunnel")
+        let out = value("--export-video-out", "/tmp/vibresia-export.mp4")
+
+        guard let app = AppState.shared else { exit(1) }
+        var attempts = 0
+        Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { t in
+            attempts += 1
+            guard app.renderer.isReady else {
+                if attempts > 60 { NSLog("[VIDEO] timeout renderer"); exit(1) }
+                return
+            }
+            t.invalidate()
+
+            let mode: VibescapeID
+            if let builtin = Vibescape(rawValue: slug) {
+                mode = .builtin(builtin)
+            } else if let custom = app.customVibescapes.first(where: { $0.id == slug }) {
+                mode = .custom(custom.id)
+            } else {
+                NSLog("[VIDEO] no vibescape called \(slug)")
+                exit(1)
+            }
+
+            // Something to record. The demo tone if nothing is playing, so
+            // the export has audio to put in it.
+            if app.audio.sourceState != .live && app.audio.sourceState != .demo {
+                app.audio.startDemo()
+            }
+            // And a moment for the ring buffer to fill.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.exportVideoNow(mode: mode, out: out)
+            }
+        }
+    }
+
+    private func exportVideoNow(mode: VibescapeID, out: String) {
+        guard let app = AppState.shared else { exit(1) }
+        Task { @MainActor in
+            do {
+                try await VideoExporter.export(renderer: app.renderer, mode: mode,
+                                              audio: app.audio,
+                                              to: URL(fileURLWithPath: out))
+                NSLog("[VIDEO] saved=\(out)")
+                exit(0)
+            } catch {
+                NSLog("[VIDEO] failed: \(error)")
+                exit(1)
             }
         }
     }

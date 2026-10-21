@@ -935,6 +935,28 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Changes who a vibescape says made it.
+    ///
+    /// Only the name: the shader is not touched, so nothing is recompiled.
+    /// The share sheet edits it, because that is the last moment before the
+    /// name goes out on a link.
+    func setCustomVibescapeAuthor(id: String, author: String) {
+        guard let i = customVibescapes.firstIndex(where: { $0.id == id }) else { return }
+        guard customVibescapes[i].author != author else { return }
+        customVibescapes[i].author = author
+        customVibescapes[i].modified = Date()
+        try? CustomVibescapeStore.save(customVibescapes[i])
+    }
+
+    /// Puts a vibescape in the list without writing it to disk.
+    ///
+    /// For looking at the UI with one in it — a screenshot, a preview — and
+    /// not for anything else: nothing is saved, so it goes when the app does.
+    func previewVibescape(_ mode: CustomVibescape) {
+        guard !customVibescapes.contains(where: { $0.id == mode.id }) else { return }
+        customVibescapes.append(mode)
+    }
+
     /// Removes a user's vibescape, from the list and from disk.
     func deleteCustomVibescape(id: String) {
         customVibescapes.removeAll { $0.id == id }

@@ -40,6 +40,7 @@ uniform float uClock;       // wall-clock seconds; keeps running in silence (use
 uniform float uLevelSmooth; // slow loudness, 0..1: rises over ~0.3 s, falls over ~1.5 s
 uniform float uBassSmooth;  // the same slow easing applied to uBass
 uniform float uPresence;    // music presence, 0..1: eases in and out over ~2.3 s, no chatter
+uniform int uGenre;         // the genre of the music: 0 classical … 9 ambient
 out vec4 fragColor;
 
 const float PI = 3.14159265;
@@ -326,7 +327,7 @@ void main() {
 
     var u = uniforms(gl, program, ["uTime", "uBass", "uMid", "uTreble", "uLevel",
       "uLevelSmooth", "uBassSmooth", "uBeat", "uBeatStrength", "uResolution",
-      "uIdle", "uActive", "uBeats", "uScroll", "uClock", "uPresence",
+      "uIdle", "uActive", "uBeats", "uScroll", "uClock", "uPresence", "uGenre",
       "uBands[0]", "uPalette[0]"]);
     var g = uniforms(gl, grade, ["uTex", "uShadow", "uHighlight", "uSaturation",
       "uDuotone", "uLift"]);
@@ -370,6 +371,9 @@ void main() {
     gl.uniform1f(u.uScroll, a.scroll);
     gl.uniform1f(u.uClock, a.clock);
     gl.uniform1f(u.uPresence, a.presence);
+    // The browser has no idea what is playing, so the preview says it is
+    // rock. A shader that branches on the genre still draws.
+    gl.uniform1i(u.uGenre, 2);
     gl.uniform1fv(u["uBands[0]"], bands(a));
     gl.uniform3fv(u["uPalette[0]"], s.palette);
     gl.bindVertexArray(s.vao);

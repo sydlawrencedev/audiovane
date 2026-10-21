@@ -32,6 +32,8 @@ struct ShareVibescapeView: View {
     @State private var isSharing: Bool = false
     @State private var savingPreview: Bool = false
     @State private var savedPreviewPath: String?
+    /// Where the exported movie went, so the button can say so.
+    @State private var savedVideoPath: String?
     @State private var hoverShare = false
     @State private var hoverSave = false
     /// The short link, once the site has made it. Nil until then, and nil
@@ -42,23 +44,39 @@ struct ShareVibescapeView: View {
     /// than starting a second one.
     @State private var linkTask: Task<String?, Never>?
 
-    /// Off by default, and not because minifying is bad at it — it roughly
-    /// halves the payload again. Because it is the one part of a share that costs
-    /// the recipient something: the app saves whatever arrives verbatim, so
-    /// turning this on hands them a shader with the comments gone and the
-    /// spacing crushed, and that is what they will be looking at.
+    /// The name of whoever made this, as it will be published.
     ///
-    /// Compression is on unconditionally and costs them nothing, which is why it
-    /// isn't behind this switch.
+    /// Editable here because this is the last moment before it goes out: the
+    /// name ends up on the link, and — if the gallery is ticked — on the
+    /// front page of the site.
+    @State private var author: String = ""
+    /// Whether this goes in the public gallery.
     ///
-    /// The short link makes length a non-issue, so this is now about the
-    /// fallback: the long form, which still carries the payload with it, and
-    /// which is what gets shared if the site can't be reached. It also makes
-    /// the stored payload smaller.
-    @State private var minifyLink = false
+    /// On by default. A share is a link anybody can open; the gallery is
+    /// different — it lists them, so anything in it is findable by anybody at
+    /// all. The name and the author on it are public, and the sheet says so.
+    @State private var inGallery: Bool = true
+    /// Whether the video is being written.
+    @State private var exportingVideo = false
+    /// Whether the name field has the keyboard.
+    @FocusState private var authorFieldFocused: Bool
 
     init(vibescape: VibescapeID) {
         _vibescape = State(initialValue: vibescape)
+        // The name as it stands, so the field is never empty on the way in.
+        // `onAppear` sets it too, for the case where the app has not finished
+        // starting when the sheet is made.
+        _author = State(initialValue: ShareVibescapeView.storedAuthor(for: vibescape))
+    }
+
+    /// The author on a vibescape, as it stands on disk.
+    static func storedAuthor(for vibescape: VibescapeID) -> String {
+        guard case .custom(let id) = vibescape,
+              let author = AppState.shared?.customVibescape(id: id)?.author,
+              !author.isEmpty else {
+            return VibescapeMetadata.author
+        }
+        return author
     }
 
     /// The URL the recipient gets. Recomputed by SwiftUI on each render,
@@ -115,56 +133,84 @@ struct ShareVibescapeView: View {
                 shareButton
                 Spacer(minLength: 6)
                 savePreviewButton
+                exportVideoButton
             }
 
             Divider().overlay(Color.white.opacity(0.1))
+
+            // Only for custom vibescapes: a built-in is a slug in the URL and
+            // has nothing to publish.
+            if vibescape.isCustom {
+                authorSection
+                gallerySection
+            }
 
             Text(recipientHint)
                 .font(.system(size: 11))
                 .foregroundStyle(Color(white: 0.55))
                 .fixedSize(horizontal: false, vertical: true)
-
-            // Only for custom vibescapes: a built-in is a slug in the URL and
-            // has nothing to shorten.
-            if vibescape.isCustom {
-                shorterLinkToggle
-            }
         }
         .padding(22)
         .frame(width: 540)
         .background(Color(red: 0.06, green: 0.03, blue: 0.11))
         .onAppear {
+            // The name on the link, and the picture of it, are made from the
+            // vibescape's own author.
+            author = currentAuthor
             // Start making the short link as soon as the sheet is up, so it
             // is usually ready before the person reaches for Share. If it
             // never arrives, the long link is still there.
             Task { await makeShortLink() }
         }
-        .onChange(of: minifyLink) { _ in
-            // The short link is the same length either way — the vibescape is
-            // stored on the site, not in the URL — so there is nothing to
-            // remake and no reason to show the long one for a moment. The
-            // long fallback link does change, and it is computed on the spot.
-            if shortLink == nil {
-                Task { await makeShortLink() }
-            }
-        }
     }
 
 
-    /// The one setting in this sheet that trades something away, so it says so
-    /// on its face rather than hiding behind a tooltip.
+    /// Whoever made this, as it will be published.
     ///
-    /// It used to halve the short link. It doesn't any more: a short link is
-    /// the same length whatever this says, because the vibescape is stored on
-    /// the site rather than carried in the URL. What it still changes is the
-    /// long fallback link — the one that carries the shader itself — and the
-    /// payload the first share of a vibescape stores.
-    private var shorterLinkToggle: some View {
-        Toggle(isOn: $minifyLink) {
+    /// The name goes on the link, and — if the gallery is ticked — on the
+    /// front page of the site, so the sheet says so rather than leaving it
+    /// to be found out.
+    private var authorSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("YOUR NAME")
+                .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(Color(white: 0.55))
+
+            TextField("Your name", text: $author)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(Color.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(Color.black)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 6)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
+                .focused($authorFieldFocused)
+                .onSubmit { commitAuthor() }
+                .onChange(of: authorFieldFocused) { _, focused in
+                    if !focused { commitAuthor() }
+                }
+
+            Text("This is public. It goes on the link, and on the gallery if you tick the box below.")
+                .font(.system(size: 11))
+                .foregroundStyle(Color(white: 0.55))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Whether this goes in the public gallery.
+    private var gallerySection: some View {
+        Toggle(isOn: $inGallery) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Shorter link")
+                Text("Public gallery")
                     .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                Text("Strips the comments and spacing out of the code. The short link is the same length either way — this is for the fallback link, and for the first share of a vibescape. Whoever opens it gets back the stripped version.")
+                Text("Lists it at vibresia.com/vibescapes, where anybody can find it. Your name goes with it.")
                     .font(.system(size: 11))
                     .foregroundStyle(Color(white: 0.55))
                     .fixedSize(horizontal: false, vertical: true)
@@ -173,7 +219,33 @@ struct ShareVibescapeView: View {
         .toggleStyle(.switch)
         .controlSize(.small)
         .tint(Color(red: 1, green: 0.17, blue: 0.84))
-        .padding(.top, 2)
+    }
+
+    /// Saves the name, and makes the link again.
+    ///
+    /// The name is part of what a share is, so a share with a new name is a
+    /// different one — and gets its own link. The old link keeps working.
+    private func commitAuthor() {
+        let trimmed = author.trimmingCharacters(in: .whitespacesAndNewlines)
+        let wanted = trimmed.isEmpty ? VibescapeMetadata.author : trimmed
+        guard wanted != currentAuthor else { return }
+
+        if case .custom(let id) = vibescape {
+            app.setCustomVibescapeAuthor(id: id, author: wanted)
+        }
+        shortLink = nil
+        Task { await makeShortLink() }
+    }
+
+    /// The name on the vibescape as it stands.
+    private var currentAuthor: String {
+        switch vibescape {
+        case .builtin:
+            return VibescapeMetadata.author
+        case .custom(let id):
+            let author = app.customVibescape(id: id)?.author ?? ""
+            return author.isEmpty ? VibescapeMetadata.author : author
+        }
     }
 
     // MARK: - Sections
@@ -327,10 +399,11 @@ struct ShareVibescapeView: View {
         makingLink = true
         defer { makingLink = false }
 
-        // The credit names the author, or the app's own name when the
-        // vibescape doesn't say — and the key is of the same thing, so that
-        // two Macs holding the same vibescape work out the same link.
-        let author = mode.author.isEmpty ? VibescapeMetadata.author : mode.author
+        // The name as it is in the sheet, which is the name as it will be
+        // published. The key is of the same thing, so that two Macs holding
+        // the same vibescape work out the same link.
+        let trimmed = author.trimmingCharacters(in: .whitespacesAndNewlines)
+        let author = trimmed.isEmpty ? VibescapeMetadata.author : trimmed
         let key = ShareIdentity.key(name: mode.name, author: author,
                                     url: mode.url, shader: mode.shader)
 
@@ -351,7 +424,9 @@ struct ShareVibescapeView: View {
             return shortLink
         }
 
-        let payload = ShareImporter.encodePayload(mode, minify: minifyLink)
+        // The shader as it is, compressed — not minified. The link is short
+        // whatever this is, and the recipient gets the code somebody wrote.
+        let payload = ShareImporter.encodePayload(mode, minify: false)
         let name = mode.name
         let target = vibescape
 
@@ -362,7 +437,8 @@ struct ShareVibescapeView: View {
             width: 1200, height: 630, time: 6.0, author: author)
 
         let link = await ShareLinkStore().makeLink(
-            payload: payload, name: name, author: author, image: image, key: key)
+            payload: payload, name: name, author: author, image: image,
+            key: key, inGallery: inGallery)
         shortLink = link?.url
         if let shareID = link?.id {
             ShareLinkCache.remember(shareID: shareID, for: key)
@@ -461,6 +537,67 @@ struct ShareVibescapeView: View {
         }
     }
 
+    /// Saves the last ten seconds of the vibescape, with the music, as a
+    /// movie in Downloads.
+    private var exportVideoButton: some View {
+        Button {
+            exportVideo()
+        } label: {
+            HStack(spacing: 6) {
+                if exportingVideo {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                }
+                Text(exportingVideo ? "Recording…" : "Export video")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 100)
+                    .fill(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 100)
+                            .stroke(Color(red: 0.17, green: 0.95, blue: 1.0), lineWidth: 1.5)
+                    )
+            )
+            .foregroundStyle(Color(red: 0.17, green: 0.95, blue: 1.0))
+        }
+        .buttonStyle(.plain)
+        .disabled(exportingVideo)
+        .help("Save the last ten seconds of this vibescape, with the music, as a movie")
+    }
+
+    /// Records the last ten seconds and writes them to Downloads.
+    private func exportVideo() {
+        guard let app = AppState.shared else { return }
+        exportingVideo = true
+        let mode = vibescape
+        let slug = previewFilenameSlug()
+        let downloads = FileManager.default.urls(for: .downloadsDirectory,
+                                                 in: .userDomainMask).first
+            ?? URL(fileURLWithPath: NSHomeDirectory() + "/Downloads")
+        let url = downloads.appendingPathComponent("vibescape-\(slug).mp4")
+
+        Task { @MainActor in
+            do {
+                try await VideoExporter.export(renderer: app.renderer, mode: mode,
+                                              audio: app.audio, to: url)
+                savedVideoPath = url.path
+                NSWorkspace.shared.activateFileViewerSelecting([url])
+                Task { await Analytics.shared.track("share_video_exported", [
+                    "kind": mode.isCustom ? "custom" : "builtin"
+                ]) }
+            } catch {
+                NSLog("[SHARE] could not export the video: \(error)")
+                Task { await Analytics.shared.track("share_video_failed", [
+                    "kind": mode.isCustom ? "custom" : "builtin",
+                    "reason": String(describing: error),
+                ]) }
+            }
+            exportingVideo = false
+        }
+    }
+
     private func previewFilenameSlug() -> String {
         switch vibescape {
         case .builtin(let m): return m.rawValue
@@ -486,7 +623,7 @@ struct ShareVibescapeView: View {
         case .builtin:
             return "Anyone who clicks it sees a page with the vibescape preview and an “Open in Vibresia” button — works whether they already have the app or not."
         case .custom:
-            return "The vibescape is stored on the site, so the link stays short — and it stays the same link however many times you share it. Clicking it adds the vibescape to their list."
+            return "Clicking the link adds the vibescape to their list. The link is the same one every time you share it, so you can send it to as many people as you like."
         }
     }
 
@@ -506,7 +643,7 @@ struct ShareVibescapeView: View {
             guard let mode = app.customVibescape(id: id) else {
                 return URL(string: "https://vibresia.com/share")!
             }
-            let encoded = ShareImporter.encodePayload(mode, minify: minifyLink)
+            let encoded = ShareImporter.encodePayload(mode, minify: false)
             // The trailing slash matters. Without it the URL is /share?d=… and
             // the server answers with a 307 to /share/?d=… — a redirect that
             // some link-preview crawlers (WhatsApp's among them) do not

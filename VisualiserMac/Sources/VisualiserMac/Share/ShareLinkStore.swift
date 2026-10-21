@@ -44,8 +44,11 @@ actor ShareLinkStore {
     /// uses it to find the share this vibescape already has rather than
     /// making a second one, so the same vibescape always gets the same
     /// link.
+    ///
+    /// `inGallery` is whether it goes in the public gallery. The sheet asks,
+    /// and says there that the name and the author are public.
     func makeLink(payload: String, name: String, author: String,
-                  image: Data?, key: String) async -> ShareLink? {
+                  image: Data?, key: String, inGallery: Bool) async -> ShareLink? {
         guard !payload.isEmpty, !ShareLinkStore.token.isEmpty else { return nil }
 
         var request = URLRequest(url: ShareLinkStore.endpoint)
@@ -61,6 +64,7 @@ actor ShareLinkStore {
         if !key.isEmpty {
             body["key"] = key
         }
+        body["public"] = inGallery
         if let image, !image.isEmpty {
             body["image"] = image.base64EncodedString()
         }

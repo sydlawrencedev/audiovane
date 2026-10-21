@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe your own — Vibresia</title>
+<meta name="description" content="Describe a world. An agent writes the shader. It moves with your music.">
+<link rel="canonical" href="https://vibresia.com/vibe">
+<meta name="robots" content="noindex, follow">
+<meta name="theme-color" content="#06010d">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Vibresia">
+<meta property="og:url" content="https://vibresia.com/vibe">
+<meta property="og:title" content="Vibe your own — Vibresia">
+<meta property="og:description" content="Describe a world. An agent writes the shader. It moves with your music.">
+<meta property="og:image" content="https://vibresia.com/media/share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Vibresia vibescape">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Vibe your own — Vibresia">
+<meta name="twitter:description" content="Describe a world. An agent writes the shader. It moves with your music.">
+<meta name="twitter:image" content="https://vibresia.com/media/share.jpg">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/media/share.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/chrome.css">
+<link rel="stylesheet" href="/vibe.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- chrome:nav -->
+  <header class="site-header">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M1.6 16 L7.94 16 L10.82 7.36 L14.56 24.64 L18.3 10.24 L21.76 20.32 L24.06 16 L30.4 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      VIBRESIA
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/vibescapes">Vibescapes</a>
+      <a href="/vibe">Vibe your own</a>
+      <a href="/agents">Agents</a>
+      <a href="/#install">Install</a>
+      <a href="/#changelog">Changelog</a>
+      <a href="https://github.com/sydlawrencedev/vibresia">GitHub</a>
+    </nav>
+  </header>
+  <!-- /chrome:nav -->
+
+  <section class="vibe-head">
+    <p class="eyebrow">Vibe your own</p>
+    <h1>Say what you want.<br>An agent writes the shader.</h1>
+    <p class="lede">Vibresia has a small server that AI assistants can talk to. Point your agent at it, describe a world in a sentence, and the agent writes the code, draws it, looks at the picture and tries again until it likes what it sees. Then it lands in your list and moves with your music.</p>
+  </section>
+
+  <!-- The exchange: a prompt on one side, the world it makes on the other. -->
+  <section class="exchange">
+    <div class="panel prompt-panel">
+      <div class="panel-head">
+        <span class="panel-label">1 · You</span>
+        <button type="button" class="copy" data-copy-prompt>Copy</button>
+      </div>
+      <textarea id="prompt" rows="5" spellcheck="false" aria-label="The prompt you give your agent"></textarea>
+      <p class="panel-note">This is the prompt to hand your agent. Copy it, paste it, and it writes the shader on the other side.</p>
+    </div>
+
+    <div class="panel world-panel">
+      <div class="panel-head">
+        <span class="panel-label">2 · Your agent</span>
+        <span class="panel-label dim" id="world-name"></span>
+      </div>
+      <div class="shot">
+        <canvas id="world-canvas" width="1200" height="630" role="img" aria-label="The vibescape, drawn"></canvas>
+      </div>
+      <p class="panel-note" id="world-note">The agent's code, running in your browser. It is the same shader the app draws, and the same music driving it.</p>
+    </div>
+  </section>
+
+  <div class="examples" role="group" aria-label="Examples">
+    <span class="examples-label">Try one:</span>
+    <button type="button" class="example" data-example="gold">Liquid gold</button>
+    <button type="button" class="example" data-example="nebula">A slow nebula</button>
+    <button type="button" class="example" data-example="rings">Rings on the beat</button>
+  </div>
+
+  <!-- How to do it. -->
+  <section class="how">
+    <h2>How to do it</h2>
+
+    <ol class="steps">
+      <li>
+        <h3>Point your agent at Vibresia</h3>
+        <p>Vibresia ships a local server. Give your agent this and it can draw, check and save vibescapes:</p>
+        <div class="cmd"><code id="cmd">Connect to this mcp: vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy-cmd>Copy</button></div>
+        <p class="small">Claude Code, Cursor, Codex and the rest each want it spelled a little differently — <a href="/agents">the agents page</a> has the version for yours.</p>
+      </li>
+      <li>
+        <h3>Ask for a world</h3>
+        <p>Describe it. The more specific you are about the movement, the better it comes out:</p>
+        <div class="cmd"><code>Write a vibescape for Vibresia: a tunnel of liquid gold that pulses with the bass. Make it warm and slow.</code></div>
+      </li>
+      <li>
+        <h3>Watch it happen</h3>
+        <p>The agent draws the shader and looks at the picture, then changes it and draws it again. That loop is the whole trick: it does not describe what it wrote, it looks at it. When it is happy — or when you are — it saves, and the vibescape is in your list, moving with whatever is playing.</p>
+      </li>
+    </ol>
+
+    <div class="note">
+      <h3>What the agent already knows</h3>
+      <p>It can hear. Ask it what is playing and it gets the genre, the tempo and the shape of the spectrum, so it can write something that suits the music rather than something generic. It can also see every uniform a vibescape has, and preview a shader as a picture before it saves anything.</p>
+    </div>
+  </section>
+
+  <!-- chrome:footer -->
+  <footer class="site-footer">
+    <p>Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
+    <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+  </footer>
+  <!-- /chrome:footer -->
+</div>
+
+<script src="/analytics.js" defer></script>
+<script src="/share/preview.js"></script>
+<script>
+  /* The exchange: a prompt on one side, the world it makes on the other.
+   *
+   * The agent is on your machine, not on this page, so what this does is
+   * show the shape of the thing: the prompt that goes to the agent, the
+   * shader it writes, and that shader running. The examples are real
+   * prompts with real shaders — the same ones the agent would have written.
+   */
+  (function () {
+    "use strict";
+
+    var EXAMPLES = {
+      gold: {
+        name: "Liquid gold",
+        prompt: "Write a vibescape for Vibresia: a tunnel of liquid gold that pulses with the bass. Make it warm and slow, and fade out in silence.",
+        shader: [
+          "vec3 render(vec2 p, float t)",
+          "{",
+          "    float r = length(p);",
+          "    float a = atan(p.y, p.x);",
+          "    float rings = 0.5 + 0.5 * sin(r * 26.0 - t * 1.6 + uBass * 4.0 + a * 0.4);",
+          "    vec3 gold = vec3(1.0, 0.72, 0.22);",
+          "    vec3 deep = vec3(0.22, 0.06, 0.01);",
+          "    return mix(deep, gold, rings) * uActive;",
+          "}"
+        ].join("\n")
+      },
+      nebula: {
+        name: "A slow nebula",
+        prompt: "Write a vibescape for Vibresia: a slow nebula that breathes with the treble, in deep purple and blue. It should never be still.",
+        shader: [
+          "vec3 render(vec2 p, float t)",
+          "{",
+          "    float n = fbm(p * 4.0 + vec2(t * 0.04, -t * 0.03));",
+          "    vec3 colour = mix(vec3(0.04, 0.02, 0.10), vec3(0.42, 0.22, 0.92), n);",
+          "    colour += vec3(0.10, 0.32, 0.55) * uTreble * n;",
+          "    return colour * uActive;",
+          "}"
+        ].join("\n")
+      },
+      rings: {
+        name: "Rings on the beat",
+        prompt: "Write a vibescape for Vibresia: concentric rings that snap outwards on every beat, in cyan on black. Nothing should move when the music stops.",
+        shader: [
+          "vec3 render(vec2 p, float t)",
+          "{",
+          "    float r = length(p);",
+          "    float f = fract(r * 5.0 - t * 0.7);",
+          "    float ring = smoothstep(0.06, 0.0, abs(f - 0.5) - 0.02);",
+          "    vec3 colour = mix(vec3(0.0), vec3(0.15, 0.95, 0.9), ring);",
+          "    return colour * (0.35 + uBeatStrength) * uActive;",
+          "}"
+        ].join("\n")
+      }
+    };
+
+    var promptBox = document.getElementById("prompt");
+    var canvas = document.getElementById("world-canvas");
+    var nameLabel = document.getElementById("world-name");
+    var note = document.getElementById("world-note");
+    var running = null;
+
+    function show(key) {
+      var example = EXAMPLES[key];
+      if (!example) return;
+      promptBox.value = example.prompt;
+      nameLabel.textContent = example.name;
+      note.textContent = "The agent's code, running in your browser. It is the same shader the app draws, and the same music driving it.";
+
+      if (running && running.stop) running.stop();
+      if (!window.vibresiaPreview) {
+        note.textContent = "This browser cannot draw it — but the app can, and that is where it will run.";
+        return;
+      }
+      var result = window.vibresiaPreview.animate(example.shader, canvas, { animate: true });
+      if (!result.ok) {
+        note.textContent = "This browser would not draw it: " + (result.error || "unknown");
+        return;
+      }
+      running = result;
+    }
+
+    document.querySelectorAll("[data-example]").forEach(function (button) {
+      button.addEventListener("click", function () {
+        show(button.getAttribute("data-example"));
+      });
+    });
+
+    function copy(text, button) {
+      var done = function () {
+        var was = button.textContent;
+        button.textContent = "Copied";
+        button.setAttribute("data-done", "");
+        setTimeout(function () {
+          button.textContent = was;
+          button.removeAttribute("data-done");
+        }, 1600);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done, function () { done(); });
+      } else {
+        done();
+      }
+    }
+
+    var promptCopy = document.querySelector("[data-copy-prompt]");
+    if (promptCopy) {
+      promptCopy.addEventListener("click", function () {
+        copy(promptBox.value, promptCopy);
+      });
+    }
+    var cmdCopy = document.querySelector("[data-copy-cmd]");
+    if (cmdCopy) {
+      cmdCopy.addEventListener("click", function () {
+        copy(document.getElementById("cmd").textContent, cmdCopy);
+      });
+    }
+
+    show("gold");
+  })();
+</script>
+</body>
+</html>
