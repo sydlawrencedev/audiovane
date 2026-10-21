@@ -1311,6 +1311,15 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Puts a made-up song in the chrome, for looking at the UI without a
+    /// music app playing something.
+    func setFakeSong(title: String, artist: String) {
+        nowPlaying = SongIdentifier.Song(
+            title: title, artist: artist,
+            catalogueGenre: "Alternative", genre: .rock)
+        songGenre = .rock
+    }
+
     /// Takes what the catalogue said and puts it on the stage.
     private func applySong(_ song: SongIdentifier.Song) {
         // A song we already know about: the same track change can be seen

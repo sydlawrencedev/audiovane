@@ -227,6 +227,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // A song, made up — so the chrome can be looked at with one in it
+        // without a music app playing something.
+        if let i = CommandLine.arguments.firstIndex(of: "--fake-song"), i + 1 < CommandLine.arguments.count {
+            let title = CommandLine.arguments[i + 1]
+            let artist = i + 2 < CommandLine.arguments.count ? CommandLine.arguments[i + 2] : ""
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                AppState.shared?.setFakeSong(title: title, artist: artist)
+            }
+        }
+
         // UI snapshot — renders the SwiftUI overlay layer (header, HUD, meter)
         // to a PNG so the chrome can be reviewed without a screen recorder.
         if CommandLine.arguments.contains("--ui-shot") {
