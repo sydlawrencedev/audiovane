@@ -21,7 +21,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const local = process.argv.includes("--local");
-const flags = local ? ["--local"] : [];
+// D1's commands are local unless they are told otherwise, and the point of
+// this script is the live database.
+const flags = local ? ["--local"] : ["--remote"];
 const database = "vibresia-shares";
 
 function wrangler(args, options = {}) {
@@ -44,10 +46,34 @@ function rowsFrom(text) {
   return out;
 }
 
+/** How many shares have no hash yet. */
+function unhashedCount() {
+  const counted = rowsFrom(wrangler([
+    "--command",
+    "SELECT COUNT(*) AS n FROM shares WHERE payload_hash IS NULL",
+    "--json",
+  ]));
+  return Number(counted[0]?.n ?? 0);
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 console.log("==> Reading the shares that have no hash yet");
-const rows = rowsFrom(
-  wrangler(["--command", "SELECT id, payload FROM shares WHERE payload_hash IS NULL", "--json"])
-);
+
+// D1 serves reads from replicas, and one that hasn't caught up with the
+// migration answers "no rows" rather than "no such column". So an empty
+// answer is only believed once a second read agrees with it.
+let rows = [];
+for (let attempt = 0; attempt < 5; attempt += 1) {
+  rows = rowsFrom(
+    wrangler(["--command", "SELECT id, payload FROM shares WHERE payload_hash IS NULL", "--json"])
+  );
+  if (rows.length > 0) break;
+  const waiting = unhashedCount();
+  if (waiting === 0) break;
+  console.log(`    ${waiting} share(s) to hash, but this replica hasn't caught up — trying again`);
+  await sleep(1500);
+}
 
 if (rows.length === 0) {
   console.log("==> Nothing to do — every share has a hash");
