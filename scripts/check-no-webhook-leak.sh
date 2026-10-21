@@ -13,8 +13,11 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
 # The /api/notify token counts as well: it is the thing standing between a
-# stranger and our Discord channel now that the app reports to us.
+# stranger and our Discord channel now that the app reports to us. So does
+# the share token, which is what stops the site's share endpoint being used
+# as free storage by anyone who finds it.
 matches=$(git grep -InE 'NOTIFY_TOKEN\s*=\s*["'\'']?[A-Za-z0-9_-]{16,}' -- . 2>/dev/null || true)
+matches=$(git grep -InE 'SHARE_TOKEN\s*=\s*["'\'']?[A-Za-z0-9_-]{16,}' -- . 2>/dev/null || true)
 
 # Include .env / .dev.vars in the sweep even though they're ignored: the point
 # is to catch the moment one of them gets force-added.
@@ -27,6 +30,9 @@ for f in .env .dev.vars; do
   if grep -qE '^\s*NOTIFY_TOKEN\s*=\s*\S{16,}' "$f"; then
     matches+="${f}: contains the /api/notify token (ignored file — do not commit it)"
   fi
+  if grep -qE '^\s*SHARE_TOKEN\s*=\s*\S{16,}' "$f"; then
+    matches+="${f}: contains the share token (ignored file — do not commit it)"
+  fi
 done
 
 if [ -n "$matches" ]; then
@@ -34,7 +40,8 @@ if [ -n "$matches" ]; then
   echo "$matches" >&2
   echo "" >&2
   echo "Treat it as leaked: rotate the webhook in Discord (npx wrangler secret put" >&2
-echo "DISCORD_WEBHOOK_URL) and the notify token (NOTIFY_TOKEN), then rebuild." >&2
+echo "DISCORD_WEBHOOK_URL), the notify token (NOTIFY_TOKEN) and the share token" >&2
+echo "(SHARE_TOKEN), then rebuild." >&2
   exit 1
 fi
-echo "no webhook URLs or notify tokens in tracked files"
+echo "no webhook URLs, notify tokens or share tokens in tracked files"

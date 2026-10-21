@@ -23,6 +23,21 @@ run_worker_first = true
 DISCORD_NOTIFICATIONS_ENABLED = "true"
 DISCORD_BOT_USERNAME = "Vibresia"
 
+# Shared vibescapes. The app POSTs a custom vibescape here — the shader
+# payload and a picture of it — and gets back a short URL on this domain
+# (/s/<id>) that the site serves with the payload inlined and a real og:image.
+#
+# D1 rather than Workers KV because KV is eventually consistent: a link
+# opened ten seconds after it was shared could hit an edge that has not seen
+# the write and 404. D1 is SQLite-backed and strongly consistent, so the link
+# works the moment it exists.
+#
+#   npx wrangler d1 migrations apply vibresia-shares --remote
+[[d1_databases]]
+binding = "SHARES"
+database_name = "vibresia-shares"
+database_id = "df8952d8-d6d0-4bd5-91cb-19f6ba97adae"
+
 # These are routes rather than custom domains because the DNS for
 # vibresia.com already exists and is proxied. A custom domain would want to
 # own those records, and Cloudflare refuses to overwrite records it didn't

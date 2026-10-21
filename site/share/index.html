@@ -14,6 +14,9 @@
 <meta property="og:title" content="A vibescape was shared with you — Vibresia">
 <meta property="og:description" content="Someone shared a Vibresia vibescape with you. Open it in Vibresia or download the app.">
 <meta property="og:image" content="https://vibresia.com/media/share.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="A Vibresia vibescape">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="A vibescape was shared with you — Vibresia">
 <meta name="twitter:description" content="Someone shared a Vibresia vibescape with you. Open it in Vibresia or download the app.">
@@ -86,7 +89,10 @@
   // DOM work, which doesn't care that it happens a tick later.
   (async function () {
     var params = new URL(window.location.href).searchParams;
-    var d = params.get("d");
+    // The payload is in the query string for the long form of the link
+    // (/share/?d=…). The short form (/s/<id>) has the Worker inline it as a
+    // global instead, so the URL a recipient sees stays short.
+    var d = params.get("d") || (window.__VIBRESIA_SHARE__ && window.__VIBRESIA_SHARE__.d) || null;
     var content = document.getElementById("content");
     var lede = document.getElementById("lede");
     var creditAuthor = document.getElementById("credit-author");

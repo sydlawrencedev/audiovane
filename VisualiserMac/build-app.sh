@@ -48,6 +48,18 @@ if [ -z "$REPORT_TOKEN" ]; then
     echo "NOTE: no REPORT_TOKEN set — this build won't report crashes to Discord."
 fi
 
+# The token the site checks before it stores a shared vibescape. The site
+# keeps the payload of a share and gives back a short URL for it, and this is
+# what stops that endpoint being used as free storage by anyone who finds
+# it. It ships inside the app, so it is a speed bump rather than a lock —
+# the same caveat as REPORT_TOKEN above.
+#
+#   SHARE_TOKEN=…            (the same value as the SHARE_TOKEN secret)
+SHARE_TOKEN="${SHARE_TOKEN:-}"
+if [ -z "$SHARE_TOKEN" ]; then
+    echo "NOTE: no SHARE_TOKEN set — this build's share links will stay long."
+fi
+
 if [ "$CONFIG" = "release" ]; then
     # Preserve DWARF in the optimized binary so dsymutil can emit the symbols
     # PostHog Error Tracking needs to symbolicate production crashes.
@@ -130,6 +142,8 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <string>${REPORT_ENDPOINT}</string>
     <key>ReportToken</key>
     <string>${REPORT_TOKEN}</string>
+    <key>ShareToken</key>
+    <string>${SHARE_TOKEN}</string>
     <!-- Register Vibresia as the handler for vibresia:// URLs so a shared
          vibescape link handed to us (vibresia://open?p=ribbons or ?d=...) lands
          in the app rather than in the browser. The handler is wired up in

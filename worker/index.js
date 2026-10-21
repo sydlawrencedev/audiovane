@@ -99,6 +99,9 @@ export function resetRateLimiter() {
   lastErrorAt = 0;
   errorsThisHour = 0;
   errorHourStartedAt = 0;
+  lastShareAt = 0;
+  sharesThisHour = 0;
+  shareHourStartedAt = 0;
 }
 
 // Same idea, separate budget: a download in a loop shouldn't silence the one
@@ -116,11 +119,33 @@ function errorRateLimited() {
   return false;
 }
 
+// Sharing has its own budget again. A person makes a handful of shares in a
+// row, so the ceiling is generous for one person and low for a script: what
+// is being protected is the daily row-write quota, and burning it would stop
+// sharing working for everyone.
+const SHARE_MIN_SECONDS_BETWEEN = 1;
+const SHARE_MAX_PER_HOUR = 120;
+let lastShareAt = 0;
+let sharesThisHour = 0;
+let shareHourStartedAt = 0;
+
+function shareRateLimited() {
+  const now = Date.now();
+  if (now - shareHourStartedAt > 3_600_000) {
+    shareHourStartedAt = now;
+    sharesThisHour = 0;
+  }
+  if (now - lastShareAt < SHARE_MIN_SECONDS_BETWEEN * 1000) return true;
+  if (sharesThisHour >= SHARE_MAX_PER_HOUR) return true;
+  lastShareAt = now;
+  sharesThisHour += 1;
+  return false;
+}
+
 // Kept pure and exported so the payload can be asserted on without a network.
 // `firstSeen` means "this browser has downloaded before" — the page puts it in
 // the link's query string, since a plain link click can't carry a header.
-export function buildDownloadEmbed({ source, referer, country, city, agent, firstSeen }) {
-  const style = STYLES.good;
+export function buildDownloadEmbed({ source, referer, country, city, agent, firstSeen }) {  const style = STYLES.good;
   const fields = [];
 
   if (source) fields.push({ name: "Source", value: truncate(source, DISCORD_FIELD_LIMIT), inline: true });
@@ -262,6 +287,260 @@ export function buildErrorEmbed({ title, message, priority = "high", fields = []
   };
 }
 
+// ------------------------------------------------------------- shared vibescapes
+//
+// A custom vibescape used to travel as its payload in the query string:
+// /share/?d=<base64 of the deflated shader>. That works, but the URL is
+// around 370 characters, and it made a 307 redirect on the way in, which
+// WhatsApp's link-preview crawler did not follow — so the preview was blank
+// and the link looked broken in a chat.
+//
+// So the payload is stored here and the app shares /s/<id> instead: a short
+// URL on this domain that the Worker serves directly, with the payload
+// inlined and an og:image that is a picture of this vibescape rather than
+// the generic Vibresia one.
+//
+// D1 rather than Workers KV because KV is eventually consistent. A link
+// opened ten seconds after it was shared could reach an edge that had not
+// seen the write and 404, which is the whole feature failing at exactly the
+// moment it is used. D1 is SQLite-backed and strongly consistent.
+
+// Six characters from an alphabet with no l, 1 or 0 in it — the characters
+// people misread when they type one out. About a billion ids.
+const SHARE_ID_ALPHABET = "abcdefghijkmnopqrstuvwxyz23456789";
+const SHARE_ID_LENGTH = 6;
+const SHARE_ID_PATTERN = new RegExp(`^[${SHARE_ID_ALPHABET}]{${SHARE_ID_LENGTH}}$`);
+
+// Caps on what one share can be. The image is the big one: a row is a
+// megabyte or two of the free tier's storage per share, and the picture is
+// the only part of it that is worth having at a size.
+const MAX_PAYLOAD_CHARS = 8192;
+const MAX_NAME_CHARS = 120;
+const MAX_AUTHOR_CHARS = 120;
+const MAX_IMAGE_BYTES = 400 * 1024;
+
+// The payload is base64url of the deflated JSON, so it is base64url
+// characters and nothing else. Checking that is not much, but it is enough
+// to keep anything that is not a share out of the database.
+const PAYLOAD_PATTERN = /^[A-Za-z0-9_-]+$/;
+
+function randomShareId() {
+  const bytes = crypto.getRandomValues(new Uint8Array(SHARE_ID_LENGTH));
+  let id = "";
+  for (const byte of bytes) {
+    id += SHARE_ID_ALPHABET[byte % SHARE_ID_ALPHABET.length];
+  }
+  return id;
+}
+
+function isValidShareId(id) {
+  return SHARE_ID_PATTERN.test(id);
+}
+
+export function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (c) => {
+    switch (c) {
+      case "&": return "&amp;";
+      case "<": return "&lt;";
+      case ">": return "&gt;";
+      case '"': return "&quot;";
+      default: return "&#39;";
+    }
+  });
+}
+
+/// The page a share is served as.
+///
+/// The static page at /share/ is the same page, with the payload in the
+/// query string. This one has the payload inlined and the metadata rewritten,
+/// so a crawler gets a title, a description and a picture for this specific
+/// vibescape instead of the generic ones. Crawlers do not run the page's
+/// JavaScript, so the metadata has to be right in the HTML itself.
+export function buildSharePage(html, { id, payload, name, author, url }) {
+  const title = name ? `${name} — Vibresia` : "A vibescape was shared with you — Vibresia";
+  const description = author
+    ? `A vibescape called “${name}” by ${author}. Open it in Vibresia, free.`
+    : "Someone shared a Vibresia vibescape with you. Open it in Vibresia or download the app.";
+  const image = `${CANONICAL_SITE}og/${id}.jpg`;
+
+  let out = html;
+
+  // The payload. Injected as a global rather than a query parameter so the
+  // URL a recipient sees stays short. `</` is escaped because the payload
+  // ends up inside a <script> element, and the JSON is the only thing that
+  // could close it early.
+  const injected = `<script>window.__VIBRESIA_SHARE__ = ${JSON.stringify({ d: payload }).replace(/</g, "\\u003c")};</script>`;
+  out = out.replace("</head>", `${injected}\n</head>`);
+
+  const swap = (pattern, value) => {
+    out = out.replace(pattern, value);
+  };
+  swap(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`);
+  swap(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${escapeHtml(url)}">`);
+  swap(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${escapeHtml(description)}">`);
+  swap(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${escapeHtml(url)}">`);
+  swap(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${escapeHtml(title)}">`);
+  swap(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${escapeHtml(description)}">`);
+  swap(/<meta property="og:image" content="[^"]*">/, `<meta property="og:image" content="${escapeHtml(image)}">`);
+  swap(/<meta property="og:image:width" content="[^"]*">/, `<meta property="og:image:width" content="1200">`);
+  swap(/<meta property="og:image:height" content="[^"]*">/, `<meta property="og:image:height" content="630">`);
+  swap(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${escapeHtml(title)}">`);
+  swap(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${escapeHtml(description)}">`);
+  swap(/<meta name="twitter:image" content="[^"]*">/, `<meta name="twitter:image" content="${escapeHtml(image)}">`);
+
+  return out;
+}
+
+/// `POST /api/share` — the app hands over a vibescape and gets back a short
+/// URL for it.
+///
+/// The token is a speed bump, not a lock: it ships inside the app, so
+/// anyone who wants it can read it out of the bundle. What it stops is a
+/// script creating shares on this domain to burn the daily write quota,
+/// which would break sharing for everyone.
+async function handleShareCreate(request, env) {
+  const token = request.headers.get("x-av-token") || "";
+  if (!env.SHARE_TOKEN || token !== env.SHARE_TOKEN) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+  if (shareRateLimited()) {
+    return Response.json({ ok: false, error: "slow down" }, { status: 429 });
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: "bad json" }, { status: 400 });
+  }
+
+  const payload = typeof body?.payload === "string" ? body.payload : "";
+  const name = typeof body?.name === "string" ? body.name : "";
+  const author = typeof body?.author === "string" ? body.author : "";
+  if (!payload || payload.length > MAX_PAYLOAD_CHARS || !PAYLOAD_PATTERN.test(payload)) {
+    return Response.json({ ok: false, error: "bad payload" }, { status: 400 });
+  }
+  if (name.length > MAX_NAME_CHARS || author.length > MAX_AUTHOR_CHARS) {
+    return Response.json({ ok: false, error: "name too long" }, { status: 400 });
+  }
+
+  // The picture is optional. Without one the share still works — it just
+  // has the generic preview, which is what every custom share used to have.
+  let image = null;
+  if (typeof body?.image === "string" && body.image.length > 0) {
+    let bytes;
+    try {
+      bytes = Uint8Array.from(atob(body.image), (c) => c.charCodeAt(0));
+    } catch {
+      return Response.json({ ok: false, error: "bad image" }, { status: 400 });
+    }
+    if (bytes.length > MAX_IMAGE_BYTES) {
+      return Response.json({ ok: false, error: "image too large" }, { status: 400 });
+    }
+    image = bytes;
+  }
+
+  // A handful of tries: the id is six characters from a billion, so a
+  // collision is a one-in-a-million thing, but it is a primary key and
+  // losing the race should not fail the share.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const id = randomShareId();
+    try {
+      await env.SHARES.prepare(
+        "INSERT INTO shares (id, payload, name, author, image, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+      ).bind(id, payload, name, author, image, Date.now()).run();
+      return Response.json({
+        ok: true,
+        id,
+        url: `${CANONICAL_SITE}s/${id}`,
+        imageUrl: image ? `${CANONICAL_SITE}og/${id}.jpg` : null,
+      });
+    } catch (error) {
+      if (String(error).includes("UNIQUE constraint failed")) continue;
+      console.log(`[share] insert failed: ${error}`);
+      return Response.json({ ok: false, error: "could not save" }, { status: 500 });
+    }
+  }
+  return Response.json({ ok: false, error: "could not save" }, { status: 500 });
+}
+
+/// `GET /s/<id>` — the share itself.
+///
+/// Served directly rather than redirected to the long form, because a
+/// redirect is what WhatsApp's crawler was not following.
+async function handleSharePage(request, url, env) {
+  const id = url.pathname.slice("/s/".length);
+  if (!isValidShareId(id)) return new Response("Not found", { status: 404 });
+
+  const row = await env.SHARES.prepare(
+    "SELECT payload, name, author FROM shares WHERE id = ?"
+  ).bind(id).first();
+  if (!row) return new Response("Not found", { status: 404 });
+
+  // The page itself is a static asset; the Worker pulls it and rewrites the
+  // parts that are specific to this share.
+  //
+  // "/share/" rather than "/share/index.html": the asset service answers the
+  // latter with a 307 to the former, and a 3xx is not `ok`, so asking for
+  // the file by name looks like a missing asset.
+  const asset = await env.ASSETS.fetch(new Request(new URL("/share/", url), request));
+  if (!asset.ok) {
+    console.log(`[share] could not read the share page: ${asset.status}`);
+    return new Response("Not found", { status: 404 });
+  }
+  const html = await asset.text();
+
+  const page = buildSharePage(html, {
+    id,
+    payload: row.payload,
+    name: row.name,
+    author: row.author,
+    url: `${CANONICAL_SITE}s/${id}`,
+  });
+
+  return new Response(page, {
+    headers: {
+      "content-type": "text/html; charset=utf-8",
+      "cache-control": "public, max-age=0, must-revalidate",
+    },
+  });
+}
+
+/// A BLOB column comes back from D1 as an ArrayBuffer in some places and as a
+/// plain array of bytes in others, and `new Response()` can only make a body
+/// out of the first. So: normalise before responding.
+export function toBytes(value) {
+  if (value == null) return null;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (Array.isArray(value)) return Uint8Array.from(value);
+  return null;
+}
+
+/// `GET /og/<id>.jpg` — the picture of the vibescape, for link previews.
+///
+/// Long-lived, because a share link does not change once it exists and the
+/// picture never does either. The id is in the filename, so the cache key is
+/// right without asking.
+async function handleShareImage(request, url, env) {
+  const id = url.pathname.slice("/og/".length).replace(/\.jpg$/, "");
+  if (!isValidShareId(id)) return new Response("Not found", { status: 404 });
+
+  const row = await env.SHARES.prepare(
+    "SELECT image FROM shares WHERE id = ?"
+  ).bind(id).first();
+  if (!row) return new Response("Not found", { status: 404 });
+  const bytes = toBytes(row.image);
+  if (!bytes || bytes.length === 0) return new Response("Not found", { status: 404 });
+
+  return new Response(bytes, {
+    headers: {
+      "content-type": "image/jpeg",
+      "cache-control": "public, max-age=31536000, immutable",
+    },
+  });
+}
+
 /// `POST /api/notify` — how the Mac app reports problems.
 ///
 /// Authenticated with a shared token so this can't be used as a free posting
@@ -365,6 +644,9 @@ export default {
     if (url.pathname === "/download") return handleDownload(request, url, env, ctx);
     if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
+    if (url.pathname === "/api/share") return handleShareCreate(request, env);
+    if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env);
+    if (url.pathname.startsWith("/og/")) return handleShareImage(request, url, env);
     // Note: Cloudflare serves a request that matches an existing asset straight
     // from the edge, without invoking this Worker at all (only misses reach it,
     // which is how `x-av-worker` showed up on a 404 and nowhere else). So

@@ -866,24 +866,62 @@ final class OpenGLRenderer: NSObject {
     }
 
     private func writePNG(_ flipped: [UInt8], width: Int, height: Int, to path: String) {
-        let rowBytes = width * 4
-        let cs = CGColorSpaceCreateDeviceRGB()
-        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
-        guard let provider = CGDataProvider(data: Data(flipped) as CFData) else { return }
-        guard let cgImg = CGImage(width: width, height: height, bitsPerComponent: 8,
-                                 bitsPerPixel: 32, bytesPerRow: rowBytes,
-                                 space: cs, bitmapInfo: info,
-                                 provider: provider, decode: nil, shouldInterpolate: false,
-                                 intent: .defaultIntent) else { return }
+        guard let cgImg = makeImage(flipped, width: width, height: height) else { return }
         let url = URL(fileURLWithPath: path)
         guard let dest = CGImageDestinationCreateWithURL(url as CFURL, "public.png" as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(dest, cgImg, nil)
         CGImageDestinationFinalize(dest)
     }
 
+    /// The rendered frame as a CGImage, ready to be encoded.
+    private func makeImage(_ flipped: [UInt8], width: Int, height: Int) -> CGImage? {
+        let rowBytes = width * 4
+        let cs = CGColorSpaceCreateDeviceRGB()
+        let info = CGBitmapInfo(rawValue: CGImageAlphaInfo.premultipliedLast.rawValue)
+        guard let provider = CGDataProvider(data: Data(flipped) as CFData) else { return nil }
+        return CGImage(width: width, height: height, bitsPerComponent: 8,
+                       bitsPerPixel: 32, bytesPerRow: rowBytes,
+                       space: cs, bitmapInfo: info,
+                       provider: provider, decode: nil, shouldInterpolate: false,
+                       intent: .defaultIntent)
+    }
+
+    /// One frame of a vibescape, at a chosen moment, as JPEG data.
+    ///
+    /// This is the picture a share link shows: the same vibescape, at the
+    /// same moment, that the share page draws in a browser. The share page
+    /// takes its still at six seconds in rather than at the first frame, so
+    /// that anything driven by time has reached its stride — hence `time`
+    /// being an input rather than something the loop works its way to.
+    ///
+    /// A single frame, not a run of them. The run exists to let time-driven
+    /// shaders settle, but here the time is given, so one frame at t=6 is
+    /// the same picture as 360 frames ending at t=6 — and it costs one
+    /// readback instead of 360.
+    func renderStill(width: Int, height: Int, mode: VibescapeID, time: Double) -> Data? {
+        var still: [UInt8] = []
+        renderFrames(width: width, height: height, mode: mode, frames: 1,
+                     syntheticAudio: true, startTime: time) { _, pixels in
+            still = pixels
+        }
+        guard !still.isEmpty else { return nil }
+        guard let cgImg = makeImage(still, width: width, height: height) else { return nil }
+
+        // JPEG rather than PNG: the picture is 1200x630 of smooth gradients,
+        // which is exactly what JPEG is good at, and it is a third of the
+        // size. A share's picture is stored, and stored pictures are what
+        // run the storage down.
+        let out = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(out, "public.jpeg" as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, cgImg, [kCGImageDestinationLossyCompressionQuality: 0.82] as CFDictionary)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return out as Data
+    }
+
     /// The offscreen draw loop, handing every graded frame to `eachFrame`.
     private func renderFrames(width: Int, height: Int, mode: VibescapeID, frames: Int,
                               syntheticAudio: Bool = false, fps: Double = 60,
+                              startTime: Double = 0,
                               eachFrame: (Int, [UInt8]) -> Void) {
         guard let ctx = ensureOffscreenContext() else {
             NSLog("[VIZ] renderToPNG: failed to create offscreen context")
@@ -930,7 +968,7 @@ final class OpenGLRenderer: NSObject {
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), snapTarget.fbo)
         let rowBytes = width * 4
         for k in 0..<frames {
-            let seconds = Double(k) / fps
+            let seconds = startTime + Double(k) / fps
             if syntheticAudio {
                 audio.syntheticState(at: seconds)
             }

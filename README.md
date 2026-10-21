@@ -23,11 +23,13 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/v
 | `site/analytics.js` | Anonymous page-view / click tracking for the landing page. |
 | `site/github.js` | Changelog and open issues, fetched from the GitHub API when scrolled into view. |
 | `worker/index.js` | Cloudflare Worker: serves `./site` and handles `/download` (redirect + Discord notification). |
+| `worker/share.test.js` | Tests for the shared-vibescape endpoints. |
+| `migrations/` | D1 schema — one table, one row per shared vibescape. |
 | `site/sitemap.xml`, `site/robots.txt` | What Google is pointed at. One URL; the plain-text agent pages are deliberately left crawlable but unlisted. |
 | `site/_headers`, `site/_redirects` | Cloudflare response headers (caching, security) and canonical-path redirects. |
 | `scripts/check-vibescapes.sh` | Fails if a vibescape is missing from the landing page, or the version in its structured data is stale. |
 | `scripts/check-posthog.sh` | Fails if the site and the app report to different PostHog projects. |
-| `scripts/check-no-webhook-leak.sh` | Fails if a Discord webhook URL is anywhere in the tree. |
+| `scripts/check-no-webhook-leak.sh` | Fails if a Discord webhook URL, a notify token or a share token is anywhere in the tree. |
 | `wrangler.toml` | Deploys the Worker (and `site/` through it) to Cloudflare. |
 
 ## Developing
@@ -153,6 +155,54 @@ Notes:
   `wrangler.toml` and redeploying; the site keeps working either way.
 - `install.sh` still downloads straight from GitHub, so script installs don't
   produce notifications.
+
+## Shared vibescapes
+
+A custom vibescape — one somebody wrote — used to travel as its payload in
+the link: `vibresia.com/share/?d=<base64 of the deflated shader>`. That
+works with no backend at all, which is why it was built that way. But the
+link was around 370 characters, and the server answered it with a 307 to
+add the trailing slash, which WhatsApp's link-preview crawler did not
+follow — so the preview was blank and the link looked broken in a chat.
+
+Now the payload is stored and the link is short:
+
+```
+POST /api/share   {payload, name, author, image}   →  {"url": "https://vibresia.com/s/k3f9x2"}
+GET  /s/k3f9x2                                         the share page, with the payload inlined
+GET  /og/k3f9x2.jpg                                    a picture of this vibescape
+```
+
+- **D1, not Workers KV.** KV is eventually consistent — a link opened ten
+  seconds after it was shared could reach an edge that hadn't seen the write
+  and 404, which is the feature failing at exactly the moment it is used.
+  D1 is SQLite-backed and strongly consistent, so the link works the moment
+  it exists. It is free: 100,000 rows written a day, 5,000,000 read, 5 GB
+  stored. A share is a row with a payload and a ~120 KB picture in it.
+- **The page is served, not redirected to.** A redirect is what the preview
+  crawler was not following. The Worker fetches `/share/` and rewrites the
+  parts that are specific to the share: the title, the description, and the
+  `og:image` that points at the stored picture. Crawlers do not run the
+  page's JavaScript, so that has to be right in the HTML itself.
+- **The picture is the vibescape.** The app renders it at 1200x630, at the
+  same moment the share page draws its still (six seconds in, so anything
+  driven by time has reached its stride), so the preview in a chat is the
+  picture the recipient gets.
+- **The long link still works.** It carries the payload with it, so it
+  needs nothing stored. The app falls back to it if the site can't be
+  reached — sharing is not allowed to depend on the network.
+
+The endpoint needs a token, which is a speed bump rather than a lock: it
+ships inside the app, so anyone can read it out of the bundle. What it
+stops is a script creating shares to burn the daily write quota.
+
+```bash
+npx wrangler secret put SHARE_TOKEN        # once; the same value goes in VisualiserMac/.env
+npx wrangler d1 migrations apply vibresia-shares --remote
+```
+
+`SHARE_TOKEN` is a credential in the same class as `NOTIFY_TOKEN`, so
+`scripts/check-no-webhook-leak.sh` fails if it ends up in the tree.
 
 ## Changelog and open issues
 

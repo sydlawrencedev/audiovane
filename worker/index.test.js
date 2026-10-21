@@ -1,4 +1,4 @@
-// Tests for the Worker: node --test worker/
+// Tests for the Worker: node --test worker/*.test.js
 //
 // The Discord POST is captured by replacing global fetch, so nothing here
 // touches the network or needs a webhook — the same reason delphina mocks

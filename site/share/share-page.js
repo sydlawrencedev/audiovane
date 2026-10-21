@@ -34,7 +34,10 @@
     var slug = open.getAttribute("data-share-slug");
     if (slug) return "vibresia://open?p=" + encodeURIComponent(slug);
     if (open.hasAttribute("data-share-custom")) {
-      var d = new URL(window.location.href).searchParams.get("d");
+      // The query string for the long form of the link, the global for the
+      // short form the Worker serves. See site/share/index.html.
+      var d = new URL(window.location.href).searchParams.get("d")
+        || (window.__VIBRESIA_SHARE__ && window.__VIBRESIA_SHARE__.d);
       if (!d) return null;
       return "vibresia://open?d=" + d;
     }

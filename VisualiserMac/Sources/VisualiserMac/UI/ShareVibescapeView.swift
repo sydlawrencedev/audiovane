@@ -9,9 +9,16 @@ import UniformTypeIdentifiers
 /// that doesn't render link previews.
 ///
 /// Built-in vibescapes get a short, readable URL (`vibresia.com/share/<slug>`).
-/// Custom vibescapes carry the shader in the URL fragment as base64; the
-/// page on the other end (`site/share?d=…`) decodes the payload and gives
-/// the recipient a working vibescape without any backend storage.
+/// Custom vibescapes used to carry the shader in the URL's query string as
+/// base64 — around 370 characters, behind a redirect that WhatsApp's
+/// link-preview crawler did not follow, so the preview was blank and the
+/// link looked broken in a chat.
+///
+/// Now a custom vibescape's link is `/s/<id>`: the payload is stored on the
+/// site, the URL is short, and the page behind it has a picture of the
+/// vibescape for the preview. The long form still works and is what falls
+/// back if the site cannot be reached — sharing is not allowed to depend on
+/// the network.
 ///
 /// The view's input is captured once when the sheet is presented — the URL
 /// and preview render against the active vibescape at that moment. Switch
@@ -27,16 +34,24 @@ struct ShareVibescapeView: View {
     @State private var savedPreviewPath: String?
     @State private var hoverShare = false
     @State private var hoverSave = false
+    /// The short link, once the site has made it. Nil until then, and nil
+    /// for good if the site could not be reached.
+    @State private var shortLink: String?
+    @State private var makingLink = false
 
     /// Off by default, and not because minifying is bad at it — it roughly
-    /// halves the link again. Because it is the one part of a share that costs
+    /// halves the payload again. Because it is the one part of a share that costs
     /// the recipient something: the app saves whatever arrives verbatim, so
     /// turning this on hands them a shader with the comments gone and the
     /// spacing crushed, and that is what they will be looking at.
     ///
     /// Compression is on unconditionally and costs them nothing, which is why it
-    /// isn't behind this switch. This one only exists for links that still
-    /// don't fit in whatever they're being pasted into.
+    /// isn't behind this switch.
+    ///
+    /// The short link makes length a non-issue, so this is now about the
+    /// fallback: the long form, which still carries the payload with it, and
+    /// which is what gets shared if the site can't be reached. It also makes
+    /// the stored payload smaller.
     @State private var minifyLink = false
 
     init(vibescape: VibescapeID) {
@@ -47,6 +62,17 @@ struct ShareVibescapeView: View {
     /// which is cheap (a couple of `URLComponents` operations) and keeps
     /// the URL box in sync if the active vibescape ever changes.
     private var shareURL: URL {
+        // The short link once there is one, the long one otherwise. The long
+        // one always works — it carries the payload with it — so a site that
+        // is down or a rate limit that trips costs the prettiness of the
+        // link, not the link itself.
+        if let shortLink, let url = URL(string: shortLink) { return url }
+        return longShareURL
+    }
+
+    /// The long form: the payload in the query string. Always works, with
+    /// nothing stored anywhere.
+    private var longShareURL: URL {
         getShareURL(for: vibescape)
     }
 
@@ -104,6 +130,19 @@ struct ShareVibescapeView: View {
         .padding(22)
         .frame(width: 540)
         .background(Color(red: 0.06, green: 0.03, blue: 0.11))
+        .onAppear {
+            // Start making the short link as soon as the sheet is up, so it
+            // is usually ready before the person reaches for Share. If it
+            // never arrives, the long link is still there.
+            Task { await makeShortLink() }
+        }
+        .onChange(of: minifyLink) { _ in
+            // The payload that was stored was the one made with the old
+            // setting, so the link has to be made again — otherwise the
+            // toggle would claim to do something it no longer does.
+            shortLink = nil
+            Task { await makeShortLink() }
+        }
     }
 
 
@@ -161,6 +200,18 @@ struct ShareVibescapeView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
 
+            // Says what is going on rather than showing a long URL that
+            // silently changes length a moment later.
+            if vibescape.isCustom && shortLink == nil {
+                if makingLink {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                } else {
+                    Text("Long link")
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(Color(white: 0.45))
+                }
+            }
+
             Button {
                 copyLink()
             } label: {
@@ -194,22 +245,24 @@ struct ShareVibescapeView: View {
 
     private var shareButton: some View {
         Button {
-            isSharing = true
-            Task { await Analytics.shared.track("share_sheet_opened", [
-                "kind": vibescape.isCustom ? "custom" : "builtin"
-            ]) }
+            shareTapped()
         } label: {
-            Text("Share…")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: 100)
-                        .fill(Color(red: 1, green: 0.17, blue: 0.84))
-                        .shadow(color: Color(red: 1, green: 0.17, blue: 0.84).opacity(0.4),
-                                radius: 10)
-                )
-                .foregroundStyle(.white)
+            HStack(spacing: 6) {
+                if makingLink {
+                    ProgressView().controlSize(.small).scaleEffect(0.7)
+                }
+                Text("Share…")
+                    .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 100)
+                            .fill(Color(red: 1, green: 0.17, blue: 0.84))
+                            .shadow(color: Color(red: 1, green: 0.17, blue: 0.84).opacity(0.4),
+                                    radius: 10)
+                    )
+                    .foregroundStyle(.white)
+            }
         }
         .buttonStyle(.plain)
         .onHover { hoverShare = $0 }
@@ -245,6 +298,56 @@ struct ShareVibescapeView: View {
 
 
     // MARK: - Behaviour
+
+    /// Asks the site to store this vibescape and give back a short link,
+    /// with a picture of it for the preview.
+    ///
+    /// The picture is rendered at the same moment the share page draws its
+    /// still — six seconds in, so anything driven by time has reached its
+    /// stride — so the preview in a chat is the picture the recipient gets.
+    private func makeShortLink() async {
+        guard vibescape.isCustom, shortLink == nil, !makingLink else { return }
+        guard case .custom(let id) = vibescape,
+              let mode = app.customVibescape(id: id) else { return }
+
+        makingLink = true
+        let payload = ShareImporter.encodePayload(mode, minify: minifyLink)
+        let name = mode.name
+        let author = mode.author
+        let target = vibescape
+
+        // Rendering is a GPU job and takes a moment, so it happens off the
+        // main thread — otherwise the sheet would stutter while the user is
+        // looking at it.
+        let image: Data? = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                continuation.resume(returning: app.renderer.renderStill(
+                    width: 1200, height: 630, mode: target, time: 6.0))
+            }
+        }
+
+        let link = await ShareLinkStore().makeLink(
+            payload: payload, name: name, author: author, image: image)
+        makingLink = false
+        shortLink = link
+    }
+
+    /// The Share button. Waits for the short link if there isn't one yet, so
+    /// the link that goes into the chat is the short one — but shares the
+    /// long one if the site can't be reached, rather than doing nothing.
+    private func shareTapped() {
+        if vibescape.isCustom && shortLink == nil {
+            Task { @MainActor in
+                await makeShortLink()
+                isSharing = true
+            }
+        } else {
+            isSharing = true
+        }
+        Task { await Analytics.shared.track("share_sheet_opened", [
+            "kind": vibescape.isCustom ? "custom" : "builtin"
+        ]) }
+    }
 
     private func copyLink() {
         NSPasteboard.general.clearContents()
@@ -330,7 +433,13 @@ struct ShareVibescapeView: View {
                 return URL(string: "https://vibresia.com/share")!
             }
             let encoded = ShareImporter.encodePayload(mode, minify: minifyLink)
-            var comps = URLComponents(string: "https://vibresia.com/share")!
+            // The trailing slash matters. Without it the URL is /share?d=… and
+            // the server answers with a 307 to /share/?d=… — a redirect that
+            // some link-preview crawlers (WhatsApp's among them) do not
+            // follow, which left the preview blank and the link looking
+            // broken in a chat. The built-in vibescape links are
+            // /share/<slug> and never redirect, and now neither do these.
+            var comps = URLComponents(string: "https://vibresia.com/share/")!
             comps.queryItems = [URLQueryItem(name: "d", value: encoded)]
             return comps.url!
         }
