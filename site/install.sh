@@ -50,8 +50,11 @@ for old in /Applications/AudioVane.app "$HOME/Applications/AudioVane.app"; do
     fi
 done
 mv "$tmp/Vibresia.app" "$dest"
-# The app is ad-hoc signed rather than notarised, so clear the download
-# quarantine flag or Gatekeeper will refuse to open it.
+# The app is signed with a Developer ID certificate and notarized by Apple,
+# so Gatekeeper opens it without an override and this is not what lets it
+# open. It is kept because it is the difference between the app opening and
+# being blocked on the rare Mac that cannot validate the ticket, and it
+# costs nothing.
 xattr -dr com.apple.quarantine "$dest" 2>/dev/null || true
 open "$dest"
 

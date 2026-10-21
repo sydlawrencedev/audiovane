@@ -6,8 +6,10 @@ import Foundation
 /// running app once we've quit, and relaunch.
 ///
 /// Releases are published by `release.sh` as `Vibresia.zip` on
-/// github.com/sydlawrencedev/vibresia. Builds are ad-hoc signed, so the
-/// downloaded copy has its quarantine flag cleared before relaunching.
+/// github.com/sydlawrencedev/vibresia. Builds are signed with a Developer ID
+/// certificate and notarized, so the downloaded copy opens on its own; the
+/// quarantine flag is still cleared before relaunching, which costs nothing
+/// and is a fallback for a Mac that cannot validate the ticket.
 final class UpdateChecker {
     static let shared = UpdateChecker()
     static let repo = "sydlawrencedev/vibresia"
