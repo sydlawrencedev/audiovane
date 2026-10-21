@@ -23,7 +23,7 @@ struct DropdownEntry<Item: Hashable>: Identifiable {
     /// It's drawn as an overlay rather than inside the row's own button, so
     /// the two don't fight over the click.
     var editAction: (() -> Void)? = nil
-    /// A thin rule between groups of rows, for separating the vibscapes from
+    /// A thin rule between groups of rows, for separating the vibescapes from
     /// the buttons that act on them.
     var isDivider: Bool = false
     var id: String { title + (subtitle ?? "") }
@@ -31,7 +31,7 @@ struct DropdownEntry<Item: Hashable>: Identifiable {
 
 /// A header pill that opens a floating list.
 ///
-/// This replaces SwiftUI's `Menu` for the vibscape and genre pickers. `Menu` is
+/// This replaces SwiftUI's `Menu` for the vibescape and genre pickers. `Menu` is
 /// the obvious choice, but it renders through an NSView that can't be
 /// captured by `ImageRenderer`, which made the chrome impossible to review
 /// without a screen recorder. A hand-rolled list also lets the two pickers
@@ -191,7 +191,7 @@ struct DropdownMenu<Item: Hashable>: View {
                                     .foregroundStyle(Color(white: 0.5))
                             }
                             .buttonStyle(.plain)
-                            .help("Edit this vibscape")
+                            .help("Edit this vibescape")
                             // Clear of the tick, which is on the trailing
                             // edge of a selected row.
                             .padding(.trailing, isSelected(entry) ? 26 : 10)

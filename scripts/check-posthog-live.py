@@ -44,8 +44,13 @@ DISTINCT_ID = "posthog-canary-check"
 # Ingestion to queryable is usually seconds, but PostHog's API can lag well past
 # that under load. Failing early would produce flaky releases, which trains
 # people to re-run a check that was telling the truth.
-WAIT_SECONDS = 90
+WAIT_SECONDS = 300
 POLL_SECONDS = 5
+# The events endpoint has been measured answering in 40-47s on a cold query,
+# well past urllib's usual patience. A read that gives up at 20s looks exactly
+# like a dead project, which is the one conclusion this script must never get
+# wrong. It has to outlast the slowest response we have actually seen.
+READ_TIMEOUT = 90
 
 
 def load_env(path):
@@ -65,13 +70,13 @@ def load_env(path):
 
 def get(url, headers):
     req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=20) as response:
+    with urllib.request.urlopen(req, timeout=READ_TIMEOUT) as response:
         return json.loads(response.read().decode())
 
 
 def post(url, body, headers):
     req = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=20) as response:
+    with urllib.request.urlopen(req, timeout=READ_TIMEOUT) as response:
         return response.status, response.read().decode()
 
 
@@ -155,8 +160,12 @@ def main():
     print(f"FAIL: posted {EVENT}, but it never came back after {WAIT_SECONDS}s.")
     if last_error:
         print(f"  Last read error: {last_error}")
-    print("  /batch/ answers 200 for a dead token too, so the app and the site both")
-    print("  look healthy while nothing is recorded. Check, in this order:")
+        if isinstance(last_error, (TimeoutError, urllib.error.URLError)):
+            print("  That is a timeout, not a rejected read — the request never got an")
+            print("  answer. PostHog's events API has been measured answering in ~45s on a")
+            print("  cold query, so this says nothing either way about the project key.")
+            print("  Re-run before reading anything into it.")
+    print("  If the reads are answering and the canary still isn't there, check in order:")
     print(f"    1. Project {project_id}'s API key still matches phc_... in VisualiserMac/.env")
     print("    2. The key belongs to the project you are actually looking at")
     print("    3. The project has not hit its event quota (PostHog drops silently)")

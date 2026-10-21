@@ -2,7 +2,7 @@
 """Drive the Vibresia MCP server over stdio the way a real client would,
 and save whatever pictures come back so they can be looked at.
 
-This is the whole loop the tools exist for: describe or write a vibscape, get
+This is the whole loop the tools exist for: describe or write a vibescape, get
 a frame back, change a constant, get another one. If this passes, the loop
 passes.
 """
@@ -128,16 +128,16 @@ c2 = Client()
 c2.raw("initialize", {"protocolVersion": "2024-11-05"})
 r = c2.raw("tools/list")
 names = [t["name"] for t in r.get("result", {}).get("tools", [])]
-required = ["preview_vibscape", "validate_vibscape", "get_uniform_snapshot",
-            "get_palette", "save_vibscape", "list_vibscapes", "get_vibscape",
-            "preview_vibscape_animation", "diff_vibscape", "what_i_hear"]
+required = ["preview_vibescape", "validate_vibescape", "get_uniform_snapshot",
+            "get_palette", "save_vibescape", "list_vibescapes", "get_vibescape",
+            "preview_vibescape_animation", "diff_vibescape", "what_i_hear"]
 results.append(check(all(n in names for n in required), "all tools advertised",
                      f"missing {set(required) - set(names)}"))
 
 # -------------------------------------------------------------- 2. preview
-print("\n2. preview_vibscape — one frame of a described visual")
+print("\n2. preview_vibescape — one frame of a described visual")
 t0 = time.time()
-r = c2.call("preview_vibscape", {"code": TUNNEL})
+r = c2.call("preview_vibescape", {"code": TUNNEL})
 elapsed = (time.time() - t0) * 1000
 imgs, text = save_images(r, "tunnel")
 results.append(check(len(imgs) == 1, "returns a PNG", text[:300]))
@@ -156,7 +156,7 @@ results.append(check(not png_is_flat(imgs[0][0]), "the frame has real content"))
 
 # ------------------------------------------ 3. the two-tool-call edit loop
 print("\n3. the edit loop: render, change a constant, render again")
-r = c2.call("preview_vibscape", {"code": SPARSE})
+r = c2.call("preview_vibescape", {"code": SPARSE})
 imgs2, _ = save_images(r, "sparse")
 a = open(imgs[0][0], "rb").read()
 b = open(imgs2[0][0], "rb").read()
@@ -164,9 +164,9 @@ results.append(check(a != b, "changing a constant changes the picture"))
 print(f"       rings 9.0 -> {os.path.getsize(imgs[0][0])}B,  rings 1.5 -> {os.path.getsize(imgs2[0][0])}B")
 
 # ------------------------------------------------------------ 4. multi-frame
-print("\n4. preview_vibscape_animation — 8 frames over 4s")
+print("\n4. preview_vibescape_animation — 8 frames over 4s")
 t0 = time.time()
-r = c2.call("preview_vibscape_animation", {"code": TUNNEL})
+r = c2.call("preview_vibescape_animation", {"code": TUNNEL})
 elapsed = (time.time() - t0) * 1000
 imgs3, text3 = save_images(r, "strip")
 results.append(check(len(imgs3) == 1, "one strip comes back"))
@@ -176,25 +176,25 @@ print("       " + text3.replace("\n", "\n       ")[:300])
 
 # ------------------------------------------------------------- 5. uniforms
 print("\n5. preview with uniforms set by hand")
-r = c2.call("preview_vibscape", {"code": BARS, "options": {"width": 300, "height": 200,
+r = c2.call("preview_vibescape", {"code": BARS, "options": {"width": 300, "height": 200,
                                                             "uniforms": {"uBass": 0.95, "uActive": 1.0}}})
 imgs4, text4 = save_images(r, "bass-high")
 results.append(check(len(imgs4) == 1, "renders with overrides"))
 results.append(check("uBass" in text4, "reports which uniforms were overridden"))
 print("       " + text4.replace("\n", "\n       ")[:300])
 
-r = c2.call("preview_vibscape", {"code": BARS, "options": {"width": 300, "height": 200,
+r = c2.call("preview_vibescape", {"code": BARS, "options": {"width": 300, "height": 200,
                                                             "uniforms": {"uBass": 0.0, "uBands": [0.0] * 96}}})
 imgs5, _ = save_images(r, "bass-zero")
 results.append(check(open(imgs4[0][0], "rb").read() != open(imgs5[0][0], "rb").read(),
                      "uBass 0.95 and uBass 0.0 look different"))
 
 # And the reverse: silence has to be askable for, not just escaped from.
-r = c2.call("preview_vibscape", {"code": BARS, "options": {"width": 200, "height": 150,
+r = c2.call("preview_vibescape", {"code": BARS, "options": {"width": 200, "height": 150,
                                                             "uniforms": {"uActive": 0.0}}})
 imgs8, _ = save_images(r, "silence")
 results.append(check(os.path.getsize(imgs8[0][0]) < 9000,
-                     "uActive 0 draws a resting vibscape, not a dead one",
+                     "uActive 0 draws a resting vibescape, not a dead one",
                      f"{os.path.getsize(imgs8[0][0])}B"))
 
 # ------------------------------------------------------------- 6. palette
@@ -224,7 +224,7 @@ def centre_rgb(grade, palette=None):
     opts = {"width": 16, "height": 16, "grade": grade}
     if palette:
         opts["palette"] = palette
-    r = c2.call("preview_vibscape",
+    r = c2.call("preview_vibescape",
                 {"code": "vec3 render(vec2 p, float t) { return vec3(0.0, 1.0, 0.85); }",
                  "options": opts})
     raw = None
@@ -267,45 +267,45 @@ for pal, rgb in graded.items():
     print(f"       {pal:<6} rgb{rgb}")
 
 # ------------------------------------------------------------ 8. validate
-print("\n8. validate_vibscape")
-r = c2.call("validate_vibscape", {"code": TUNNEL})
+print("\n8. validate_vibescape")
+r = c2.call("validate_vibescape", {"code": TUNNEL})
 text = r["result"]["content"][0]["text"]
 results.append(check("compiles" in text.lower(), "a good one passes"))
 
-r = c2.call("validate_vibscape", {"code": BROKEN})
+r = c2.call("validate_vibescape", {"code": BROKEN})
 text = r["result"]["content"][0]["text"]
 results.append(check(r["result"].get("isError") and "nope" in text,
                      "a broken one says what the driver said"))
 print("       " + text.replace("\n", "\n       ")[:300])
 
-r = c2.call("validate_vibscape", {"code": NO_MUSIC})
+r = c2.call("validate_vibescape", {"code": NO_MUSIC})
 text = r["result"]["content"][0]["text"]
 results.append(check("never reads the music" in text,
-                     "warns about a vibscape that ignores the music"))
+                     "warns about a vibescape that ignores the music"))
 print("       " + text.replace("\n", "\n       ")[:300])
 
 # ------------------------------------------------------ 9. broken preview
 print("\n9. broken code still gets a real error, not a blank picture")
-r = c2.call("preview_vibscape", {"code": BROKEN})
+r = c2.call("preview_vibescape", {"code": BROKEN})
 text = r["result"].get("content", [{}])[0].get("text", "")
 results.append(check(r["result"].get("isError"), "returns isError"))
 
 # ------------------------------------------------------------- 10. gallery
-print("\n10. list_vibscapes — with thumbnails")
+print("\n10. list_vibescapes — with thumbnails")
 t0 = time.time()
-r = c2.call("list_vibscapes")
+r = c2.call("list_vibescapes")
 elapsed = (time.time() - t0) * 1000
 content = r["result"]["content"]
 pics = [c for c in content if c.get("type") == "image"]
-results.append(check(len(pics) >= 15, "every vibscape has a thumbnail", f"{len(pics)} images"))
+results.append(check(len(pics) >= 15, "every vibescape has a thumbnail", f"{len(pics)} images"))
 print(f"       {len(pics)} thumbnails in {elapsed:.0f}ms")
 
 # ------------------------------------------------------------- 11. save
-print("\n11. save_vibscape — refuses broken code, previews what it saves")
-r = c2.call("save_vibscape", {"name": "zz-check-broken", "code": BROKEN})
+print("\n11. save_vibescape — refuses broken code, previews what it saves")
+r = c2.call("save_vibescape", {"name": "zz-check-broken", "code": BROKEN})
 results.append(check(r["result"].get("isError"), "does not save broken code"))
 
-r = c2.call("save_vibscape", {"name": "zz-preview-check", "code": TUNNEL,
+r = c2.call("save_vibescape", {"name": "zz-preview-check", "code": TUNNEL,
                               "description": "a tunnel for the test", "palette": "NEON",
                               "audio_targets": "bass and the beat"})
 imgs6, text6 = save_images(r, "saved")
@@ -313,23 +313,23 @@ results.append(check(len(imgs6) == 1, "shows what it saved"))
 results.append(check("zz-preview-check" in text6, "reports the id"))
 print("       " + text6.replace("\n", "\n       ")[:400])
 
-r = c2.call("list_vibscapes")
+r = c2.call("list_vibescapes")
 names_in_list = r["result"]["content"][-1]["text"]
 results.append(check("zz-preview-check" in names_in_list, "it's in the list afterwards"))
 
 # -------------------------------------------------------------- 12. diff
-print("\n12. diff_vibscape — two versions, one picture")
-r = c2.call("diff_vibscape", {"code_a": SPARSE, "code_b": TUNNEL,
+print("\n12. diff_vibescape — two versions, one picture")
+r = c2.call("diff_vibescape", {"code_a": SPARSE, "code_b": TUNNEL,
                               "label_a": "1.5", "label_b": "9.0"})
 imgs7, text7 = save_images(r, "diff")
 results.append(check(len(imgs7) == 1, "returns one side-by-side picture"))
 print("       " + text7.replace("\n", "\n       ")[:300])
 
 # tidy up after ourselves
-c2.call("delete_vibscape", {"id": "zz-preview-check"})
+c2.call("delete_vibescape", {"id": "zz-preview-check"})
 # ------------------------------------------- 13. it doesn't fake a live app
 print("\n13. honesty about where the numbers came from")
-r = c2.call("preview_vibscape", {"code": TUNNEL, "options": {"width": 64, "height": 64}})
+r = c2.call("preview_vibescape", {"code": TUNNEL, "options": {"width": 64, "height": 64}})
 text = r["result"]["content"][-1]["text"]
 
 if app_running:

@@ -1,5 +1,5 @@
-/* Share page — what the recipient sees after someone sends them a Vibscape
- * link. Branches on the kind of vibscape:
+/* Share page — what the recipient sees after someone sends them a Vibescape
+ * link. Branches on the kind of vibescape:
  *
  *   - Built-in: the URL is `/share/<slug>`, the open button carries
  *     `data-share-slug`, the JS calls `vibresia://open?p=<slug>`.

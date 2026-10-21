@@ -1,14 +1,14 @@
 import SwiftUI
 
-/// Vibscape picker — a drop-down anchored in the top HUD rather than the old
-/// 11-row vertical rail down the left edge. With eleven vibscapes the rail ate a
+/// Vibescape picker — a drop-down anchored in the top HUD rather than the old
+/// 11-row vertical rail down the left edge. With eleven vibescapes the rail ate a
 /// fixed 200pt column and about 60% of the window height, which was real
 /// estate the visualisation should have had.
 ///
-/// One line per vibscape (no shortcut subtitles) so the open list stays short
+/// One line per vibescape (no shortcut subtitles) so the open list stays short
 /// enough for small windows. The keyboard shortcuts still work and are
 /// listed in the Visualizer menu.
-struct VibscapePicker: View {
+struct VibescapePicker: View {
     @EnvironmentObject var app: AppState
 
     var body: some View {
@@ -18,42 +18,42 @@ struct VibscapePicker: View {
             // buttons that open the panels.
             entries: entries,
             selection: Binding(
-                get: { app.activeVibscape },
+                get: { app.activeVibescape },
                 set: {
                     // Flags the change as deliberate so the mode_changed event
                     // can tell a click apart from auto-scan cycling.
                     app.viaPicker = true
-                    app.activeVibscape = $0
+                    app.activeVibescape = $0
                 }
             ),
-            tint: app.activeVibscape.isBand || app.activeVibscape.isAutoScan ? .bandTint : .modeTint,
-            pillExtra: app.activeVibscape.isAutoScan ? AnyView(scanIndicator) : nil,
+            tint: app.activeVibescape.isBand || app.activeVibescape.isAutoScan ? .bandTint : .modeTint,
+            pillExtra: app.activeVibescape.isAutoScan ? AnyView(scanIndicator) : nil,
             showsPillText: app.layout.showsPillText
         )
     }
 
-    /// The list: every vibscape the user has switched on, then Auto Scan, then
-    /// the two buttons that open the Custom Vibscape and View All panels.
-    private var entries: [DropdownEntry<VibscapeID>] {
-        var items: [DropdownEntry<VibscapeID>] = app.enabledVibscapes.map { entry in
+    /// The list: every vibescape the user has switched on, then Auto Scan, then
+    /// the two buttons that open the Custom Vibescape and View All panels.
+    private var entries: [DropdownEntry<VibescapeID>] {
+        var items: [DropdownEntry<VibescapeID>] = app.enabledVibescapes.map { entry in
             DropdownEntry(
                 value: entry.id,
                 title: entry.title,
-                // A user's own vibscape gets a pencil to edit it, and nothing
+                // A user's own vibescape gets a pencil to edit it, and nothing
                 // else — how many lines it is isn't the business of a list
-                // of vibscapes.
+                // of vibescapes.
                 subtitle: entry.isCustom ? nil : entry.subtitle,
                 glyph: entry.glyph,
-                editAction: entry.isCustom ? { app.editCustomVibscape(id: entry.id.slug) } : nil
+                editAction: entry.isCustom ? { app.editCustomVibescape(id: entry.id.slug) } : nil
             )
         }
         items.append(DropdownEntry(
             value: .builtin(.autoScan),
-            title: Vibscape.autoScan.displayName,
+            title: Vibescape.autoScan.displayName,
             // The key that picks Auto Scan, like every other row.
             glyph: "="
         ))
-        // A divider, so the buttons don't read as more vibscapes.
+        // A divider, so the buttons don't read as more vibescapes.
         items.append(DropdownEntry(
             value: .builtin(.autoScan),
             title: "",
@@ -61,11 +61,11 @@ struct VibscapePicker: View {
         ))
         items.append(DropdownEntry(
             value: .builtin(.autoScan),
-            title: "+ CUSTOM VIBSCAPE",
+            title: "+ CUSTOM VIBESCAPE",
             glyph: "+",
             action: {
                 app.openDropdown = nil
-                app.customVibscapeSheet = .new
+                app.customVibescapeSheet = .new
             }
         ))
         items.append(DropdownEntry(
@@ -74,7 +74,7 @@ struct VibscapePicker: View {
             glyph: "≡",
             action: {
                 app.openDropdown = nil
-                app.showVibscapesSheet = true
+                app.showVibescapesSheet = true
             }
         ))
         return items
@@ -95,7 +95,7 @@ struct VibscapePicker: View {
     }
 }
 
-extension Vibscape {
+extension Vibescape {
     /// SF Symbol used in the drop-down menu.
     var symbolName: String {
         switch self {
@@ -125,6 +125,6 @@ extension Vibscape {
 extension Color {
     /// The app's primary magenta accent.
     static let modeTint = Color(red: 1, green: 0.17, blue: 0.84)
-    /// Cyan, used for the band vibscape and anything auto-detected.
+    /// Cyan, used for the band vibescape and anything auto-detected.
     static let bandTint = Color(red: 0.17, green: 0.95, blue: 1.0)
 }

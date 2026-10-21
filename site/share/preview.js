@@ -1,17 +1,17 @@
 // Draws a shared vibescape in the browser, so a link someone was sent shows the
 // vibescape rather than a wall of shader.
 //
-// Built-in vibscapes have a page each with a picture rendered at build time. A
+// Built-in vibescapes have a page each with a picture rendered at build time. A
 // shared custom vibescape can't have that: it arrives as source in the URL and
 // nothing stores it. So it is drawn here, from the same source, by the same
 // contract the app uses — the same prelude, the same `render(vec2, float)`
-// wrapper, the same palette grade. What you see is the vibscape someone made,
+// wrapper, the same palette grade. What you see is the vibescape someone made,
 // not a picture of it.
 //
 // Nothing is playing on a web page, so the uniforms come from a synthetic beat
 // clock: a kick on every beat, a spectrum that swells with it, a bar that
 // drifts. It is the same shape of made-up music the homepage video and the MCP
-// preview tools use, so a vibscape behaves the same in all three.
+// preview tools use, so a vibescape behaves the same in all three.
 //
 // The first frame is drawn synchronously and is the picture the page has even if
 // it never animates — so with reduced motion, on a machine without WebGL, or in
@@ -198,7 +198,7 @@ void main() {
     return lines.join("\n");
   }
 
-  /* The music that isn't there. Returns the uniforms a vibscape would be
+  /* The music that isn't there. Returns the uniforms a vibescape would be
    * drawing with if a kick were landing on the beat.
    *
    * uActive stays 1 throughout: a preview that respects the room's silence is a
@@ -376,7 +376,7 @@ void main() {
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 
     // The palette grade, so this looks like the app rather than raw shader
-    // output. A custom vibscape is graded in the app too.
+    // output. A custom vibescape is graded in the app too.
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, w, h);
     gl.clear(gl.COLOR_BUFFER_BIT);

@@ -23,7 +23,7 @@ REPO="sydlawrencedev/vibresia"
 VERSION="$(./version.sh --write)"
 TAG="v$VERSION"
 
-../scripts/check-vibscapes.sh
+../scripts/check-vibescapes.sh
 ../scripts/check-posthog.sh
 ../scripts/check-no-webhook-leak.sh
 # The share page embeds a copy of the app's shaders, because a browser can't

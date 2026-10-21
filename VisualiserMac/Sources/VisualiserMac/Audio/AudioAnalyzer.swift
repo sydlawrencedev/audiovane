@@ -297,12 +297,12 @@ final class AudioAnalyzer {
 
     /// Direct-write bands + analysis state for snapshots. Bypasses FFT so we
     /// don't have to debug the vDSP pipeline offline.
-    /// Plausible analyzer state without any audio, so a vibscape can be drawn
+    /// Plausible analyzer state without any audio, so a vibescape can be drawn
     /// with something to react to.
     ///
     /// `kick` and `barPhase` let a caller drive this from a beat clock. One
     /// call with no arguments is right for a still; a video needs the numbers
-    /// to move, because the spectrum, band and waveform vibscapes draw
+    /// to move, because the spectrum, band and waveform vibescapes draw
     /// `uBands`, and a frozen spectrum is a flat line with nothing happening on
     /// it.
     func setSyntheticState(kick: Float = 1, barPhase: Float = 0) {

@@ -2,7 +2,7 @@
 """Generates the per-vibescape share HTML pages at `site/share/<slug>.html`
 and the lookup table at `site/share/manifest.json`.
 
-`site/share/index.html` — the page custom vibscape shares land on — is
+`site/share/index.html` — the page custom vibescape shares land on — is
 hand-written, not generated. It lives in the `share/` directory on purpose:
 Cloudflare Workers Static Assets serve a directory's index.html for both
 `/share` and `/share/`, so no rewrite is needed. A rewrite in `_redirects`
@@ -36,8 +36,8 @@ OUT_DIR = ROOT / "site" / "share"
 OUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def parse_vibscape_cards() -> list[dict]:
-    """Read the homepage and pull (slug, title, description) from each vibscape card."""
+def parse_vibescape_cards() -> list[dict]:
+    """Read the homepage and pull (slug, title, description) from each vibescape card."""
     html = INDEX_HTML.read_text(encoding="utf-8")
 
     # Split on the card opener, then parse each card on its own. This used to be
@@ -47,23 +47,23 @@ def parse_vibscape_cards() -> list[dict]:
     # match itself, so a card that drifts takes out one card rather than
     # silently pairing one card's title with another's description.
     #
-    # Only the shipped vibscapes carry data-vibscape; the Auto Scan card
+    # Only the shipped vibescapes carry data-vibescape; the Auto Scan card
     # doesn't, because it isn't shareable.
     cards = []
-    for chunk in html.split('<article class="vibscape" data-vibscape="')[1:]:
+    for chunk in html.split('<article class="vibescape" data-vibescape="')[1:]:
         slug = chunk[:chunk.index('"')].strip()
         head = re.search(
             r'<h3>(?P<title>[^<]+)</h3>(?:\s*<p>(?P<desc>.*?)</p>)?',
             chunk, re.DOTALL)
         if not head:
-            sys.exit(f'vibscape card "{slug}" has no <h3> — homepage template drifted')
+            sys.exit(f'vibescape card "{slug}" has no <h3> — homepage template drifted')
         cards.append({
             "slug": slug,
             "title": head["title"].strip(),
             "desc": (head["desc"] or "").strip(),
         })
     if not cards:
-        sys.exit("no vibscape cards parsed from site/index.html — template likely drifted")
+        sys.exit("no vibescape cards parsed from site/index.html — template likely drifted")
     return cards
 
 
@@ -124,7 +124,7 @@ def render(slug: str, title: str, desc: str) -> str:
 
   <div class="shot">
     <!-- Moving rather than still: the app renders these, so the clip is the
-         vibscape rather than a picture of it. The poster is the same render as
+         vibescape rather than a picture of it. The poster is the same render as
          a JPEG, so there is a frame there from the first paint and for anyone
          whose browser won't play it — and it stays the og:image, because a
          crawler that fetches a link has no video and no JavaScript. -->
@@ -154,17 +154,17 @@ def render(slug: str, title: str, desc: str) -> str:
 
 
 def main() -> int:
-    cards = parse_vibscape_cards()
+    cards = parse_vibescape_cards()
     for card in cards:
         out = OUT_DIR / f"{card['slug']}.html"
         out.write_text(render(**card), encoding="utf-8")
         print(f"[share-pages] wrote {out.relative_to(ROOT)}")
 
     # site/share/index.html is hand-written and is what /share serves, so it is
-    # checked rather than generated — if it goes missing, every custom-vibscape
+    # checked rather than generated — if it goes missing, every custom-vibescape
     # share link 404s, and that should be a loud failure here.
     if not (OUT_DIR / "index.html").exists():
-        print("[share-pages] site/share/index.html is missing — custom vibscape "
+        print("[share-pages] site/share/index.html is missing — custom vibescape "
               "shares would 404. Restore it before deploying.", file=sys.stderr)
         return 1
 
@@ -182,7 +182,7 @@ def main() -> int:
     manifest_path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     print(f"[share-pages] wrote {manifest_path.relative_to(ROOT)}")
 
-    print(f"[share-pages] {len(cards)} vibscapes generated")
+    print(f"[share-pages] {len(cards)} vibescapes generated")
     return 0
 
 

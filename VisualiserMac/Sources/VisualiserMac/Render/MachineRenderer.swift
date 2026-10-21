@@ -3,7 +3,7 @@ import AppKit
 import simd
 import OpenGL.GL3
 
-/// GL resources and draw logic for MACHINE vibscape.
+/// GL resources and draw logic for MACHINE vibescape.
 ///
 /// Four smooth meshes (cannon, drum, pad, ball), each drawn instanced with a
 /// per-instance model matrix and colour. The machine renders into its own

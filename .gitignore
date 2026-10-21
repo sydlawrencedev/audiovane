@@ -30,3 +30,10 @@ VisualiserMac/Tests/eval-results/
 # Python bytecode from scripts/
 __pycache__/
 *.pyc
+
+# PostHog wizard scratch files
+.posthog-wizard-cache/
+
+# macOS AppleDouble files from editors/sync tools
+._*
+.!*

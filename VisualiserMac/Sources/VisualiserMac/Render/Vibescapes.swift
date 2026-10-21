@@ -1,21 +1,21 @@
 import Foundation
 
-// MARK: - Vibscape identity
+// MARK: - Vibescape identity
 
-/// Identifies something the app can draw: either a vibscape built into the binary,
+/// Identifies something the app can draw: either a vibescape built into the binary,
 /// or a custom shader the user added.
 ///
-/// `Vibscape` is a compile-time enum, so a custom vibscape can't be a case
+/// `Vibescape` is a compile-time enum, so a custom vibescape can't be a case
 /// of it. This is the dynamic identifier that stands in for both, and it is
 /// what the UI, the renderer and the saved preference all speak.
-enum VibscapeID: Hashable, Identifiable {
-    case builtin(Vibscape)
+enum VibescapeID: Hashable, Identifiable {
+    case builtin(Vibescape)
     case custom(String)
 
     var id: String { rawValue }
 
     /// Stable string form, used for `UserDefaults` and the analytics
-    /// `vibscape` property. The `custom:` prefix keeps a custom vibscape from ever
+    /// `vibescape` property. The `custom:` prefix keeps a custom vibescape from ever
     /// colliding with a built-in that happens to share its slug.
     var rawValue: String {
         switch self {
@@ -27,7 +27,7 @@ enum VibscapeID: Hashable, Identifiable {
     init?(rawValue: String) {
         if rawValue.hasPrefix(Self.customPrefix) {
             self = .custom(String(rawValue.dropFirst(Self.customPrefix.count)))
-        } else if let m = Vibscape(rawValue: rawValue) {
+        } else if let m = Vibescape(rawValue: rawValue) {
             self = .builtin(m)
         } else {
             return nil
@@ -36,15 +36,15 @@ enum VibscapeID: Hashable, Identifiable {
 
     private static let customPrefix = "custom:"
 
-    /// The built-in this wraps, or nil for a custom vibscape.
-    var builtin: Vibscape? {
+    /// The built-in this wraps, or nil for a custom vibescape.
+    var builtin: Vibescape? {
         if case .builtin(let m) = self { return m }
         return nil
     }
 
     var isCustom: Bool { builtin == nil }
 
-    /// True for Auto Scan, which is the one vibscape that isn't a scene.
+    /// True for Auto Scan, which is the one vibescape that isn't a scene.
     var isAutoScan: Bool { self == .builtin(.autoScan) }
 
     /// True for The Band, which behaves differently from the other scenes
@@ -52,7 +52,7 @@ enum VibscapeID: Hashable, Identifiable {
     var isBand: Bool { self == .builtin(.band) }
 
     /// The id without its prefix — the built-in's raw value, or the custom
-    /// vibscape's slug.
+    /// vibescape's slug.
     var slug: String {
         switch self {
         case .builtin(let v): return v.rawValue
@@ -61,31 +61,31 @@ enum VibscapeID: Hashable, Identifiable {
     }
 }
 
-// MARK: - The vibscape itself
+// MARK: - The vibescape itself
 
-/// One user-written vibscape: a name and a fragment shader.
+/// One user-written vibescape: a name and a fragment shader.
 ///
 /// The shader is a *body*, not a whole shader — the app prepends
 /// `FunShaders.prelude`, which declares the uniforms, the signed-distance
 /// helpers and `main()`'s surroundings. The user's job is to write a
 /// `vec3 render(vec2 p, float t)` and hand it back.
-struct CustomVibscape: Identifiable, Codable, Equatable {
+struct CustomVibescape: Identifiable, Codable, Equatable {
     var id: String
     var name: String
-    /// Who made it. Free text, because someone else's vibscape should be
+    /// Who made it. Free text, because someone else's vibescape should be
     /// credited to them.
     var author: String
-    /// Where to find more, if there's somewhere. Optional — most vibscapes
+    /// Where to find more, if there's somewhere. Optional — most vibescapes
     /// won't have one.
     var url: String?
     var shader: String
-    /// Whether it shows in the vibscape list and takes part in Auto Scan. Off
+    /// Whether it shows in the vibescape list and takes part in Auto Scan. Off
     /// means "kept, but out of the way" — the same relationship the View All
     /// panel gives the built-ins.
     var enabled: Bool
     var modified: Date
 
-    var modeID: VibscapeID { .custom(id) }
+    var modeID: VibescapeID { .custom(id) }
 
     /// Plain-language summary for the View All panel.
     var subtitle: String {
@@ -93,7 +93,7 @@ struct CustomVibscape: Identifiable, Codable, Equatable {
         return "\(lines.count) lines"
     }
 
-    /// Decoding has to tolerate vibscapes saved before the author and URL
+    /// Decoding has to tolerate vibescapes saved before the author and URL
     /// existed, and before the fields were renamed.
     init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -118,19 +118,19 @@ struct CustomVibscape: Identifiable, Codable, Equatable {
     }
 }
 
-// MARK: - The vibscape list
+// MARK: - The vibescape list
 
-/// Who made the vibscapes that ship with the app.
-enum VibscapeMetadata {
+/// Who made the vibescapes that ship with the app.
+enum VibescapeMetadata {
     static let author = "Minith Labs"
     static let url = "https://minithlabs.com"
 }
 
-/// One row in the vibscape list, whether it came with the app or the user wrote
-/// it. The UI only ever works with this, so a custom vibscape is a first-class
+/// One row in the vibescape list, whether it came with the app or the user wrote
+/// it. The UI only ever works with this, so a custom vibescape is a first-class
 /// citizen rather than a special case bolted on beside the built-ins.
-struct VibscapeEntry: Identifiable, Hashable {
-    var id: VibscapeID
+struct VibescapeEntry: Identifiable, Hashable {
+    var id: VibescapeID
     var title: String
     /// Who made it. Shown on hover in the View All panel.
     var author: String
@@ -139,16 +139,16 @@ struct VibscapeEntry: Identifiable, Hashable {
     /// That address as a link, if it is one.
     var link: URL? {
         guard let url, !url.isEmpty else { return nil }
-        // A vibscape's address might be written without the scheme, so
+        // A vibescape's address might be written without the scheme, so
         // "minithlabs.com" still works.
         if url.hasPrefix("http://") || url.hasPrefix("https://") {
             return URL(string: url)
         }
         return URL(string: "https://" + url)
     }
-    /// The mark in the list: the keyboard shortcut that picks this vibscape.
+    /// The mark in the list: the keyboard shortcut that picks this vibescape.
     var glyph: String
-    /// The key that picks this vibscape, if it has one. It follows the vibscape's
+    /// The key that picks this vibescape, if it has one. It follows the vibescape's
     /// place in the list, so rearranging the list rearranges the keys.
     var shortcut: Character?
     /// A short line under the title.
@@ -156,15 +156,15 @@ struct VibscapeEntry: Identifiable, Hashable {
     var isCustom: Bool
     var isEnabled: Bool
     /// True for the "make your own" card at the end of the list.
-    var isNewVibscapeCard: Bool = false
+    var isNewVibescapeCard: Bool = false
 
-    init(builtin mode: Vibscape, shortcut: Character?) {
+    init(builtin mode: Vibescape, shortcut: Character?) {
         self.id = .builtin(mode)
         // Names are shown in capitals throughout, but kept as they were
-        // written, so editing a vibscape doesn't shout at whoever typed it.
+        // written, so editing a vibescape doesn't shout at whoever typed it.
         self.title = mode.displayName.uppercased()
-        self.author = VibscapeMetadata.author
-        self.url = VibscapeMetadata.url
+        self.author = VibescapeMetadata.author
+        self.url = VibescapeMetadata.url
         self.shortcut = shortcut
         self.glyph = shortcut.map(String.init) ?? ""
         self.subtitle = nil
@@ -172,7 +172,7 @@ struct VibscapeEntry: Identifiable, Hashable {
         self.isEnabled = true
     }
 
-    init(custom mode: CustomVibscape, shortcut: Character?) {
+    init(custom mode: CustomVibescape, shortcut: Character?) {
         self.id = .custom(mode.id)
         self.title = mode.name.uppercased()
         self.author = mode.author
@@ -182,14 +182,14 @@ struct VibscapeEntry: Identifiable, Hashable {
         self.subtitle = mode.subtitle
         self.isCustom = true
         self.isEnabled = mode.enabled
-        self.isNewVibscapeCard = false
+        self.isNewVibescapeCard = false
     }
 
-    /// The card at the end of the list that opens the Custom Vibscape sheet.
-    /// It isn't a vibscape, so most of its fields are blank — but it travels
+    /// The card at the end of the list that opens the Custom Vibescape sheet.
+    /// It isn't a vibescape, so most of its fields are blank — but it travels
     /// through the same list as everything else so the grid doesn't need a
     /// special case for it.
-    init(newVibscapeCard: Bool) {
+    init(newVibescapeCard: Bool) {
         self.id = .builtin(.tunnel)
         self.title = "MAKE YOUR OWN"
         self.author = ""
@@ -199,48 +199,56 @@ struct VibscapeEntry: Identifiable, Hashable {
         self.subtitle = nil
         self.isCustom = false
         self.isEnabled = true
-        self.isNewVibscapeCard = newVibscapeCard
+        self.isNewVibescapeCard = newVibescapeCard
     }
 }
 
 // MARK: - On-disk store
 
-/// Custom vibscapes live as one JSON file each under
-/// `~/Library/Application Support/Vibresia/Vibscapes/`.
+/// Custom vibescapes live as one JSON file each under
+/// `~/Library/Application Support/Vibresia/Vibescapes/`.
 ///
 /// A folder rather than one blob in `UserDefaults` because these are the one
 /// thing a user is expected to hand to someone else: the files can be copied,
 /// emailed, dropped into another Mac, and kept in version control. It also
 /// matches the Hamsters folder, so "where do I put my own stuff" has one
 /// answer in this app.
-enum CustomVibscapeStore {
+enum CustomVibescapeStore {
     static var folder: URL {
         // VIBRESIA_CUSTOM_DIR points somewhere else, for tests and for
-        // demo runs that must never read a real person's vibscapes.
+        // demo runs that must never read a real person's vibescapes.
         if let dir = ProcessInfo.processInfo.environment["VIBRESIA_CUSTOM_DIR"] {
             return URL(fileURLWithPath: dir, isDirectory: true)
         }
-        return SupportFolder.folder("Vibscapes")
+        // "Vibescapes", reached by SupportFolder's migration rather than by any
+        // build pointing straight at it — CustomModes -> Vibscapes -> Vibescapes,
+        // one step per release that renamed it. This folder holds people's own
+        // work and is named on disk in every install that has ever made a
+        // vibescape, so the move has to happen in a migration rather than by
+        // changing this literal: a build that skipped a release would otherwise
+        // point at an empty folder and every existing vibescape would look
+        // deleted.
+        return SupportFolder.folder("Vibescapes")
     }
 
     static func ensureFolder() {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
     }
 
-    /// Every vibscape on disk, oldest first so a fresh install and a restored one
+    /// Every vibescape on disk, oldest first so a fresh install and a restored one
     /// list them the same way.
-    static func loadAll() -> [CustomVibscape] {
+    static func loadAll() -> [CustomVibescape] {
         ensureFolder()
         let urls = (try? FileManager.default.contentsOfDirectory(
             at: folder, includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles])) ?? []
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
-        let modes: [CustomVibscape] = urls
+        let modes: [CustomVibescape] = urls
             .filter { $0.pathExtension.lowercased() == "json" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
             .compactMap { try? Data(contentsOf: $0) }
-            .compactMap { try? decoder.decode(CustomVibscape.self, from: $0) }
+            .compactMap { try? decoder.decode(CustomVibescape.self, from: $0) }
         // A file whose slug doesn't match its filename would let two files
         // claim one id, and the second would silently never load.
         var seen = Set<String>()
@@ -251,7 +259,7 @@ enum CustomVibscapeStore {
         folder.appendingPathComponent("\(id).json")
     }
 
-    static func save(_ mode: CustomVibscape) throws {
+    static func save(_ mode: CustomVibescape) throws {
         ensureFolder()
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -293,13 +301,13 @@ enum CustomVibscapeStore {
 
 // MARK: - Helping content
 
-/// The words and starter code shown in the Custom Vibscape sheet.
+/// The words and starter code shown in the Custom Vibescape sheet.
 ///
 /// Kept here rather than in the view so the AI prompt, the template and the
 /// validator all quote the same uniform names. If a uniform is ever renamed in
 /// the prelude, this is the one place that has to change with it.
-enum CustomVibscapeGuide {
-    /// Uniforms and helpers the prelude hands a custom vibscape.
+enum CustomVibescapeGuide {
+    /// Uniforms and helpers the prelude hands a custom vibescape.
     static let reference = """
     Every mode is a small program written in GLSL, a language for drawing \
     pixels. You write one function:
@@ -367,17 +375,17 @@ enum CustomVibscapeGuide {
     a shader you haven't seen. The loop is two calls: draw it, change one thing,
     draw it again. A frame takes about 40ms.
 
-      preview_vibscape({ code })                   one frame, as a PNG
-      preview_vibscape_animation({ code })         several frames in one picture
+      preview_vibescape({ code })                   one frame, as a PNG
+      preview_vibescape_animation({ code })         several frames in one picture
 
     Ask for several frames when the movement is the point — a single frame of a
     scrolling tunnel and a still tunnel look identical, and one of them is
-    wrong. `preview_vibscape_animation` defaults to 8 frames over 4 seconds.
+    wrong. `preview_vibescape_animation` defaults to 8 frames over 4 seconds.
 
     You can also point the audio uniforms anywhere you like, which is how you
     find out how it behaves when the music isn't playing:
 
-      preview_vibscape({
+      preview_vibescape({
         code: myShader,
         options: { uniforms: { uBass: 0.9, uLevel: 0.7, uActive: 1.0 } }
       })
@@ -387,7 +395,7 @@ enum CustomVibscapeGuide {
     before you decide how much it should react.
 
     Code that doesn't compile comes back as the driver's own error, in words,
-    with the line number — not a blank picture. If a vibscape compiles but looks
+    with the line number — not a blank picture. If a vibescape compiles but looks
     wrong, the problem is usually one of the lints: not reading the music at all,
     or a uniform that keeps running in silence when you wanted it to stop.
 
@@ -405,7 +413,7 @@ enum CustomVibscapeGuide {
 
     ## Colours are graded, and you can see it
 
-    Every vibscape is drawn and then graded through the palette you pick in the
+    Every vibescape is drawn and then graded through the palette you pick in the
     header — the same as the built-ins. That's why a colour can look muted on
     screen when it was bright in your code: the app maps brightness between two
     palette colours and pushes saturation. It is not a bug, and the built-ins
@@ -424,7 +432,7 @@ enum CustomVibscapeGuide {
 
     /// Ready-to-paste prompt for someone using an AI coding assistant.
     static let agentPrompt = """
-    Write a vibscape for Vibresia, a macOS app for visual worlds that move \
+    Write a vibescape for Vibresia, a macOS app for visual worlds that move \
     with music. The output is one GLSL function, pasted into the app and \
     compiled as a fragment shader.
 
@@ -460,7 +468,7 @@ enum CustomVibscapeGuide {
 
     /// The blank starting point for someone writing it by hand.
     static let starterTemplate = """
-    // Your vibscape. Edit the colour, press Test.
+    // Your vibescape. Edit the colour, press Test.
     // Full list of uniforms and helpers: press "What's available?" below.
     vec3 render(vec2 p, float t)
     {

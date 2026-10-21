@@ -4,7 +4,7 @@ import UniformTypeIdentifiers
 
 /// "Share this vibescape" pill, under the VIBRESIA wordmark in the chrome.
 ///
-/// A small button that opens `ShareVibscapeView`. Built into the HUD so it
+/// A small button that opens `ShareVibescapeView`. Built into the HUD so it
 /// rides the existing chrome (slides out with the rest of the bar when the
 /// pointer leaves the window). At the tiny layout tier it drops entirely —
 /// the keyboard shortcut on the existing `Visualizer` menu still works, and
@@ -14,7 +14,7 @@ import UniformTypeIdentifiers
 ///   - same rounded-rectangle fill/stroke as `SourcePicker` / `BPM`
 ///   - uses `app.layout.showsPillText` so the label drops at the narrow tier,
 ///     same as the other pills, instead of cramping the brand mark.
-struct ShareVibscapeButton: View {
+struct ShareVibescapeButton: View {
     @EnvironmentObject var app: AppState
     @State private var hovering = false
     @State private var showingSheet = false
@@ -24,7 +24,7 @@ struct ShareVibscapeButton: View {
             Button {
                 showingSheet = true
                 Task { await Analytics.shared.track("share_pill_clicked", [
-                    "kind": kindFor(app.activeVibscape)
+                    "kind": kindFor(app.activeVibescape)
                 ]) }
             } label: {
                 HStack(spacing: 6) {
@@ -59,13 +59,13 @@ struct ShareVibscapeButton: View {
             .onHover { hovering = $0 }
             .help("Share this vibescape with someone")
             .sheet(isPresented: $showingSheet) {
-                ShareVibscapeView(vibscape: app.activeVibscape)
+                ShareVibescapeView(vibescape: app.activeVibescape)
                     .environmentObject(app)
             }
         }
     }
 
-    private func kindFor(_ id: VibscapeID) -> String {
+    private func kindFor(_ id: VibescapeID) -> String {
         id.isCustom ? "custom" : (id.builtin.flatMap { $0 == .autoScan ? nil : $0.rawValue } ?? "auto_scan")
     }
 }

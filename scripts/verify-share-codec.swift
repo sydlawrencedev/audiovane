@@ -17,14 +17,14 @@ struct SharePayload: Codable, Equatable {
     var shader: String
 }
 
-enum VibscapeStub: String {
+enum VibescapeStub: String {
     case ribbons, vortex, silk, flux, spectrum, tunnel, liquid
     case kaleidoscope, waveform, machine, warp, particles, nyan
     case hamster, badger, llama, danceFloor, band, autoScan
 }
 
 enum Request: Equatable {
-    case builtin(VibscapeStub)
+    case builtin(VibescapeStub)
     case custom(SharePayload)
     case malformed(String)
 }
@@ -53,7 +53,7 @@ func decodeURL(_ s: String) -> Request {
     let items = comps.queryItems ?? []
     func v(_ n: String) -> String? { items.first { $0.name == n }?.value }
     if let slug = v("p"), !slug.isEmpty {
-        if let mode = VibscapeStub(rawValue: slug) { return .builtin(mode) }
+        if let mode = VibescapeStub(rawValue: slug) { return .builtin(mode) }
         return .malformed("unknown slug")
     }
     if let d = v("d"), !d.isEmpty {
@@ -156,7 +156,7 @@ guard let padded = base64URLDecode(stripped) else { fatalError() }
 if padded == standard { print("ok   base64 tolerates missing padding") }
 else { failures += 1; print("FAIL base64 missing-padding tolerance") }
 
-// 9. The URL is short enough to fit in any chat platform. Vibscape-like
+// 9. The URL is short enough to fit in any chat platform. Vibescape-like
 //    shader bodies (typical 1-3KB) plus metadata produce a payload of ~3-5KB
 //    base64-encoded, which Slack/Twitter/iMessage all accept.
 let smallShader = "vec3 render(vec2 p, float t) { return vec3(uBass); }"

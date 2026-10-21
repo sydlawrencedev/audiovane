@@ -1,8 +1,8 @@
 # Contributing to Vibresia
 
-Thanks for helping! Bug reports, ideas and pull requests are all welcome, and **new vibscapes are especially welcome**.
+Thanks for helping! Bug reports, ideas and pull requests are all welcome, and **new vibescapes are especially welcome**.
 
-- **Bugs and ideas:** [open an issue](https://github.com/sydlawrencedev/vibresia/issues). For bugs, include your macOS version, the vibscape you were in and what was playing.
+- **Bugs and ideas:** [open an issue](https://github.com/sydlawrencedev/vibresia/issues). For bugs, include your macOS version, the vibescape you were in and what was playing.
 - **Pull requests:** fork, branch, and open a PR against `main`. Small, focused PRs are easiest to review. Screenshots or a short screen recording help a lot for anything visual.
 
 ## Building
@@ -17,12 +17,12 @@ open build/Vibresia.app
 
 Pick **Use Demo Tone** on the intro screen to test without sharing system audio.
 
-## Adding a vibscape
+## Adding a vibescape
 
-Most vibscapes are a single full-screen fragment shader, which is the quickest way in.
+Most vibescapes are a single full-screen fragment shader, which is the quickest way in.
 
-1. **Register the vibscape** in `VisualiserMac/Sources/VisualiserMac/AppState.swift`: add a `case` to `Vibscape` (above `autoScan`, which must stay last) and a `displayName`. Give it an SF Symbol in `UI/VibscapePicker.swift` (`symbolName`).
-2. **Write the shader** in `Render/FunShaders.swift`: add a `static let yourVibscape = """ … """` with a `main()` that writes `fragColor`, and add `(.yourVibscape, yourVibscape)` to `FunShaders.modes`. The shared `prelude` at the top of that file gives you:
+1. **Register the vibescape** in `VisualiserMac/Sources/VisualiserMac/AppState.swift`: add a `case` to `Vibescape` (above `autoScan`, which must stay last) and a `displayName`. Give it an SF Symbol in `UI/VibescapePicker.swift` (`symbolName`).
+2. **Write the shader** in `Render/FunShaders.swift`: add a `static let yourVibescape = """ … """` with a `main()` that writes `fragColor`, and add `(.yourVibescape, yourVibescape)` to `FunShaders.modes`. The shared `prelude` at the top of that file gives you:
    - `uTime`: animation clock (stops when the music does)
    - `uBass`, `uMid`, `uTreble`, `uLevel`: smoothed energy, 0 to 1
    - `uBands[96]`: the spectrum, 40Hz–16kHz on a log scale (`bandAt(x)` reads it with x from 0 to 1)
@@ -32,10 +32,10 @@ Most vibscapes are a single full-screen fragment shader, which is the quickest w
    - `uActive`: 0 in silence, easing to 1 with sound
    - `uLevelSmooth`, `uBassSmooth`: slow versions of `uLevel` and `uBass` (rise over ~0.3 s, fall over ~1.5 s). Use them for swells, brightness and size that should breathe with the music rather than flicker
    - `uPresence`: music presence, 0 in silence and 1 with music, easing in and out over ~2.3 s with no chatter at quiet passages. Use it to morph between an idle state and the playing look
-   - `uClock`: wall-clock seconds that keep running in silence. Only for a vibscape that should never stop completely (Ribbons keeps a slow drift); everything else follows the house rule below
+   - `uClock`: wall-clock seconds that keep running in silence. Only for a vibescape that should never stop completely (Ribbons keeps a slow drift); everything else follows the house rule below
    - helpers: `screenP()`, `sdCircle`, `sdBox`, `sdSeg`, `fill`, `rot`, `hash21`, …
 3. **Follow the house rules:**
-   - In silence the vibscape should be still: scale motion and colour by `uActive`, and drive time from `uTime`, `uBeats` or `uScroll`.
+   - In silence the vibescape should be still: scale motion and colour by `uActive`, and drive time from `uTime`, `uBeats` or `uScroll`.
    - Never multiply time by a value that goes up and down, or things jump backwards. Use `uScroll` for "faster when louder".
    - Draw everything procedurally (no image assets), and don't copy anyone else's artwork.
 4. **Check it renders:**
@@ -43,10 +43,10 @@ Most vibscapes are a single full-screen fragment shader, which is the quickest w
    ./build-app.sh debug
    SNAPSHOT_DIR=/tmp/av ./build/Vibresia.app/Contents/MacOS/Vibresia --snapshot
    ```
-   This writes a PNG of every vibscape to `/tmp/av` and logs any shader compile errors. To watch it live: `./build/Vibresia.app/Contents/MacOS/Vibresia --vibscape yourVibscape`.
-5. **Add it to the website:** in `site/index.html`, add a card to the vibscapes grid with `data-vibscape="yourVibscape"` (the `case` name) and a 640×360 thumbnail in `site/media/modes/`. `scripts/check-vibscapes.sh` fails until every vibscape has a card, and releases run it.
+   This writes a PNG of every vibescape to `/tmp/av` and logs any shader compile errors. To watch it live: `./build/Vibresia.app/Contents/MacOS/Vibresia --vibescape yourVibescape`.
+5. **Add it to the website:** in `site/index.html`, add a card to the vibescapes grid with `data-vibescape="yourVibescape"` (the `case` name) and a 640×360 thumbnail in `site/media/modes/`. `scripts/check-vibescapes.sh` fails until every vibescape has a card, and releases run it.
 
-Vibscapes that need more than a shader (3D geometry, per-frame state) live in their own renderer. See `Render/MachineMode.swift` and `Render/MachineRenderer.swift` for an example.
+Vibescapes that need more than a shader (3D geometry, per-frame state) live in their own renderer. See `Render/MachineMode.swift` and `Render/MachineRenderer.swift` for an example.
 
 ## Releases
 

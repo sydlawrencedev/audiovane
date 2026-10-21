@@ -53,7 +53,7 @@
       "applicationCategory": "MultimediaApplication",
       "applicationSubCategory": "Music visual worlds",
       "operatingSystem": "macOS 14.2 or later, Apple silicon",
-      "softwareVersion": "0.10.20175",
+      "softwareVersion": "0.10.212",
       "downloadUrl": "https://github.com/sydlawrencedev/vibresia/releases/latest/download/Vibresia.zip",
       "installUrl": "https://vibresia.com/install.sh",
       "screenshot": "https://vibresia.com/media/share.jpg",
@@ -122,19 +122,25 @@
   .cmd code { white-space: nowrap; color: var(--cyan); font-size: 14px; flex: 1; }
   .cmd button { flex: none; background: var(--line); color: var(--text); border: 0; border-radius: 8px; padding: 6px 10px; font: 600 12px "JetBrains Mono", monospace; cursor: pointer; }
 
-  .video { margin: 48px auto 8px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(43, 242, 255, 0.10), 0 0 0 1px rgba(255, 43, 214, 0.15); background: #000; aspect-ratio: 16 / 10; }
-  .video video { width: 100%; height: 100%; display: block; object-fit: cover; }
+  .video { position: relative; margin: 48px auto 8px; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 30px 80px rgba(43, 242, 255, 0.10), 0 0 0 1px rgba(255, 43, 214, 0.15); background: #000; aspect-ratio: 16 / 10; }
+  .video video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; object-fit: cover; }
+  /* The full-quality reel is fetched in the background and fades in over the
+     small one. Both show the same frames at the same instant, so the
+     crossfade lands on identical imagery rather than on a visible jump. */
+  #reel-hq { opacity: 0; transition: opacity 500ms ease; }
+  #reel-hq.upgraded { opacity: 1; }
+  @media (prefers-reduced-motion: reduce) { #reel-hq { transition: none; } }
 
   section { padding: 56px 0 8px; }
   section > h2 { font-size: 32px; margin: 0 0 8px; }
   section > p.sub { color: var(--muted); margin: 0 0 26px; }
-  .vibscapes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
-  .vibscape { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
-  .vibscape img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
-  .vibscape .body { padding: 14px 16px 18px; }
-  .vibscape h3 { margin: 2px 0 6px; font-size: 19px; }
-  .vibscape p { margin: 0; color: var(--muted); font-size: 15px; }
-  .vibscape.scan { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 180px; background: linear-gradient(135deg, rgba(255, 43, 214, 0.12), rgba(43, 242, 255, 0.12)); }
+  .vibescapes { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 18px; }
+  .vibescape { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+  .vibescape img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; background: #000; }
+  .vibescape .body { padding: 14px 16px 18px; }
+  .vibescape h3 { margin: 2px 0 6px; font-size: 19px; }
+  .vibescape p { margin: 0; color: var(--muted); font-size: 15px; }
+  .vibescape.scan { display: flex; align-items: center; justify-content: center; text-align: center; min-height: 180px; background: linear-gradient(135deg, rgba(255, 43, 214, 0.12), rgba(43, 242, 255, 0.12)); }
 
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 18px; }
   .fact { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
@@ -186,7 +192,7 @@
       VIBRESIA
     </a>
     <nav>
-      <a href="#vibscapes">Vibscapes</a>
+      <a href="#vibescapes">Vibescapes</a>
       <a href="#make">Make your own</a>
       <a href="#install">Install</a>
       <a href="#changelog">Changelog</a>
@@ -204,13 +210,17 @@
       <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
       <a class="btn coffee" data-track="coffee_clicked" data-placement="hero" href="https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01">☕ Buy me a coffee</a>
     </div>
-    <p class="small">macOS 14.2 or later · Apple silicon · updates itself · <a href="#shareware">proudly shareware</a></p>
+    <p class="small">macOS 14.2 or later · Apple silicon · updates itself · <a href="#shareware">proudly shareware</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues" rel="noopener" data-track="bug_report_link_clicked" data-placement="hero">report a bug</a></p>
   </div>
 
   <div class="video">
-    <video autoplay muted loop playsinline preload="metadata" poster="media/poster.jpg">
-      <source src="media/demo.mp4" type="video/mp4">
+    <video id="reel-lq" autoplay muted loop playsinline preload="auto" poster="media/poster.jpg">
+      <source src="media/demo-low.mp4" type="video/mp4">
     </video>
+    <!-- No src in the markup: fetching the full-quality reel immediately would
+         undo the point of the small one. reel-upgrade.js sets it, and only
+         when the connection looks willing. -->
+    <video id="reel-hq" muted loop playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
   </div>
 
     <div class="install" id="install">
@@ -222,44 +232,44 @@
       <p class="small" style="margin-top:10px">On first launch, choose <b>Share System Audio</b> and allow Vibresia to record system audio. Nothing is recorded or sent anywhere; the audio is only analysed on your Mac.</p>
     </div>
 
-  <section id="vibscapes">
-    <h2>Vibscapes</h2>
+  <section id="vibescapes">
+    <h2>Vibescapes</h2>
     <p class="sub">Individual visual worlds you can create, customise and share.</p>
-    <p class="small">Auto Scan cycles through them all, handing over a few bars at a time. Every vibscape follows the music, and holds still when it stops.</p>
-    <div class="vibscapes">
-      <article class="vibscape" data-vibscape="ribbons">
+    <p class="small">Auto Scan cycles through them all, handing over a few bars at a time. Every vibescape follows the music, and holds still when it stops.</p>
+    <div class="vibescapes">
+      <article class="vibescape" data-vibescape="ribbons">
 <img src="media/modes/ribbons.jpg" alt="Ribbons: glowing hot pink and cyan ribbons weaving through cyan-edged glass shapes above a glossy floor" loading="lazy"><div class="body"><h3>Ribbons</h3><p>Luminous ribbons twist through floating glass as the whole scene drifts past. Every bass note bends them, and every beat turns the glass.</p></div></article>
-      <article class="vibscape" data-vibscape="vortex"><img src="media/modes/vortex.jpg" alt="Vortex: a cyber tunnel of cyan and magenta grid lines rushing past" loading="lazy"><div class="body"><h3>Vortex</h3><p>A cyber tunnel of grid lines rushing past. The rings speed up and the field of view pulses with the bass, and the whole thing twists as it goes.</p></div></article>
-      <article class="vibscape" data-vibscape="silk"><img src="media/modes/silk.jpg" alt="Silk Flight: a wide, glossy hot pink satin ribbon sweeping through black space into a teal dust cloud, turning violet in the distance, as chunky cyan glass blocks fly past" loading="lazy"><div class="body"><h3>Silk Flight</h3><p>Fly through the music past a wide satin ribbon that twists away into a dust cloud, with glass blocks tumbling by. The louder it gets, the faster you go.</p></div></article>
-      <article class="vibscape" data-vibscape="flux"><img src="media/modes/flux.jpg" alt="Flux: huge sheets of hot pink and gold light strands swirling into a vanishing point, with gold bokeh and cyan glass shards streaking past" loading="lazy"><div class="body"><h3>Flux</h3><p>Sheets of hot pink and gold light swirl into a vanishing point like long-exposure trails. Louder music flies faster, and every beat swells softly.</p></div></article>
-      <article class="vibscape" data-vibscape="spectrum"><img src="media/modes/spectrum.jpg" alt="Spectrum: classic segmented LED bars with falling peak caps" loading="lazy"><div class="body"><h3>Spectrum</h3><p>Classic segmented LED bars with falling peak caps.</p></div></article>
-      <article class="vibscape" data-vibscape="tunnel"><img src="media/modes/tunnel.jpg" alt="Tunnel: neon spectrum bars flying past in a ring" loading="lazy"><div class="body"><h3>Tunnel</h3><p>Fly through rings of spectrum bars that pulse with the bass.</p></div></article>
-      <article class="vibscape" data-vibscape="liquid"><img src="media/modes/liquid.jpg" alt="Liquid: psychedelic fluid flowing and folding like Milkdrop" loading="lazy"><div class="body"><h3>Liquid</h3><p>Milkdrop-style psychedelic fluid that flows and folds to the music.</p></div></article>
-      <article class="vibscape" data-vibscape="kaleidoscope"><img src="media/modes/kaleidoscope.jpg" alt="Kaleidoscope: mirrored fractal folds pulsing with the bass" loading="lazy"><div class="body"><h3>Kaleidoscope</h3><p>Mirrored fractal folds that punch in on the bass and shift colour every few bars.</p></div></article>
-      <article class="vibscape" data-vibscape="waveform"><img src="media/modes/waveform.jpg" alt="Neon Wave: glowing green waveforms shaped by the spectrum" loading="lazy"><div class="body"><h3>Neon Wave</h3><p>Glowing green waveforms, shaped by the spectrum like an analogue sound analyser.</p></div></article>
-      <article class="vibscape" data-vibscape="machine"><img src="media/modes/machine.jpg" alt="Machine: cannons firing balls at the drums" loading="lazy"><div class="body"><h3>Machine</h3><p>Cannons fire balls at drums in time with the notes, after mrdoob's MIDEM Hack Day machine.</p></div></article>
-      <article class="vibscape" data-vibscape="warp"><img src="media/modes/warp.jpg" alt="Warp: hyperspace star streaks trailing behind the music" loading="lazy"><div class="body"><h3>Warp</h3><p>Hyperspace star streaks. More stars, and longer trails, the louder it gets.</p></div></article>
-      <article class="vibscape" data-vibscape="particles"><img src="media/modes/particles.jpg" alt="Constellation: a swarm of glowing orbs lit by the music" loading="lazy"><div class="body"><h3>Constellation</h3><p>A swarm of orbs. The louder it gets, the more of them light up, each pushed by its own frequency.</p></div></article>
-      <article class="vibscape" data-vibscape="nyan"><img src="media/modes/nyan.jpg" alt="Nyan Cat: a pixel cat on a rainbow trail streaking across the screen" loading="lazy"><div class="body"><h3>Nyan Cat</h3><p>A pixel cat on a rainbow trail, flying faster when the music's louder.</p></div></article>
-      <article class="vibscape" data-vibscape="hamster"><img src="media/modes/hamster.jpg" alt="Hamster Dance: a wall of pixel hamsters dancing at the song tempo" loading="lazy"><div class="body"><h3>Hamster Dance</h3><p>A wall of dancing hamsters, played at the song's tempo. Drop your own GIFs in to use them instead.</p></div></article>
-      <article class="vibscape" data-vibscape="badger"><img src="media/modes/badger.jpg" alt="Badger Badger: rows of dancing badgers bobbing to the beat" loading="lazy"><div class="body"><h3>Badger Badger</h3><p>Rows of dancing badgers, in time with the beat. Big drops bring out the mushroom, or the snake.</p></div></article>
-      <article class="vibscape" data-vibscape="llama"><img src="media/modes/llama.jpg" alt="Whooping Llama: llamas in bright blankets hopping on the beat" loading="lazy"><div class="body"><h3>Whooping Llama</h3><p>Llamas in bright blankets hop to the beat and whoop on every hit.</p></div></article>
-      <article class="vibscape" data-vibscape="danceFloor"><img src="media/modes/danceFloor.jpg" alt="Dance Floor: a perspective grid of neon Rubik's-cube tiles, the camera panning and rolling on the beat" loading="lazy"><div class="body"><h3>Dance Floor</h3>
+      <article class="vibescape" data-vibescape="vortex"><img src="media/modes/vortex.jpg" alt="Vortex: a cyber tunnel of cyan and magenta grid lines rushing past" loading="lazy"><div class="body"><h3>Vortex</h3><p>A cyber tunnel of grid lines rushing past. The rings speed up and the field of view pulses with the bass, and the whole thing twists as it goes.</p></div></article>
+      <article class="vibescape" data-vibescape="silk"><img src="media/modes/silk.jpg" alt="Silk Flight: a wide, glossy hot pink satin ribbon sweeping through black space into a teal dust cloud, turning violet in the distance, as chunky cyan glass blocks fly past" loading="lazy"><div class="body"><h3>Silk Flight</h3><p>Fly through the music past a wide satin ribbon that twists away into a dust cloud, with glass blocks tumbling by. The louder it gets, the faster you go.</p></div></article>
+      <article class="vibescape" data-vibescape="flux"><img src="media/modes/flux.jpg" alt="Flux: huge sheets of hot pink and gold light strands swirling into a vanishing point, with gold bokeh and cyan glass shards streaking past" loading="lazy"><div class="body"><h3>Flux</h3><p>Sheets of hot pink and gold light swirl into a vanishing point like long-exposure trails. Louder music flies faster, and every beat swells softly.</p></div></article>
+      <article class="vibescape" data-vibescape="spectrum"><img src="media/modes/spectrum.jpg" alt="Spectrum: classic segmented LED bars with falling peak caps" loading="lazy"><div class="body"><h3>Spectrum</h3><p>Classic segmented LED bars with falling peak caps.</p></div></article>
+      <article class="vibescape" data-vibescape="tunnel"><img src="media/modes/tunnel.jpg" alt="Tunnel: neon spectrum bars flying past in a ring" loading="lazy"><div class="body"><h3>Tunnel</h3><p>Fly through rings of spectrum bars that pulse with the bass.</p></div></article>
+      <article class="vibescape" data-vibescape="liquid"><img src="media/modes/liquid.jpg" alt="Liquid: psychedelic fluid flowing and folding like Milkdrop" loading="lazy"><div class="body"><h3>Liquid</h3><p>Milkdrop-style psychedelic fluid that flows and folds to the music.</p></div></article>
+      <article class="vibescape" data-vibescape="kaleidoscope"><img src="media/modes/kaleidoscope.jpg" alt="Kaleidoscope: mirrored fractal folds pulsing with the bass" loading="lazy"><div class="body"><h3>Kaleidoscope</h3><p>Mirrored fractal folds that punch in on the bass and shift colour every few bars.</p></div></article>
+      <article class="vibescape" data-vibescape="waveform"><img src="media/modes/waveform.jpg" alt="Neon Wave: glowing green waveforms shaped by the spectrum" loading="lazy"><div class="body"><h3>Neon Wave</h3><p>Glowing green waveforms, shaped by the spectrum like an analogue sound analyser.</p></div></article>
+      <article class="vibescape" data-vibescape="machine"><img src="media/modes/machine.jpg" alt="Machine: cannons firing balls at the drums" loading="lazy"><div class="body"><h3>Machine</h3><p>Cannons fire balls at drums in time with the notes, after mrdoob's MIDEM Hack Day machine.</p></div></article>
+      <article class="vibescape" data-vibescape="warp"><img src="media/modes/warp.jpg" alt="Warp: hyperspace star streaks trailing behind the music" loading="lazy"><div class="body"><h3>Warp</h3><p>Hyperspace star streaks. More stars, and longer trails, the louder it gets.</p></div></article>
+      <article class="vibescape" data-vibescape="particles"><img src="media/modes/particles.jpg" alt="Constellation: a swarm of glowing orbs lit by the music" loading="lazy"><div class="body"><h3>Constellation</h3><p>A swarm of orbs. The louder it gets, the more of them light up, each pushed by its own frequency.</p></div></article>
+      <article class="vibescape" data-vibescape="nyan"><img src="media/modes/nyan.jpg" alt="Nyan Cat: a pixel cat on a rainbow trail streaking across the screen" loading="lazy"><div class="body"><h3>Nyan Cat</h3><p>A pixel cat on a rainbow trail, flying faster when the music's louder.</p></div></article>
+      <article class="vibescape" data-vibescape="hamster"><img src="media/modes/hamster.jpg" alt="Hamster Dance: a wall of pixel hamsters dancing at the song tempo" loading="lazy"><div class="body"><h3>Hamster Dance</h3><p>A wall of dancing hamsters, played at the song's tempo. Drop your own GIFs in to use them instead.</p></div></article>
+      <article class="vibescape" data-vibescape="badger"><img src="media/modes/badger.jpg" alt="Badger Badger: rows of dancing badgers bobbing to the beat" loading="lazy"><div class="body"><h3>Badger Badger</h3><p>Rows of dancing badgers, in time with the beat. Big drops bring out the mushroom, or the snake.</p></div></article>
+      <article class="vibescape" data-vibescape="llama"><img src="media/modes/llama.jpg" alt="Whooping Llama: llamas in bright blankets hopping on the beat" loading="lazy"><div class="body"><h3>Whooping Llama</h3><p>Llamas in bright blankets hop to the beat and whoop on every hit.</p></div></article>
+      <article class="vibescape" data-vibescape="danceFloor"><img src="media/modes/danceFloor.jpg" alt="Dance Floor: a perspective grid of neon Rubik's-cube tiles, the camera panning and rolling on the beat" loading="lazy"><div class="body"><h3>Dance Floor</h3>
 <p>A Rubik's-cube floor in perspective. The camera pans, rolls and travels on the beat, and the tiles keep re-solving themselves.</p></div></article>
-      <article class="vibscape" data-vibscape="band"><img src="media/modes/band.jpg" alt="The Band: a pixel-art band walking on stage when their instrument is heard" loading="lazy"><div class="body"><h3>The Band</h3><p>A pixel-art band in ten genre sets, from a concert hall to a jazz club. Musicians walk on when Vibresia hears their instrument, and the singer matches the voice.</p></div></article>
-      <article class="vibscape scan"><div class="body"><h3>Auto Scan</h3><p>Cycles through every vibscape, a few bars at a time.</p></div></article>
+      <article class="vibescape" data-vibescape="band"><img src="media/modes/band.jpg" alt="The Band: a pixel-art band walking on stage when their instrument is heard" loading="lazy"><div class="body"><h3>The Band</h3><p>A pixel-art band in ten genre sets, from a concert hall to a jazz club. Musicians walk on when Vibresia hears their instrument, and the singer matches the voice.</p></div></article>
+      <article class="vibescape scan"><div class="body"><h3>Auto Scan</h3><p>Cycles through every vibescape, a few bars at a time.</p></div></article>
     </div>
     <p class="small">These ship with the app. Yours sit alongside them, in the same list, and can be shared the same way.</p>
   </section>
 
   <section id="make">
     <h2>Make your own</h2>
-    <p class="sub">A vibscape is a world of your own that moves with the music — and you don't have to write it yourself.</p>
+    <p class="sub">A vibescape is a world of your own that moves with the music — and you don't have to write it yourself.</p>
     <div class="facts">
-      <div class="fact"><h3>Vibe with your AI</h3><p>Point any AI assistant at Vibresia and it can write a vibscape, check it compiles, look at the result and try again — all on its own. No copying code back and forth. <a href="/agents">Set it up in a minute</a>.</p></div>
-      <div class="fact"><h3>Or write it yourself</h3><p>A vibscape is a single function: <code>vec3 render(vec2 p, float t)</code>, returning a colour. The music arrives as uniforms — bass, mids, treble, the beat, the whole spectrum — so you draw with it rather than redraw it every frame.</p></div>
+      <div class="fact"><h3>Vibe with your AI</h3><p>Point any AI assistant at Vibresia and it can write a vibescape, check it compiles, look at the result and try again — all on its own. No copying code back and forth. <a href="/agents">Set it up in a minute</a>.</p></div>
+      <div class="fact"><h3>Or write it yourself</h3><p>A vibescape is a single function: <code>vec3 render(vec2 p, float t)</code>, returning a colour. The music arrives as uniforms — bass, mids, treble, the beat, the whole spectrum — so you draw with it rather than redraw it every frame.</p></div>
       <div class="fact"><h3>See it before you keep it</h3><p>Nothing is saved until it works. Vibresia compiles what you wrote, draws it, and shows you the picture. If something's wrong, it says so in words rather than in a compiler log.</p></div>
-      <div class="fact"><h3>Share it</h3><p>Vibscapes are small text files. Send one to a friend, publish one, keep a collection. Yours are yours — use them wherever you like.</p></div>
+      <div class="fact"><h3>Share it</h3><p>Vibescapes are small text files. Send one to a friend, publish one, keep a collection. Yours are yours — use them wherever you like.</p></div>
     </div>
   </section>
 
@@ -267,7 +277,7 @@
     <h2>How it works</h2>
     <div class="facts">
       <div class="fact"><h3>Hears everything</h3><p>Uses macOS system-audio capture, so it reacts to any app. No plug-ins, no browser tab, no microphone needed.</p></div>
-      <div class="fact"><h3>Knows the song</h3><p>It finds the tempo, the beats and the instruments, and notices track changes in Apple Music and Spotify. That's what your vibscape draws with.</p></div>
+      <div class="fact"><h3>Knows the song</h3><p>It finds the tempo, the beats and the instruments, and notices track changes in Apple Music and Spotify. That's what your vibescape draws with.</p></div>
       <div class="fact"><h3>Moves on the beat</h3><p>Auto Scan hands over a few bars at a time, so the scene changes where the music does — on a beat, not on a timer.</p></div>
       <div class="fact"><h3>Stays on your Mac</h3><p>Audio is analysed on-device and never recorded or uploaded; instrument detection uses Apple's built-in sound classifier.</p></div>
     </div>
@@ -292,12 +302,12 @@
       <p class="small">Plain-text versions: <a href="/install.md">install.md</a> · <a href="/llms.txt">llms.txt</a></p>
     </div>
 
-    <h3>Then let it write vibscapes</h3>
-    <p>Vibresia ships an MCP server, so an assistant can write vibscapes for you — and, the part that actually matters, <b>see them</b>. It draws each one and hands the picture back, several frames at a time if you ask, so it isn't describing a shader it hasn't looked at.</p>
+    <h3>Then let it write vibescapes</h3>
+    <p>Vibresia ships an MCP server, so an assistant can write vibescapes for you — and, the part that actually matters, <b>see them</b>. It draws each one and hands the picture back, several frames at a time if you ask, so it isn't describing a shader it hasn't looked at.</p>
     <p>It can also read the music the app is hearing right now and the palette in use, which is how it picks colours that survive the grade instead of arriving as something else.</p>
     <div class="cmd"><code id="mcp-cmd">Connect to this mcp: vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp</code><button data-copy data-command="mcp">Copy</button></div>
     <p>Once it's connected, this is all it takes:</p>
-    <div class="cmd"><code>Make a vibscape using the vibresia mcp that consists of a blue smokey orb pulsing to the music</code><button data-copy data-command="prompt">Copy</button></div>
+    <div class="cmd"><code>Make a vibescape using the vibresia mcp that consists of a blue smokey orb pulsing to the music</code><button data-copy data-command="prompt">Copy</button></div>
     <p class="small">It's a good first one to try, because the answer is a picture. Every assistant has a different way of wiring up an MCP server — <a href="/agents">the setup page</a> has yours, per client.</p>
   </section>
 
@@ -317,9 +327,9 @@
     <h2>Proudly shareware</h2>
     <p class="sub">Free to use, and yours to pass on. No ads, no account.</p>
     <div class="shareware">
-      <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click. Every vibscape you have now keeps working, and every one added later comes with the same download.</p></div>
+      <div class="fact"><h3>Every update is included</h3><p>Check for updates from the app and install in one click. Every vibescape you have now keeps working, and every one added later comes with the same download.</p></div>
       <div class="fact"><h3>Your audio stays on your Mac</h3><p>Audio never leaves your Mac. Usage stats are anonymous, and you can switch them off in the app.</p></div>
-      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone. The source is on GitHub under the MIT licence, so read it, fork it or send a patch. New vibscapes are welcome, and most are a single shader.</p></div>
+      <div class="fact"><h3>Yours to keep and to pass on</h3><p>Redistribute it to anyone. The source is on GitHub under the MIT licence, so read it, fork it or send a patch. New vibescapes are welcome, and most are a single shader.</p></div>
     </div>
   </section>
 
@@ -337,6 +347,7 @@
 </div>
 <script src="/analytics.js" defer></script>
 <script src="/github.js" defer></script>
+<script src="/reel-upgrade.js" defer></script>
 <script>
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {

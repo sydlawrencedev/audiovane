@@ -1,7 +1,7 @@
 import SwiftUI
 import AppKit
 
-/// The Custom Vibscape sheet: the way a person adds a vibscape of their own.
+/// The Custom Vibescape sheet: the way a person adds a vibescape of their own.
 ///
 /// It opens on a choice of three routes, because "write some code" is a
 /// dead end for most people and the app shouldn't pretend otherwise:
@@ -9,7 +9,7 @@ import AppKit
 /// a file somebody sent them. Whichever route they take, they end in the
 /// same place — a box of code, a name, and a Test button that tells them
 /// honestly whether it works.
-struct CustomVibscapeView: View {
+struct CustomVibescapeView: View {
     /// Where in the flow they are.
     enum Step {
         case choose
@@ -31,7 +31,7 @@ struct CustomVibscapeView: View {
     @State private var name: String = ""
     @State private var author: String = ""
     @State private var url: String = ""
-    @State private var code: String = CustomVibscapeGuide.starterTemplate
+    @State private var code: String = CustomVibescapeGuide.starterTemplate
     @State private var problem: ShaderProblem?
     @State private var preview: NSImage?
     @State private var testing = false
@@ -39,19 +39,24 @@ struct CustomVibscapeView: View {
     @State private var isEditing = false
     @State private var editingID: String?
 
-    /// A vibscape already on disk, being edited rather than created.
+    /// Which of the four opening offers led to the vibescape that got saved, so
+    /// `custom_vibescape_saved` can say how people get here. `unknown` means they
+    /// came straight to the code step (editing an existing vibescape).
+    @State private var routeChosen = "unknown"
+
+    /// A vibescape already on disk, being edited rather than created.
     ///
     /// `initialStep` exists for the headless UI shots, which render each
     /// step of the flow to check it reads well.
-    init(editing mode: CustomVibscape? = nil, initialStep: Step = .choose, scrollable: Bool = true) {
+    init(editing mode: CustomVibescape? = nil, initialStep: Step = .choose, scrollable: Bool = true) {
         _name = State(initialValue: mode?.name ?? "")
         _author = State(initialValue: mode?.author ?? "")
         _url = State(initialValue: mode?.url ?? "")
-        _code = State(initialValue: mode?.shader ?? CustomVibscapeGuide.starterTemplate)
+        _code = State(initialValue: mode?.shader ?? CustomVibescapeGuide.starterTemplate)
         _isEditing = State(initialValue: mode != nil)
         _editingID = State(initialValue: mode?.id)
-        // Editing an existing vibscape goes straight to the code — there's
-        // nothing to choose, the vibscape is already there.
+        // Editing an existing vibescape goes straight to the code — there's
+        // nothing to choose, the vibescape is already there.
         _step = State(initialValue: mode != nil ? .write : initialStep)
         self.scrollable = scrollable
     }
@@ -74,7 +79,7 @@ struct CustomVibscapeView: View {
     private var chooseStep: some View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Make your own vibscape")
+                Text("Make your own vibescape")
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("A world of your own, drawn by your music. Write it yourself, or let an AI write it for you.")
@@ -90,29 +95,31 @@ struct CustomVibscapeView: View {
                 RouteButton(
                     glyph: "cpu",
                     title: "Vibe with your AI of choice",
-                    detail: "Point any AI assistant at Vibresia and it can write a vibscape, check it works and show you the result."
+                    detail: "Point any AI assistant at Vibresia and it can write a vibescape, check it works and show you the result."
                 ) {
-                    step = .mcp
+                    go(.mcp, via: "mcp")
                 }
                 RouteButton(
                     glyph: "wand.and.stars",
                     title: "Ask an AI to write it",
                     detail: "Copy a short description to your AI assistant, paste the answer back. Easiest if you've never written code."
                 ) {
-                    step = .ai
+                    go(.ai, via: "ai_paste")
                 }
                 RouteButton(
                     glyph: "curlybraces",
                     title: "Paste code you already have",
-                    detail: "For when you've written a vibscape, or had one written for you."
+                    detail: "For when you've written a vibescape, or had one written for you."
                 ) {
-                    step = .write
+                    go(.write, via: "paste_code")
                 }
                 RouteButton(
                     glyph: "folder",
                     title: "Open a file",
-                    detail: "For a vibscape file somebody sent you, or one you saved earlier."
+                    detail: "For a vibescape file somebody sent you, or one you saved earlier."
                 ) {
+                    routeChosen = "open_file"
+                    Task { await Analytics.shared.track("custom_vibescape_route_chosen", ["route": "open_file"]) }
                     openFile()
                 }
             }
@@ -122,7 +129,7 @@ struct CustomVibscapeView: View {
 
             Divider().overlay(Color.white.opacity(0.08))
             HStack {
-                Text("Your vibscapes are saved on this Mac, in your Application Support folder. Nothing is uploaded.")
+                Text("Your vibescapes are saved on this Mac, in your Application Support folder. Nothing is uploaded.")
                     .font(.system(size: 10))
                     .foregroundStyle(Color(white: 0.4))
                     .fixedSize(horizontal: false, vertical: true)
@@ -172,7 +179,7 @@ struct CustomVibscapeView: View {
     private var bar: some View {
         HStack {
             Button {
-                // Editing an existing vibscape has no chooser to go back to, and
+                // Editing an existing vibescape has no chooser to go back to, and
                 // the write step has no cancel button, so the arrow closes
                 // the sheet instead.
                 if isEditing {
@@ -188,10 +195,10 @@ struct CustomVibscapeView: View {
             .buttonStyle(.plain)
             .help(isEditing ? "Close" : "Back to the options")
 
-            Text(isEditing ? "Edit your vibscape"
+            Text(isEditing ? "Edit your vibescape"
                  : step == .ai ? "Ask an AI to write it"
                  : step == .mcp ? "Set up your agent"
-                 : "Paste your vibscape")
+                 : "Paste your vibescape")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(.white)
             Spacer()
@@ -206,7 +213,7 @@ struct CustomVibscapeView: View {
                 .font(.system(size: 9, weight: .semibold, design: .monospaced))
                 .tracking(1.2)
                 .foregroundStyle(Color(white: 0.45))
-            TextField("My Vibscape", text: $name)
+            TextField("My Vibescape", text: $name)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12))
                 .foregroundStyle(.white)
@@ -224,8 +231,8 @@ struct CustomVibscapeView: View {
         .padding(.bottom, 10)
     }
 
-    /// Who made it, and where to find more. Both optional — a vibscape someone
-    /// wrote for themselves doesn't need credit, and most vibscapes have no
+    /// Who made it, and where to find more. Both optional — a vibescape someone
+    /// wrote for themselves doesn't need credit, and most vibescapes have no
     /// home page.
     private var creditFields: some View {
         HStack(spacing: 10) {
@@ -324,7 +331,7 @@ struct CustomVibscapeView: View {
     private var resultPanel: some View {
         if showHelp {
             ScrollView {
-                Text(CustomVibscapeGuide.reference)
+                Text(CustomVibescapeGuide.reference)
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(Color(white: 0.72))
                     .textSelection(.enabled)
@@ -425,7 +432,7 @@ struct CustomVibscapeView: View {
     private var footer: some View {
         HStack(spacing: 10) {
             Button("Reset to example") {
-                code = CustomVibscapeGuide.starterTemplate
+                code = CustomVibescapeGuide.starterTemplate
                 problem = nil
                 preview = nil
             }
@@ -448,7 +455,7 @@ struct CustomVibscapeView: View {
                 )
                 .disabled(testing)
 
-            Button(isEditing ? "Save" : "Add vibscape") { save() }
+            Button(isEditing ? "Save" : "Add vibescape") { save() }
                 .buttonStyle(.plain)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(.black)
@@ -460,13 +467,13 @@ struct CustomVibscapeView: View {
                 )
                 .disabled(!canSave)
                 .opacity(canSave ? 1 : 0.4)
-                .help(canSave ? "" : "Test it first — a vibscape is only added once it works.")
+                .help(canSave ? "" : "Test it first — a vibescape is only added once it works.")
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 12)
     }
 
-    /// A vibscape can only be added once it has been shown to work, and it needs
+    /// A vibescape can only be added once it has been shown to work, and it needs
     /// a name to go by.
     private var canSave: Bool {
         preview != nil && !name.trimmingCharacters(in: .whitespaces).isEmpty
@@ -509,7 +516,7 @@ struct CustomVibscapeView: View {
                     .foregroundStyle(.white)
                 Text("""
                 Vibresia has a small local server that AI assistants can talk to. \
-                Point an agent at it and it can write a vibscape, check that it \
+                Point an agent at it and it can write a vibescape, check that it \
                 compiles, look at what it drew and try again — no copying code \
                 back and forth.
                 """)
@@ -540,7 +547,7 @@ struct CustomVibscapeView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("""
-                "Make a vibscape of slow blue smoke that swirls to the bass."
+                "Make a vibescape of slow blue smoke that swirls to the bass."
                 """)
                 .font(.system(size: 10.5, design: .monospaced))
                 .foregroundStyle(Color(white: 0.8))
@@ -648,7 +655,7 @@ struct CustomVibscapeView: View {
                         }
                         Text("""
                         Vibresia has a local server that agents can talk to, so they can write a \
-                        vibscape, check it works, look at the result and fix it — without you \
+                        vibescape, check it works, look at the result and fix it — without you \
                         copying any code. It works with any agent that speaks MCP.
                         """)
                         .font(.system(size: 11))
@@ -666,7 +673,7 @@ struct CustomVibscapeView: View {
                     Spacer()
                     Button {
                         NSPasteboard.general.clearContents()
-                        NSPasteboard.general.setString(CustomVibscapeGuide.agentPrompt, forType: .string)
+                        NSPasteboard.general.setString(CustomVibescapeGuide.agentPrompt, forType: .string)
                     } label: {
                         Label("Copy", systemImage: "doc.on.doc")
                             .font(.system(size: 10, weight: .medium))
@@ -674,7 +681,7 @@ struct CustomVibscapeView: View {
                     }
                     .buttonStyle(.plain)
                 }
-                Text(CustomVibscapeGuide.agentPrompt)
+                Text(CustomVibescapeGuide.agentPrompt)
                     .font(.system(size: 9.5, design: .monospaced))
                     .foregroundStyle(Color(white: 0.75))
                     .textSelection(.enabled)
@@ -721,6 +728,10 @@ struct CustomVibscapeView: View {
             switch app.renderer.installCustomShader(id: id, body: code) {
             case .failure(let p):
                 problem = p
+                Task { await Analytics.shared.track("custom_vibescape_tested", [
+                    "ok": false, "kind": p.analyticsKindName, "line": p.line ?? 0,
+                    "editing": isEditing, "route": routeChosen,
+                ]) }
             case .success:
                 preview = renderPreview(id: id)
                 if preview == nil {
@@ -728,12 +739,20 @@ struct CustomVibscapeView: View {
                         kind: .compileFailed,
                         message: "It compiled, but it couldn't be drawn. Try making it simpler.")
                 }
+                // Compiling and drawing are separate failures, and only knowing
+                // which one happened tells you whether the problem is the code
+                // or the graphics driver.
+                let drew = preview != nil
+                Task { await Analytics.shared.track("custom_vibescape_tested", [
+                    "ok": drew, "kind": drew ? "ok" : "notDrawn",
+                    "editing": isEditing, "route": routeChosen,
+                ]) }
             }
             testing = false
         }
     }
 
-    /// Draws the vibscape offscreen and returns the picture.
+    /// Draws the vibescape offscreen and returns the picture.
     private func renderPreview(id: String) -> NSImage? {
         let path = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("audiovane-preview-\(id).png")
@@ -749,21 +768,40 @@ struct CustomVibscapeView: View {
         // doesn't end up as a broken link on the card.
         let trimmedURL = url.trimmingCharacters(in: .whitespaces)
         let finalURL = trimmedURL.isEmpty ? nil : trimmedURL
-        let result: Result<CustomVibscape, ShaderProblem>
+        let result: Result<CustomVibescape, ShaderProblem>
         if let id = editingID {
-            result = app.updateCustomVibscape(id: id, name: finalName, author: finalAuthor,
+            result = app.updateCustomVibescape(id: id, name: finalName, author: finalAuthor,
                                           url: finalURL, shader: code)
         } else {
-            result = app.addCustomVibscape(name: finalName, author: finalAuthor,
+            result = app.addCustomVibescape(name: finalName, author: finalAuthor,
                                        url: finalURL, shader: code)
         }
         switch result {
         case .success:
+            // Whether they filled in an author or a link is the only signal that
+            // says whether anyone intends this vibescape to be shared, as
+            // opposed to being a private experiment.
+            Task { await Analytics.shared.track("custom_vibescape_saved", [
+                "editing": editingID != nil, "route": routeChosen,
+                "has_author": !finalAuthor.isEmpty, "has_url": finalURL != nil,
+            ]) }
             dismiss()
         case .failure(let p):
             problem = p
             preview = nil
+            Task { await Analytics.shared.track("custom_vibescape_failed", [
+                "stage": "save", "kind": p.analyticsKindName, "line": p.line ?? 0,
+                "editing": editingID != nil, "route": routeChosen,
+            ]) }
         }
+    }
+
+    /// Records which of the four opening offers someone took, so a vibescape
+    /// that ends up saved can be attributed back to the route that led to it.
+    private func go(_ next: Step, via route: String) {
+        routeChosen = route
+        Task { await Analytics.shared.track("custom_vibescape_route_chosen", ["route": route]) }
+        step = next
     }
 
     /// Opens a shader file somebody sent.
@@ -771,7 +809,7 @@ struct CustomVibscapeView: View {
         let panel = NSOpenPanel()
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
-        panel.message = "Choose a vibscape file — one that contains a render() function."
+        panel.message = "Choose a vibescape file — one that contains a render() function."
         panel.prompt = "Open"
         if panel.runModal() == .OK, let url = panel.url {
             if let text = try? String(contentsOf: url, encoding: .utf8) {
@@ -783,7 +821,7 @@ struct CustomVibscapeView: View {
             } else {
                 problem = ShaderProblem(
                     kind: .compileFailed,
-                    message: "That file couldn't be read. Vibscape files are plain text — .glsl, .frag or .txt all work.")
+                    message: "That file couldn't be read. Vibescape files are plain text — .glsl, .frag or .txt all work.")
             }
         }
     }

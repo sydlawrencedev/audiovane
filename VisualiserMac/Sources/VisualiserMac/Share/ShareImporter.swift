@@ -5,8 +5,8 @@ import AppKit
 ///
 /// Two payload shapes:
 ///
-/// - `vibresia://open?p=<slug>` — built-in vibscape, looked up by slug.
-/// - `vibresia://open?d=<base64>` — custom vibscape; the base64 payload is a
+/// - `vibresia://open?p=<slug>` — built-in vibescape, looked up by slug.
+/// - `vibresia://open?d=<base64>` — custom vibescape; the base64 payload is a
 ///   compact JSON `{name, author, url?, shader}`.
 ///
 /// The decoder is a pure `static` so a Swift verifier script can round-trip
@@ -19,8 +19,8 @@ enum ShareImporter {
     /// crash or alert; it's returned up the chain so we can PostHog the
     /// failure mode and move on.
     enum Request: Equatable {
-        case builtin(Vibscape)
-        case custom(CustomVibscape)
+        case builtin(Vibescape)
+        case custom(CustomVibescape)
         case malformed(String)
     }
 
@@ -55,11 +55,11 @@ enum ShareImporter {
             items.first { $0.name == name }?.value
         }
         if let slug = value("p"), !slug.isEmpty {
-            // Built-in: slug is one of `Vibscape.allCases`. The
-            // `Vibscape(rawValue:)` initialiser gives a `nil` for any
+            // Built-in: slug is one of `Vibescape.allCases`. The
+            // `Vibescape(rawValue:)` initialiser gives a `nil` for any
             // unknown slug, which we surface as `.malformed` rather
             // than crashing the app.
-            if let mode = Vibscape(rawValue: slug) {
+            if let mode = Vibescape(rawValue: slug) {
                 return .builtin(mode)
             }
             return .malformed("unknown built-in slug '\(slug)'")
@@ -85,9 +85,9 @@ enum ShareImporter {
             }
             // The slug is generated from the display name the same way the
             // store does, so the file lands where the app expects it and
-            // the activeVibscape can address it.
-            let id = CustomVibscapeStore.uniqueSlug(from: payload.name)
-            let mode = CustomVibscape(
+            // the activeVibescape can address it.
+            let id = CustomVibescapeStore.uniqueSlug(from: payload.name)
+            let mode = CustomVibescape(
                 id: id,
                 name: payload.name,
                 author: payload.author,
@@ -102,10 +102,10 @@ enum ShareImporter {
         }
     }
 
-    /// Encode a custom vibscape into a URL-safe base64 fragment. Output
+    /// Encode a custom vibescape into a URL-safe base64 fragment. Output
     /// stays around 2-4KB for typical shader sizes, which fits any chat
     /// platform without complaint.
-    static func encodePayload(_ mode: CustomVibscape) -> String {
+    static func encodePayload(_ mode: CustomVibescape) -> String {
         let payload = SharePayload(
             name: mode.name,
             author: mode.author,
@@ -123,21 +123,21 @@ enum ShareImporter {
 
     /// Run the request against the live app state. Called from
     /// `AppDelegate`'s Apple Event handler; the optional completion fires
-    /// once the active vibscape is showing and the window is up, so a
+    /// once the active vibescape is showing and the window is up, so a
     /// caller can toas or log from there.
     @MainActor
     static func apply(_ request: Request, completion: ((Request) -> Void)? = nil) {
         guard let app = AppState.shared else { return }
         switch request {
         case .builtin(let mode):
-            app.setVibscape(.builtin(mode))
+            app.setVibescape(.builtin(mode))
             bringAppToFront()
             Task { await Analytics.shared.track("share_opened", ["kind": "builtin", "slug": mode.rawValue]) }
             completion?(request)
         case .custom(let mode):
-            switch app.addCustomVibscape(name: mode.name, author: mode.author, url: mode.url, shader: mode.shader) {
+            switch app.addCustomVibescape(name: mode.name, author: mode.author, url: mode.url, shader: mode.shader) {
             case .success(let saved):
-                app.setVibscape(saved.modeID)
+                app.setVibescape(saved.modeID)
                 bringAppToFront()
                 Task { await Analytics.shared.track("share_opened", ["kind": "custom", "name": saved.name]) }
                 completion?(request)
@@ -151,7 +151,7 @@ enum ShareImporter {
         }
     }
 
-    /// Make sure the user can actually see the vibscape we just loaded.
+    /// Make sure the user can actually see the vibescape we just loaded.
     /// The URL handler can fire while the app is in the background, or
     /// for a cold launch while the window is still settling, so we ask
     /// both AppKit and the window itself.

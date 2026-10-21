@@ -11,18 +11,18 @@ enum MCPTools {
     // MARK: - The list
 
     static let all: [[String: Any]] = [
-        tool("preview_vibscape",
-             "Draw a vibscape and return the picture. The whole point: see it before you commit. " +
+        tool("preview_vibescape",
+             "Draw a vibescape and return the picture. The whole point: see it before you commit. " +
              "Set the audio uniforms yourself to explore how it responds, or ask for several frames to see the motion. " +
              "Broken code comes back as an error in words.",
              previewSchema(animation: false)),
-        tool("preview_vibscape_animation",
-             "Draw a vibscape over several seconds and return every frame as one picture, so you can see how it moves. " +
-             "Use this instead of preview_vibscape when the animation is the point.",
+        tool("preview_vibescape_animation",
+             "Draw a vibescape over several seconds and return every frame as one picture, so you can see how it moves. " +
+             "Use this instead of preview_vibescape when the animation is the point.",
              previewSchema(animation: true)),
-        tool("validate_vibscape",
-             "Compile a vibscape and run it on a single pixel. Returns errors that stop it working, and warnings about things " +
-             "that will make it look wrong — including ones that still compile, like a vibscape that ignores the music.",
+        tool("validate_vibescape",
+             "Compile a vibescape and run it on a single pixel. Returns errors that stop it working, and warnings about things " +
+             "that will make it look wrong — including ones that still compile, like a vibescape that ignores the music.",
              ["type": "object",
               "properties": ["code": ["type": "string", "description": "The shader: a vec3 render(vec2 p, float t) function."]],
               "required": ["code"]]),
@@ -36,15 +36,15 @@ enum MCPTools {
              "look like on screen, or to pick colours that already suit the palette.",
              ["type": "object",
               "properties": ["name": ["type": "string", "description": "The palette. Leave it out for all of them."]]]),
-        tool("save_vibscape",
-             "Save a vibscape, either as a new one or by replacing the one with the same name. It's compiled and previewed " +
-             "first: a vibscape that doesn't compile is not saved, and you get the picture of what you're shipping back. " +
-             "Use list_vibscapes to see what's already there.",
+        tool("save_vibescape",
+             "Save a vibescape, either as a new one or by replacing the one with the same name. It's compiled and previewed " +
+             "first: a vibescape that doesn't compile is not saved, and you get the picture of what you're shipping back. " +
+             "Use list_vibescapes to see what's already there.",
              ["type": "object",
               "properties": [
-                "name": ["type": "string", "description": "What the vibscape is called. An existing name is replaced."],
+                "name": ["type": "string", "description": "What the vibescape is called. An existing name is replaced."],
                 "code": ["type": "string", "description": "The shader: a vec3 render(vec2 p, float t) function."],
-                "author": ["type": "string", "description": "Who wrote it. Shown under the vibscape's name."],
+                "author": ["type": "string", "description": "Who wrote it. Shown under the vibescape's name."],
                 "url": ["type": "string", "description": "A link to it, if there is one."],
                 "description": ["type": "string", "description": "What it looks like, in a line."],
                 "palette": ["type": "string", "description": "The palette it was designed against, e.g. NEON."],
@@ -52,12 +52,12 @@ enum MCPTools {
                 "preview": ["type": "boolean", "description": "Draw it before saving so you can see what you're about to ship. Default true."],
               ],
               "required": ["name", "code"]]),
-        tool("diff_vibscape",
-             "Draw two versions of a vibscape with the same uniforms, side by side. Give the code for both, or name a saved " +
+        tool("diff_vibescape",
+             "Draw two versions of a vibescape with the same uniforms, side by side. Give the code for both, or name a saved " +
              "one and supply only the other. Useful for seeing what a change actually did.",
              ["type": "object",
               "properties": [
-                "name": ["type": "string", "description": "A saved vibscape to compare against, if you only have the new code."],
+                "name": ["type": "string", "description": "A saved vibescape to compare against, if you only have the new code."],
                 "code_a": ["type": "string", "description": "The first version. Defaults to the saved one."],
                 "code_b": ["type": "string", "description": "The second version."],
                 "label_a": ["type": "string", "description": "What to call the left side."],
@@ -68,54 +68,54 @@ enum MCPTools {
 
         // Kept from the first version, because they're the verbs the app itself
         // uses and an agent that learned those shouldn't be told they vanished.
-        tool("list_vibscapes",
-             "Every vibscape Vibresia has: the ones that ship with it and the user's own, each with a thumbnail. " +
+        tool("list_vibescapes",
+             "Every vibescape Vibresia has: the ones that ship with it and the user's own, each with a thumbnail. " +
              "Use this to see what's already been made before making another.",
              ["type": "object", "properties": [:]]),
-        tool("get_vibscape",
-             "The full source of one of the user's own vibscapes.",
+        tool("get_vibescape",
+             "The full source of one of the user's own vibescapes.",
              ["type": "object",
-              "properties": ["id": ["type": "string", "description": "The vibscape's id, from list_vibscapes."]],
+              "properties": ["id": ["type": "string", "description": "The vibescape's id, from list_vibescapes."]],
               "required": ["id"]]),
-        tool("vibscape_reference",
-             "What a vibscape can use: the uniforms the music drives, the helpers, and a worked example. Read this before writing a shader.",
+        tool("vibescape_reference",
+             "What a vibescape can use: the uniforms the music drives, the helpers, and a worked example. Read this before writing a shader.",
              ["type": "object", "properties": [:]]),
         tool("what_i_hear",
-             "What Vibresia is hearing right now: the suspected genre and instruments, the tempo, the levels and the shape of the spectrum. The same numbers a vibscape draws with.",
+             "What Vibresia is hearing right now: the suspected genre and instruments, the tempo, the levels and the shape of the spectrum. The same numbers a vibescape draws with.",
              ["type": "object", "properties": [:]]),
-        tool("test_vibscape",
-             "Compile a shader and draw a picture of it, without saving anything. Returns the error in words if it doesn't compile. Same as preview_vibscape.",
+        tool("test_vibescape",
+             "Compile a shader and draw a picture of it, without saving anything. Returns the error in words if it doesn't compile. Same as preview_vibescape.",
              ["type": "object",
               "properties": [
                 "code": ["type": "string", "description": "The shader: a vec3 render(vec2 p, float t) function."],
                 "name": ["type": "string", "description": "A name for the preview, for the error message."],
               ],
               "required": ["code"]]),
-        tool("create_vibscape",
-             "Save a new vibscape. The code is compiled first and is not saved if it doesn't work. Same as save_vibscape.",
+        tool("create_vibescape",
+             "Save a new vibescape. The code is compiled first and is not saved if it doesn't work. Same as save_vibescape.",
              ["type": "object",
               "properties": [
-                "name": ["type": "string", "description": "What the vibscape is called."],
+                "name": ["type": "string", "description": "What the vibescape is called."],
                 "code": ["type": "string", "description": "The shader: a vec3 render(vec2 p, float t) function."],
-                "author": ["type": "string", "description": "Who wrote it. Shown under the vibscape's name."],
+                "author": ["type": "string", "description": "Who wrote it. Shown under the vibescape's name."],
                 "url": ["type": "string", "description": "A link to it, if there is one."],
               ],
               "required": ["name", "code"]]),
-        tool("update_vibscape",
-             "Change one of the user's own vibscapes. The code is compiled first and is not saved if it doesn't work. Same as save_vibscape.",
+        tool("update_vibescape",
+             "Change one of the user's own vibescapes. The code is compiled first and is not saved if it doesn't work. Same as save_vibescape.",
              ["type": "object",
               "properties": [
-                "id": ["type": "string", "description": "The vibscape's id, from list_vibscapes."],
+                "id": ["type": "string", "description": "The vibescape's id, from list_vibescapes."],
                 "code": ["type": "string", "description": "New shader source."],
                 "name": ["type": "string", "description": "A new name, if it should change."],
                 "author": ["type": "string", "description": "A new author, if it should change."],
                 "url": ["type": "string", "description": "A new link, if it should change."],
               ],
               "required": ["id"]]),
-        tool("delete_vibscape",
-             "Remove one of the user's own vibscapes. It cannot be undone.",
+        tool("delete_vibescape",
+             "Remove one of the user's own vibescapes. It cannot be undone.",
              ["type": "object",
-              "properties": ["id": ["type": "string", "description": "The vibscape's id, from list_vibscapes."]],
+              "properties": ["id": ["type": "string", "description": "The vibescape's id, from list_vibescapes."]],
               "required": ["id"]]),
     ]
 
@@ -175,7 +175,7 @@ enum MCPTools {
             "uActive": ["type": "number", "description": "0 in silence, eases to 1 with sound. Default 1, so a preview isn't dead."],
             "uIdle": ["type": "number", "description": "1 in silence, 0 with sound."],
             "uPresence": ["type": "number", "description": "Whether there's music at all, 0..1, very slow."],
-            "uScroll": ["type": "number", "description": "Forward-only distance. The easiest thing to scroll a vibscape by."],
+            "uScroll": ["type": "number", "description": "Forward-only distance. The easiest thing to scroll a vibescape by."],
             "uClock": ["type": "number", "description": "Wall-clock seconds. Keeps running in silence."],
         ]
         return props
@@ -190,21 +190,21 @@ enum MCPTools {
 
     static func call(name: String, arguments: [String: Any]) -> [String: Any] {
         switch name {
-        case "preview_vibscape": return previewVibscape(arguments, animation: false)
-        case "preview_vibscape_animation": return previewVibscape(arguments, animation: true)
-        case "validate_vibscape": return validateVibscape(arguments)
+        case "preview_vibescape": return previewVibescape(arguments, animation: false)
+        case "preview_vibescape_animation": return previewVibescape(arguments, animation: true)
+        case "validate_vibescape": return validateVibescape(arguments)
         case "get_uniform_snapshot": return uniformSnapshot()
         case "get_palette": return palette(arguments)
-        case "save_vibscape": return saveVibscape(arguments)
-        case "diff_vibscape": return diffVibscape(arguments)
-        case "list_vibscapes": return listVibscapes()
-        case "get_vibscape": return getVibscape(arguments)
-        case "vibscape_reference": return textResult(CustomVibscapeGuide.reference)
+        case "save_vibescape": return saveVibescape(arguments)
+        case "diff_vibescape": return diffVibescape(arguments)
+        case "list_vibescapes": return listVibescapes()
+        case "get_vibescape": return getVibescape(arguments)
+        case "vibescape_reference": return textResult(CustomVibescapeGuide.reference)
         case "what_i_hear": return whatIHear()
-        case "test_vibscape": return previewVibscape(arguments, animation: false)
-        case "create_vibscape": return createVibscape(arguments)
-        case "update_vibscape": return updateVibscape(arguments)
-        case "delete_vibscape": return deleteVibscape(arguments)
+        case "test_vibescape": return previewVibescape(arguments, animation: false)
+        case "create_vibescape": return createVibescape(arguments)
+        case "update_vibescape": return updateVibescape(arguments)
+        case "delete_vibescape": return deleteVibescape(arguments)
         default:
             return errorResult("There's no tool called \(name).")
         }
@@ -212,24 +212,24 @@ enum MCPTools {
 
     // MARK: - Preview
 
-    /// Draws a vibscape and hands back the picture.
+    /// Draws a vibescape and hands back the picture.
     ///
     /// This is the tool the rest of them are for: everything else is a way of
     /// deciding *what* to draw, and this is the one that shows the answer. The
     /// response is the picture first and a note about what went into it second,
     /// because the picture is the part that was missing.
-    private static func previewVibscape(_ arguments: [String: Any], animation: Bool) -> [String: Any] {
+    private static func previewVibescape(_ arguments: [String: Any], animation: Bool) -> [String: Any] {
         guard let code = arguments["code"] as? String else {
             return errorResult("There's no code to draw. Pass the shader source as `code`.")
         }
-        let name = (arguments["name"] as? String) ?? "this vibscape"
+        let name = (arguments["name"] as? String) ?? "this vibescape"
         var options = animation
             ? PreviewOptions(width: 320, height: 180, frames: 8, timeStart: 0, timeStep: 0.5)
             : PreviewOptions()
         applyPreviewOptions(arguments["options"], to: &options)
 
         let started = Date()
-        switch VibscapeRender.render(body: code, options: options) {
+        switch VibescapeRender.render(body: code, options: options) {
         case .failure(let problem):
             return errorResult(failure(problem, name: name))
         case .success(let preview):
@@ -248,7 +248,7 @@ enum MCPTools {
             }
             note += ". Each frame is \(preview.frameWidth)x\(preview.frameHeight). \(elapsed)ms."
             if !options.uniforms.names.contains("uActive") {
-                note += " uActive is forced to 1 so the vibscape is drawn as if music were playing; pass `uActive: 0` to see it sitting still."
+                note += " uActive is forced to 1 so the vibescape is drawn as if music were playing; pass `uActive: 0` to see it sitting still."
             }
 
             // The notes that are actually useful when the picture isn't what was
@@ -338,17 +338,17 @@ enum MCPTools {
 
     /// Compiles it, runs it on one pixel, and says what's wrong.
     ///
-    /// Deliberately separate from preview: a vibscape can fail to compile, fail
+    /// Deliberately separate from preview: a vibescape can fail to compile, fail
     /// to run, compile and look wrong, or compile and look wrong on screen
     /// because of the palette. They're four different problems and lumping them
     /// together loses the distinction.
-    private static func validateVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func validateVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let code = arguments["code"] as? String else {
             return errorResult("There's no code to check. Pass the shader source as `code`.")
         }
-        let name = (arguments["name"] as? String) ?? "this vibscape"
+        let name = (arguments["name"] as? String) ?? "this vibescape"
 
-        switch VibscapeCompiler.compile(body: code) {
+        switch VibescapeCompiler.compile(body: code) {
         case .failed(let problem):
             return errorResult(failure(problem, name: name))
         case .compiled:
@@ -358,7 +358,7 @@ enum MCPTools {
         // Compiling isn't running. One pixel through the real pipeline catches
         // the class of problem that links fine and then draws nothing.
         let options = PreviewOptions(width: 4, height: 4)
-        let ran = VibscapeRender.render(body: code, options: options)
+        let ran = VibescapeRender.render(body: code, options: options)
         var lines: [String] = []
         switch ran {
         case .success:
@@ -378,10 +378,10 @@ enum MCPTools {
         return textResult(lines.joined(separator: "\n"))
     }
 
-    /// Things that compile and run but will make the vibscape look wrong.
+    /// Things that compile and run but will make the vibescape look wrong.
     ///
     /// Each one is a mistake that is invisible in the code and obvious in the
-    /// picture: a vibscape that never reads the music, one that ignores the
+    /// picture: a vibescape that never reads the music, one that ignores the
     /// palette, one that keeps moving in silence.
     private static func lint(_ code: String) -> [String] {
         var warnings: [String] = []
@@ -437,7 +437,7 @@ enum MCPTools {
     /// The uniform values, right now.
     ///
     /// The reason this exists: picking `beat * 0.5` out of the air produces a
-    /// vibscape that either never pulses or strobes, and neither failure says
+    /// vibescape that either never pulses or strobes, and neither failure says
     /// which way to fix it. Knowing that `uBeatStrength` runs 0.1..0.6 on a
     /// chill track turns "multiply by 0.5" into "multiply by 2".
     private static func uniformSnapshot() -> [String: Any] {
@@ -446,7 +446,7 @@ enum MCPTools {
         guard let state = LiveUniforms.readFromDisk() else {
             return errorResult("""
             Vibresia isn't running, so there are no live values to read. Open it, share \
-            some audio, and ask again — or just use preview_vibscape, which falls back to \
+            some audio, and ask again — or just use preview_vibescape, which falls back to \
             stand-in values that behave like busy music.
             """)
         }
@@ -458,7 +458,7 @@ enum MCPTools {
         let age = Date().timeIntervalSince1970 - (state["at"] as? Double ?? 0)
 
         var lines: [String] = []
-        lines.append("Read from Vibresia \(String(format: "%.1f", age))s ago, drawing \(state["vibscape"] as? String ?? "?") through \(state["palette"] as? String ?? "?").\n")
+        lines.append("Read from Vibresia \(String(format: "%.1f", age))s ago, drawing \(state["vibescape"] as? String ?? "?") through \(state["palette"] as? String ?? "?").\n")
 
         lines.append("  uBass         \(d(f("uBass")))     uLevel        \(d(f("uLevel")))")
         lines.append("  uMid          \(d(f("uMid")))     uLevelSmooth  \(d(f("uLevelSmooth")))   slow loudness: rises ~0.3s, falls ~1.5s")
@@ -503,7 +503,7 @@ enum MCPTools {
             "uPresence": f("uPresence"), "uScroll": f("uScroll"),
             "uClock": f("uClock"), "beats_per_second": beatsPerSecond,
             "bpm": bpm, "palette": state["palette"] ?? "",
-            "vibscape": state["vibscape"] ?? "",
+            "vibescape": state["vibescape"] ?? "",
         ]))
         return textResult(lines.joined(separator: "\n"))
     }
@@ -529,7 +529,7 @@ enum MCPTools {
             lines.append("  \(pal.name.padding(toLength: 8, withPad: " ", startingAt: 0))  shadow \(rgb(pal.shadow))  highlight \(rgb(pal.highlight))  tint \(d(pal.duotone))")
         }
         lines.append("")
-        lines.append("Every vibscape is graded through the palette after it draws: the image's brightness is stretched between the shadow and highlight colours, then saturated and lifted. Your colours are not shown as-is, which is why a colour can look muted on screen and bright in the code.")
+        lines.append("Every vibescape is graded through the palette after it draws: the image's brightness is stretched between the shadow and highlight colours, then saturated and lifted. Your colours are not shown as-is, which is why a colour can look muted on screen and bright in the code.")
         lines.append("")
         lines.append("If you want a colour to survive, make it bright before the grade, or set `grade: false` on a preview to see it ungraded.")
         return textResult(lines.joined(separator: "\n"))
@@ -554,7 +554,7 @@ enum MCPTools {
         the shadow-to-highlight ramp. To land on a specific colour, pick the colour from this palette rather than bringing \
         your own — anything between shadow and highlight will come out as a version of these two.
         """)
-        lines.append("Note you can use `uPalette` in your vibscape directly — it's a `vec3[3]` you get for free, and drawing with it means you get the palette exactly right rather than fighting the grade.")
+        lines.append("Note you can use `uPalette` in your vibescape directly — it's a `vec3[3]` you get for free, and drawing with it means you get the palette exactly right rather than fighting the grade.")
         lines.append("")
         lines.append(json([
             "name": pal.name,
@@ -600,29 +600,29 @@ enum MCPTools {
 
     /// Saves, by way of a picture.
     ///
-    /// `save_vibscape` is the verb an agent reaches for, and it can't be reached
+    /// `save_vibescape` is the verb an agent reaches for, and it can't be reached
     /// for in the old surface — the old tools had `create` and `update`, which
     /// is a distinction nobody should have to make before saving a shader. It
     /// picks by name, previews, and only then writes.
-    private static func saveVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func saveVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let name = (arguments["name"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else {
-            return errorResult("What should the vibscape be called? Pass a name.")
+            return errorResult("What should the vibescape be called? Pass a name.")
         }
         guard let code = arguments["code"] as? String else {
             return errorResult("There's no code to save.")
         }
 
-        // Compile before anything else. A vibscape that doesn't compile isn't
+        // Compile before anything else. A vibescape that doesn't compile isn't
         // worth a preview, and definitely isn't worth writing to disk.
-        switch VibscapeCompiler.compile(body: code) {
+        switch VibescapeCompiler.compile(body: code) {
         case .failed(let problem):
             return errorResult(failure(problem, name: name) + "\n\nNothing was saved.")
         case .compiled:
             break
         }
 
-        let existing = CustomVibscapeStore.loadAll().first {
+        let existing = CustomVibescapeStore.loadAll().first {
             $0.name.caseInsensitiveCompare(name) == .orderedSame
         }
 
@@ -633,8 +633,8 @@ enum MCPTools {
         let paletteName = (arguments["palette"] as? String) ?? nil
         let targets = (arguments["audio_targets"] as? String) ?? nil
 
-        let id = existing?.id ?? CustomVibscapeStore.uniqueSlug(from: name)
-        var mode = existing ?? CustomVibscape(id: id, name: name, author: author,
+        let id = existing?.id ?? CustomVibescapeStore.uniqueSlug(from: name)
+        var mode = existing ?? CustomVibescape(id: id, name: name, author: author,
                                              url: rawURL.isEmpty ? nil : rawURL,
                                              shader: code, enabled: true, modified: Date())
         mode.shader = code
@@ -642,7 +642,7 @@ enum MCPTools {
         if !rawURL.isEmpty { mode.url = rawURL } else if existing != nil { mode.url = nil }
         // The extras are kept as a header comment, so they survive a save from
         // the app or from an agent that doesn't pass them again — and so
-        // get_vibscape can hand them back.
+        // get_vibescape can hand them back.
         mode.shader = Self.annotate(mode.shader, description: description, palette: paletteName, targets: targets)
         mode.modified = Date()
 
@@ -654,12 +654,12 @@ enum MCPTools {
         if wantsPreview {
             var options = PreviewOptions(width: 480, height: 270)
             if let paletteName, let match = paletteNamed(paletteName) { options.palette = match }
-            switch VibscapeRender.render(body: code, options: options) {
+            switch VibescapeRender.render(body: code, options: options) {
             case .success(let preview):
                 if let data = pngData(preview.image) {
                     content.append(["type": "image", "data": data.base64EncodedString(), "mimeType": "image/png"])
                 }
-                note = "Saved \(existing == nil ? "new vibscape" : "changes") \"\(mode.name)\" as \(mode.id). This is what you saved:"
+                note = "Saved \(existing == nil ? "new vibescape" : "changes") \"\(mode.name)\" as \(mode.id). This is what you saved:"
             case .failure(let problem):
                 // It compiled a moment ago, so this is a drawing problem rather
                 // than a compile one. Still worth saving: it's the author's
@@ -667,19 +667,19 @@ enum MCPTools {
                 note = "Saved \(mode.name), but it couldn't be drawn: \(problem.message)"
             }
         } else {
-            note = "Saved \(existing == nil ? "new vibscape" : "changes") \"\(mode.name)\" as \(mode.id)."
+            note = "Saved \(existing == nil ? "new vibescape" : "changes") \"\(mode.name)\" as \(mode.id)."
         }
 
         do {
-            try CustomVibscapeStore.save(mode)
+            try CustomVibescapeStore.save(mode)
         } catch {
-            return errorResult("Couldn't save the vibscape: \(error.localizedDescription)")
+            return errorResult("Couldn't save the vibescape: \(error.localizedDescription)")
         }
 
         let extras = [description, paletteName.map { "palette: \($0)" }, targets.map { "reacts to: \($0)" }]
             .compactMap { $0 }.filter { !$0.isEmpty }
         if !extras.isEmpty { note += "\n\n\(extras.joined(separator: "\n"))" }
-        note += "\n\nIt's in the vibscape list now and takes part in Auto Scan. \(CustomVibscapeStore.folder.path)/\(mode.id).json"
+        note += "\n\nIt's in the vibescape list now and takes part in Auto Scan. \(CustomVibescapeStore.folder.path)/\(mode.id).json"
 
         if content.isEmpty { return textResult(note) }
         content.append(["type": "text", "text": note])
@@ -710,7 +710,7 @@ enum MCPTools {
     ///
     /// "v3 is better" is a memory. Drawing both with the same bass and the same
     /// time turns it into something you can look at.
-    private static func diffVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func diffVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let codeB = arguments["code_b"] as? String else {
             return errorResult("Which version do you want to compare? Pass `code_b` for the new one.")
         }
@@ -719,18 +719,18 @@ enum MCPTools {
         var labelB = (arguments["label_b"] as? String) ?? "after"
 
         if codeA == nil, let name = arguments["name"] as? String {
-            let saved = CustomVibscapeStore.loadAll().first {
+            let saved = CustomVibescapeStore.loadAll().first {
                 $0.name.caseInsensitiveCompare(name) == .orderedSame || $0.id == name
             }
             guard let saved else {
-                return errorResult("There's no saved vibscape called \(name). Pass both versions with `code_a` and `code_b`.")
+                return errorResult("There's no saved vibescape called \(name). Pass both versions with `code_a` and `code_b`.")
             }
             codeA = saved.shader
             labelA = saved.name
             if labelB == "after" { labelB = "new version" }
         }
         guard let left = codeA else {
-            return errorResult("Pass the other version as `code_a`, or name a saved vibscape with `name`.")
+            return errorResult("Pass the other version as `code_a`, or name a saved vibescape with `name`.")
         }
 
         var options = PreviewOptions(width: 440, height: 440)
@@ -739,7 +739,7 @@ enum MCPTools {
         }
 
         func render(_ code: String) -> Result<NSImage, ShaderProblem> {
-            VibscapeRender.render(body: code, options: options).map { $0.image }
+            VibescapeRender.render(body: code, options: options).map { $0.image }
         }
         let leftImage = render(left)
         let rightImage = render(codeB)
@@ -798,8 +798,8 @@ enum MCPTools {
 
     // MARK: - The tools
 
-    private static func listVibscapes() -> [String: Any] {
-        let customs = CustomVibscapeStore.loadAll()
+    private static func listVibescapes() -> [String: Any] {
+        let customs = CustomVibescapeStore.loadAll()
         var content: [[String: Any]] = []
 
         // The pictures go first. "What's already been made" is a visual
@@ -807,15 +807,15 @@ enum MCPTools {
         // eighteen thumbnails do — you can see that someone's already done the
         // concentric rings, without reading a word.
         var shipped = PreviewOptions(width: 160, height: 160, grade: false)
-        for vibscape in Vibscape.allCases where vibscape != .autoScan {
-            if case .success(let preview) = VibscapeRender.render(builtin: vibscape, options: shipped),
+        for vibescape in Vibescape.allCases where vibescape != .autoScan {
+            if case .success(let preview) = VibescapeRender.render(builtin: vibescape, options: shipped),
                let data = pngData(preview.image) {
-                content.append(["type": "text", "text": "\(vibscape.displayName)"])
+                content.append(["type": "text", "text": "\(vibescape.displayName)"])
                 content.append(["type": "image", "data": data.base64EncodedString(), "mimeType": "image/png"])
             }
         }
         for mode in customs {
-            if case .success(let preview) = VibscapeRender.render(body: mode.shader, options: shipped),
+            if case .success(let preview) = VibescapeRender.render(body: mode.shader, options: shipped),
                let data = pngData(preview.image) {
                 content.append(["type": "text", "text": "\(mode.name)\(mode.author.isEmpty ? "" : " — by \(mode.author)") — id \(mode.id), changed \(relative(mode.modified))"])
                 content.append(["type": "image", "data": data.base64EncodedString(), "mimeType": "image/png"])
@@ -823,15 +823,15 @@ enum MCPTools {
         }
 
         var lines: [String] = []
-        for vibscape in Vibscape.allCases where vibscape != .autoScan {
-            lines.append("shipped  \(vibscape.rawValue)")
+        for vibescape in Vibescape.allCases where vibescape != .autoScan {
+            lines.append("shipped  \(vibescape.rawValue)")
         }
         for mode in customs {
             lines.append("yours    \(mode.id)  — \(mode.name)\(mode.author.isEmpty ? "" : "  by \(mode.author)")")
         }
         lines.append("")
-        lines.append("Each is drawn above its name. The ones with a `yours` id are the user's own — read one with get_vibscape, replace one with save_vibscape using the same name, or make a new one with save_vibscape.")
-        lines.append("These previews are drawn ungraded, so they show each vibscape's own colours rather than the current palette.")
+        lines.append("Each is drawn above its name. The ones with a `yours` id are the user's own — read one with get_vibescape, replace one with save_vibescape using the same name, or make a new one with save_vibescape.")
+        lines.append("These previews are drawn ungraded, so they show each vibescape's own colours rather than the current palette.")
         content.append(["type": "text", "text": lines.joined(separator: "\n")])
         return ["content": content]
     }
@@ -844,12 +844,12 @@ enum MCPTools {
         return "\(Int(seconds / 86400))d ago"
     }
 
-    private static func getVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func getVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let id = arguments["id"] as? String else {
-            return errorResult("Which mode? Pass the id from list_vibscapes.")
+            return errorResult("Which mode? Pass the id from list_vibescapes.")
         }
-        guard let mode = CustomVibscapeStore.loadAll().first(where: { $0.id == id }) else {
-            return errorResult("There's no vibscape with the id \(id).")
+        guard let mode = CustomVibescapeStore.loadAll().first(where: { $0.id == id }) else {
+            return errorResult("There's no vibescape with the id \(id).")
         }
         let header = """
         \(mode.name)\(mode.author.isEmpty ? "" : " — by \(mode.author)")\(mode.url.map { " — \($0)" } ?? "")
@@ -859,7 +859,7 @@ enum MCPTools {
         return textResult(header + mode.shader)
     }
 
-    private static func createVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func createVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let name = arguments["name"] as? String, !name.trimmingCharacters(in: .whitespaces).isEmpty else {
             return errorResult("What should the mode be called? Pass a name.")
         }
@@ -869,39 +869,39 @@ enum MCPTools {
         let author = (arguments["author"] as? String ?? "").trimmingCharacters(in: .whitespaces)
         let url = (arguments["url"] as? String ?? "").trimmingCharacters(in: .whitespaces)
 
-        // Never save something that doesn't run: a vibscape that can't compile
-        // is a broken vibscape, and the user would have to work out why.
-        switch VibscapeCompiler.compile(body: code) {
+        // Never save something that doesn't run: a vibescape that can't compile
+        // is a broken vibescape, and the user would have to work out why.
+        switch VibescapeCompiler.compile(body: code) {
         case .failed(let problem):
             return errorResult(failure(problem, name: name) + "\n\nNothing was saved.")
         case .compiled:
             break
         }
 
-        let id = CustomVibscapeStore.uniqueSlug(from: name)
-        let mode = CustomVibscape(id: id, name: name, author: author,
+        let id = CustomVibescapeStore.uniqueSlug(from: name)
+        let mode = CustomVibescape(id: id, name: name, author: author,
                               url: url.isEmpty ? nil : url,
                               shader: code, enabled: true, modified: Date())
         do {
-            try CustomVibscapeStore.save(mode)
+            try CustomVibescapeStore.save(mode)
         } catch {
             return errorResult("Couldn't save the mode: \(error.localizedDescription)")
         }
         return textResult("""
         Saved "\(name)" as \(id). It is in the mode list now, and in Auto Scan.
-        It lives in \(CustomVibscapeStore.folder.path) as \(id).json.
+        It lives in \(CustomVibescapeStore.folder.path) as \(id).json.
         """)
     }
 
-    private static func updateVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func updateVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let id = arguments["id"] as? String else {
-            return errorResult("Which mode? Pass the id from list_vibscapes.")
+            return errorResult("Which mode? Pass the id from list_vibescapes.")
         }
-        guard var mode = CustomVibscapeStore.loadAll().first(where: { $0.id == id }) else {
-            return errorResult("There's no vibscape with the id \(id).")
+        guard var mode = CustomVibescapeStore.loadAll().first(where: { $0.id == id }) else {
+            return errorResult("There's no vibescape with the id \(id).")
         }
         if let code = arguments["code"] as? String {
-            switch VibscapeCompiler.compile(body: code) {
+            switch VibescapeCompiler.compile(body: code) {
             case .failed(let problem):
                 return errorResult(failure(problem, name: mode.name) + "\n\nNothing was changed.")
             case .compiled:
@@ -920,21 +920,21 @@ enum MCPTools {
         }
         mode.modified = Date()
         do {
-            try CustomVibscapeStore.save(mode)
+            try CustomVibescapeStore.save(mode)
         } catch {
             return errorResult("Couldn't save the mode: \(error.localizedDescription)")
         }
         return textResult("Saved changes to \"\(mode.name)\" (\(mode.id)).")
     }
 
-    private static func deleteVibscape(_ arguments: [String: Any]) -> [String: Any] {
+    private static func deleteVibescape(_ arguments: [String: Any]) -> [String: Any] {
         guard let id = arguments["id"] as? String else {
-            return errorResult("Which mode? Pass the id from list_vibscapes.")
+            return errorResult("Which mode? Pass the id from list_vibescapes.")
         }
-        guard let mode = CustomVibscapeStore.loadAll().first(where: { $0.id == id }) else {
-            return errorResult("There's no vibscape with the id \(id).")
+        guard let mode = CustomVibescapeStore.loadAll().first(where: { $0.id == id }) else {
+            return errorResult("There's no vibescape with the id \(id).")
         }
-        guard CustomVibscapeStore.delete(id: id) else {
+        guard CustomVibescapeStore.delete(id: id) else {
             return errorResult("Couldn't delete \(id).")
         }
         return textResult("Deleted \"\(mode.name)\". It can't be undone.")
@@ -946,7 +946,7 @@ enum MCPTools {
     ///
     /// The same readings the app's own visuals use: the genre it suspects,
     /// the instruments it thinks are playing, the tempo, and the levels. An
-    /// agent writing a vibscape can look at this and write something that
+    /// agent writing a vibescape can look at this and write something that
     /// suits the music actually playing, rather than guessing.
     ///
     /// These come from the app that has the audio. macOS allows only one
@@ -1024,7 +1024,7 @@ enum MCPTools {
 
         let idle = (state["source_idle"] as? Bool) ?? true
         lines.append("Sound: \(idle ? "quiet" : "playing")")
-        lines.append("On screen: \(state["vibscape"] as? String ?? "?")")
+        lines.append("On screen: \(state["vibescape"] as? String ?? "?")")
         lines.append("Palette: \(state["palette"] as? String ?? "?")")
 
         // The same reading as data, because some of the things an agent wants to
@@ -1048,7 +1048,7 @@ enum MCPTools {
             "mid": state["mid"] as? Double ?? 0,
             "treble": state["treble"] as? Double ?? 0,
             "playing": !idle,
-            "vibscape": state["vibscape"] as? String ?? "?",
+            "vibescape": state["vibescape"] as? String ?? "?",
             "palette": state["palette"] as? String ?? "?",
         ]
         lines.append("")

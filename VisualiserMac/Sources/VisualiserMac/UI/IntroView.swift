@@ -60,7 +60,7 @@ struct IntroView: View {
                     .frame(maxWidth: 500)
                     .lineSpacing(2)
 
-                // Share feature: a vibscape someone sent you (a
+                // Share feature: a vibescape someone sent you (a
                 // `vibresia://open?p=…` or `?d=…` link) opens straight in the
                 // app. The hint under the permission text nudges people who
                 // arrived via a deep link — they already tapped something

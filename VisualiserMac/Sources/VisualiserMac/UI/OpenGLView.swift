@@ -7,20 +7,20 @@ import os
 /// NSViewRepresentable wrapping a custom NSOpenGLView.
 struct OpenGLVisualizerView: NSViewRepresentable {
     let renderer: OpenGLRenderer
-    let mode: VibscapeID
+    let mode: VibescapeID
     @EnvironmentObject var app: AppState
 
     func makeNSView(context: Context) -> GLVisualizerNSView {
         let view = GLVisualizerNSView(renderer: renderer)
-        renderer.setVibscape(mode)
-        // The OpenGL context now exists, so the user's own vibscapes can be
+        renderer.setVibescape(mode)
+        // The OpenGL context now exists, so the user's own vibescapes can be
         // compiled for the first time.
-        app.loadCustomVibscapesOnce()
+        app.loadCustomVibescapesOnce()
         return view
     }
 
     func updateNSView(_ nsView: GLVisualizerNSView, context: Context) {
-        renderer.setVibscape(mode)
+        renderer.setVibescape(mode)
     }
 }
 
@@ -136,7 +136,7 @@ final class GLVisualizerNSView: NSOpenGLView {
         // and that re-rasterization is what the user perceives as flicker.
         //
         // Auto-scan is the exception: it has to keep drawing in silence,
-        // because the scanner is supposed to keep cycling through the vibscapes
+        // because the scanner is supposed to keep cycling through the vibescapes
         // whether or not music is playing.
         let keepsDrawing = renderer.isAutoScanning
         if isIdle && idleFrameCommitted && !keepsDrawing {

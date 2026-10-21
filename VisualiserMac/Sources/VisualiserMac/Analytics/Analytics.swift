@@ -21,7 +21,7 @@ actor Analytics {
     /// about how the app is used.
     ///
     /// Read from the command line rather than set by a flag, because the
-    /// app changes its vibscape on the way up — before anything had a chance to
+    /// app changes its vibescape on the way up — before anything had a chance to
     /// switch the analytics off.
     static var suppressed: Bool { CommandLine.arguments.contains("--mcp") }
 
@@ -40,7 +40,7 @@ actor Analytics {
     private var queue: [[String: Any]] = []
     private var flushTask: Task<Void, Never>?
 
-    /// Rolled up per session so a vibscape-flicker doesn't cost 40 API calls.
+    /// Rolled up per session so a vibescape-flicker doesn't cost 40 API calls.
     private var session: [String: Int] = [:]
     private var sessionStarted = Date()
 
@@ -123,6 +123,13 @@ actor Analytics {
         } else {
             PostHogSDK.shared.optIn()
             PostHogSDK.shared.identify(distinctId)
+            // Only the opt-in is reportable, and never the opt-out. Once
+            // someone switches this off, sending anything at all — including
+            // "they switched it off" — would mean writing to the service they
+            // just asked us to stop writing to. Opt-outs are therefore invisible
+            // by design, and the only honest way to see them is their absence
+            // from the project, which is what a quiet project means.
+            track("analytics_enabled", ["via": "settings"])
             NSLog("[analytics] enabled")
         }
     }

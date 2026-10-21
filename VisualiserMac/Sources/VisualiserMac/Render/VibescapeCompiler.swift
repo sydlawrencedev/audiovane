@@ -2,9 +2,9 @@ import Foundation
 import OpenGL.GL3
 import AppKit
 
-/// Compiles a user's vibscape and draws a picture of it, outside the app.
+/// Compiles a user's vibescape and draws a picture of it, outside the app.
 ///
-/// The app compiles a vibscape when the user picks one; the MCP server compiles
+/// The app compiles a vibescape when the user picks one; the MCP server compiles
 /// one when an agent asks whether theirs works. Both need the same thing —
 /// a real GLSL compiler, with the driver's own error text — so it lives
 /// here rather than in either of them.
@@ -12,9 +12,9 @@ import AppKit
 /// It runs against whatever OpenGL context is current, which is why the
 /// caller makes one first. Nothing here touches the app's state: it reads a
 /// shader, and writes a picture.
-enum VibscapeCompiler {
+enum VibescapeCompiler {
 
-    /// The result of trying to compile a vibscape.
+    /// The result of trying to compile a vibescape.
     enum Outcome {
         case compiled
         /// It didn't compile, and this says why in words.
@@ -38,9 +38,9 @@ enum VibscapeCompiler {
         return true
     }
 
-    /// Compiles a vibscape body and says what happened.
+    /// Compiles a vibescape body and says what happened.
     ///
-    /// The cheap shape checks come first — a vibscape that writes `main()` or
+    /// The cheap shape checks come first — a vibescape that writes `main()` or
     /// leaves a `#version` line in is never going to compile, and saying so
     /// plainly is more use than the driver's complaint about it.
     static func compile(body: String) -> Outcome {
@@ -54,7 +54,7 @@ enum VibscapeCompiler {
         guard ensureContext() else {
             return .failed(ShaderProblem(
                 kind: .compileFailed,
-                message: "This Mac wouldn't give the graphics system a context, so the vibscape couldn't be checked."))
+                message: "This Mac wouldn't give the graphics system a context, so the vibescape couldn't be checked."))
         }
 
         let source = FunShaders.customSource(body: body)
@@ -67,7 +67,7 @@ enum VibscapeCompiler {
         return .compiled
     }
 
-    /// Compiles a vibscape and draws a still of it, for the agent to look at.
+    /// Compiles a vibescape and draws a still of it, for the agent to look at.
     ///
     /// Returns the picture, or the reason it couldn't be drawn.
     static func preview(body: String, width: Int, height: Int) -> Result<NSImage, ShaderProblem> {
@@ -81,7 +81,7 @@ enum VibscapeCompiler {
         guard ensureContext() else {
             return .failure(ShaderProblem(
                 kind: .compileFailed,
-                message: "This Mac wouldn't give the graphics system a context, so the vibscape couldn't be drawn."))
+                message: "This Mac wouldn't give the graphics system a context, so the vibescape couldn't be drawn."))
         }
 
         let source = FunShaders.customSource(body: body)

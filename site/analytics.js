@@ -204,14 +204,18 @@
     var seen = {};
     var observer = new IntersectionObserver(function (entries) {
       entries.forEach(function (entry) {
-        var mode = entry.target.dataset.mode;
+        var mode = entry.target.dataset.vibescape;
         if (!entry.isIntersecting || seen[mode]) return;
         seen[mode] = true;
         track("mode_card_viewed", { target: mode });
         observer.unobserve(entry.target);
       });
     }, { rootMargin: "-20% 0px" });
-    document.querySelectorAll(".mode[data-mode]").forEach(function (card) {
+    // The cards are `.vibescape[data-vibescape]`. This used to ask for
+// `.mode[data-mode]`, which has not matched anything on the page since the
+// cards were renamed — so mode_card_viewed had quietly stopped firing while the
+// dashboard carried on showing the events it did manage to collect.
+document.querySelectorAll(".vibescape[data-vibescape]").forEach(function (card) {
       observer.observe(card);
     });
   }

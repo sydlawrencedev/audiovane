@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Genre picker — the header drop-down that chooses the band vibscape's genre.
+/// Genre picker — the header drop-down that chooses the band vibescape's genre.
 ///
 /// AUTO is the default: a `GenreDetector` watches the audio and picks the
 /// genre itself. Clicking a genre locks that choice for the rest of the
@@ -14,9 +14,9 @@ struct GenrePicker: View {
     var body: some View {
         // Only meaningful when the band is on screen — the genre drives the
         // stage, the lineup and the palette there. During auto-scan that
-        // includes the moments the scanner is sitting on the band vibscape.
-        let bandOnScreen = app.activeVibscape.isBand
-            || (app.activeVibscape.isAutoScan && app.scanTarget.isBand)
+        // includes the moments the scanner is sitting on the band vibescape.
+        let bandOnScreen = app.activeVibescape.isBand
+            || (app.activeVibescape.isAutoScan && app.scanTarget.isBand)
         if bandOnScreen {
             DropdownMenu(
                 id: .genre,

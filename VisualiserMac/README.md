@@ -2,7 +2,7 @@
 
 A native macOS app for visual worlds that move with your music, in the spirit of late-90s/early-2000s Winamp. Reads system audio directly, no browser, no fake "screen-share with audio" hack.
 
-The vibscapes, plus Auto Scan:
+The vibescapes, plus Auto Scan:
 
 1. **Ribbons**: glowing hot pink and cyan ribbons of silk strands weaving through clear, cyan-edged glass polyhedra in a dark navy room above a glossy floor, the whole scene sliding right to left with depth parallax. The bass bends and widens the ribbons, each beat turns the glass a step, and the edges sparkle with the treble. It keeps a slow, dim drift in silence.
 2. **Vortex**: a cyber tunnel of grid lines rushing past. Written by Alisan. The rings speed up and the field of view pulses with the bass, the spiral twists as it goes, and the whole thing fades out in silence.
@@ -23,7 +23,7 @@ The vibscapes, plus Auto Scan:
 17. **Dance Floor**: a Rubik's-cube floor in perspective. The camera pans, rolls and travels up and down the floor, all on the beat clock, and the tiles keep re-solving themselves. A fragment shader, themed by the active palette rather than being graded after the fact.
 18. **The Band**: colour pixel-art musicians in ten genre sets (classical hall, DJ booth, rock theatre, pop studio, hip-hop street, jazz club, blues bar, country porch, R&B velvet, ambient), each with its own instruments and outfits. Apple's on-device sound classifier (SoundAnalysis), backed up by beat and bass detection, decides who walks on; the singer's voice (female, male or duet) comes from the vocal pitch. Playing follows the beat clock, with spectrum onsets as accents.
 
-Vibscapes 1–5, 8–9, 11 and 13–18 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Vibscape 10 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
+Vibescapes 1–5, 8–9, 11 and 13–18 are full-screen fragment shaders in `Render/FunShaders.swift`, drawn procedurally (no image assets). Vibescape 10 (`Machine`) is instanced 3D geometry in `Render/MachineRenderer.swift`.
 
 Built with SwiftUI + OpenGL 3.3 + Core Audio process taps + Accelerate (vDSP).
 
@@ -97,7 +97,7 @@ work. The chrome sheds pieces as it narrows, in the order least useful first:
 | Width | What happens |
 |---|---|
 | ≥ 1100 | Everything: pills with labels, footer numbers, BPM |
-| < 1100 | Footer numbers go (RMS, BASS, MID, TREB, BEAT). The vibscape stays — it's the one value someone watching wants |
+| < 1100 | Footer numbers go (RMS, BASS, MID, TREB, BEAT). The vibescape stays — it's the one value someone watching wants |
 | < 880 | Pills lose their labels and keep their glyph, swatch or dot. The menus underneath are unchanged |
 | < 620 | The pills go entirely. The scene is the point at that size, and every choice is still a keystroke (1–0, `-`, `[`, `]`, `;`, `'`, `\`, `=`) or in the Visualizer menu |
 
@@ -120,9 +120,9 @@ is the only way to answer "is it supposed to be on top?" from a bug report.
 ## First launch
 
 A fresh install starts in **Auto Scan**, cycling every twenty seconds — with
-so many vibscapes, nobody should have to guess that the good ones are behind a
+so many vibescapes, nobody should have to guess that the good ones are behind a
 menu, and a visualiser that sits on one scene forever looks like it missed
-something. Pick a vibscape and that's remembered from then on; going back to Auto
+something. Pick a vibescape and that's remembered from then on; going back to Auto
 Scan clears the memory, so "no choice" always means Auto Scan.
 
 ## Colour palettes
@@ -131,7 +131,7 @@ Five palettes, picked from the header. The palette is applied as a **post-proces
 over the finished frame** — a duotone grade that stretches the scene's
 luminance ramp between a shadow and a highlight colour, then adjusts
 saturation and lifts the blacks. Because it runs after the scene rather than
-inside each shader, one palette themes *every* vibscape at once: the tunnel, the
+inside each shader, one palette themes *every* vibescape at once: the tunnel, the
 band, the machine, all of them.
 
 | Palette | Look |
@@ -164,7 +164,7 @@ official iOS SDK also pulls in feature flags, session replay and surveys, and
 session replay has no business inside an app whose entire job is capturing the
 screen.
 
-**What is sent:** which vibscape you switched to, which palette, the coarse genre
+**What is sent:** which vibescape you switched to, which palette, the coarse genre
 the detector settled on, whether the support button got clicked, and crash
 reports (what was on screen when it died, plus a stack trace — see below).
 
@@ -193,7 +193,7 @@ it can add events but never read them.
 
 ## Crash reports
 
-Without this, a band-vibscape crash arrives as "it crashed sometimes" and a stack
+Without this, a band-vibescape crash arrives as "it crashed sometimes" and a stack
 trace from a friend three timezones away. So the app catches its own.
 
 **On crash.** A handler on the fatal signals (and on uncaught Objective-C
@@ -201,7 +201,7 @@ exceptions) writes a report to
 `~/Library/Application Support/Vibresia/Crashes/Vibresia-<stamp>-<id>.crash.json`,
 then re-raises with the default disposition so macOS still writes its own `.ips`
 into `~/Library/Logs/DiagnosticReports` exactly as before. Ours carries what the
-system's can't: the vibscape and genre on screen, the band lineup, the audio source,
+system's can't: the vibescape and genre on screen, the band lineup, the audio source,
 the last dozen actions, and a `backtrace()` of the faulting thread. The newest
 20 reports are kept.
 
@@ -214,7 +214,7 @@ Audio failures (`audio_error`) and a source that couldn't be started
 because that's a choice rather than a fault.
 
 **On next launch.** Each report is sent to PostHog as an `app_crashed` event —
-vibscape, genre, reason, top 12 frames, last 12 breadcrumbs — and then deleted from
+vibescape, genre, reason, top 12 frames, last 12 breadcrumbs — and then deleted from
 disk. Three uploads per launch, so a machine crashing in a loop doesn't spend a
 minute talking about it.
 
@@ -241,10 +241,10 @@ open build/Vibresia.app                            # uploads it, deletes it
 
 Everything lives in the top bar so the visualiser gets the whole window:
 
-- **Vibscape picker** (left of the group) — every vibscape in a drop-down. Each
+- **Vibescape picker** (left of the group) — every vibescape in a drop-down. Each
   row shows its number-row shortcut, so the keyboard route stays discoverable
   now that the list isn't permanently on screen.
-- **Genre picker** — only in band vibscape (or when Auto Scan is sitting on the
+- **Genre picker** — only in band vibescape (or when Auto Scan is sitting on the
   band), since the genre drives the stage, the lineup and the palette there.
   Clicking a genre locks it for the current song; the next song re-arms auto.
   The confidence bar next to the name shows how sure the detector is.
@@ -253,23 +253,23 @@ Everything lives in the top bar so the visualiser gets the whole window:
 
 Click away from an open list to dismiss it.
 
-## Custom vibscapes, and the local MCP server
+## Custom vibescapes, and the local MCP server
 
-A vibscape is a fragment shader: one function, `vec3 render(vec2 p, float t)`,
+A vibescape is a fragment shader: one function, `vec3 render(vec2 p, float t)`,
 that returns a colour. The app supplies the uniforms (`uBass`, `uBands`,
-`uBeats`, …), the helpers and `main()`; the vibscape supplies the picture.
+`uBeats`, …), the helpers and `main()`; the vibescape supplies the picture.
 
 There are three ways to write one, and the app offers all three in
-**View All → + Custom Vibscape**: paste code you already have, ask an AI
+**View All → + Custom Vibescape**: paste code you already have, ask an AI
 assistant to write it (a prompt is provided), or open a file somebody sent
-you. Nothing is saved until it compiles — **Test** draws the vibscape and shows
+you. Nothing is saved until it compiles — **Test** draws the vibescape and shows
 you the picture, and a failure is explained in words rather than in the
 graphics driver's log.
 
 ### The MCP server
 
 Vibresia also ships a local [MCP](https://modelcontextprotocol.io) server,
-so an agent can write a vibscape, check it compiles, look at the result and try
+so an agent can write a vibescape, check it compiles, look at the result and try
 again — without anybody copying code by hand.
 
 Point an agent at it with:
@@ -278,7 +278,7 @@ Point an agent at it with:
 claude mcp add vibresia -- "/Applications/Vibresia.app/Contents/MacOS/Vibresia" --mcp
 ```
 
-The path has to be wherever the app actually is. The Custom Vibscape sheet shows
+The path has to be wherever the app actually is. The Custom Vibescape sheet shows
 the right command for the copy on the machine, with a button to copy it.
 
 For clients that read a JSON file rather than a command line:
@@ -297,39 +297,39 @@ For clients that read a JSON file rather than a command line:
 It's the same binary, run with `--mcp`: it speaks JSON-RPC over stdin and
 stdout, has no window, no dock icon and no analytics, and doesn't listen on
 a port — so there's nothing to secure. It reads and writes the same files
-the app does, so a vibscape an agent writes turns up in the app within a
+the app does, so a vibescape an agent writes turns up in the app within a
 second, whether or not Vibresia is open.
 
 The tools it offers:
 
 | Tool | What it does |
 | --- | --- |
-| `list_vibscapes` | Every vibscape: the ones that ship with the app and the user's own. |
-| `get_vibscape` | The full source of one of the user's own vibscapes. |
-| `vibscape_reference` | The uniforms and helpers available, and a worked example. |
+| `list_vibescapes` | Every vibescape: the ones that ship with the app and the user's own. |
+| `get_vibescape` | The full source of one of the user's own vibescapes. |
+| `vibescape_reference` | The uniforms and helpers available, and a worked example. |
 | `what_i_hear` | What Vibresia is hearing right now: suspected genre and instruments, tempo, levels, spectrum. |
-| `test_vibscape` | Compile a shader and draw it, without saving anything. |
-| `create_vibscape` | Save a new vibscape. Compiles first; won't save code that doesn't run. |
-| `update_vibscape` | Change one of the user's own vibscapes. Compiles first. |
-| `delete_vibscape` | Remove one of the user's own vibscapes. |
+| `test_vibescape` | Compile a shader and draw it, without saving anything. |
+| `create_vibescape` | Save a new vibescape. Compiles first; won't save code that doesn't run. |
+| `update_vibescape` | Change one of the user's own vibescapes. Compiles first. |
+| `delete_vibescape` | Remove one of the user's own vibescapes. |
 
-`test_vibscape` returns the picture as well as the verdict, so an agent can see
+`test_vibescape` returns the picture as well as the verdict, so an agent can see
 what it made rather than being told it compiled.
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch vibscape. The keys follow the order of the vibscape list, so rearranging the list in View All rearranges the shortcuts.
+- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch vibescape. The keys follow the order of the vibescape list, so rearranging the list in View All rearranges the shortcuts.
 - `Space` / `Esc` — toggle the intro overlay
 
 ## Development flags
 
-- `--vibscape <name>` — start in a given vibscape (e.g. `--vibscape machine`)
+- `--vibescape <name>` — start in a given vibescape (e.g. `--vibescape machine`)
 - `--palette N` — start with a given colour palette (0–4)
 - `--autoscan` — start in auto scan
 - `--scan-seconds N` — shorten the auto-scan dwell time (default 20s)
 - `--about` — open the credits popover on launch (checks the Stripe embed)
 - `--share` — with `--about`, opens the share sheet without a click
-- `--snapshot` — render one frame of every vibscape to PNG and exit
+- `--snapshot` — render one frame of every vibescape to PNG and exit
 - `--snapshot --genres` — render one frame of every genre and exit
 - `--ui-shot` — render the SwiftUI chrome to PNG (the OpenGL layer won't appear)
 - `--record <dir>` — capture consecutive frames of the GL output
@@ -389,7 +389,7 @@ Electronic vs Rock, 75bpm Blues vs Country, tempo-less ballad vs Ambient).
 
 ## Keyboard shortcuts
 
-- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch vibscape. The keys follow the order of the vibscape list, so rearranging it in View All rearranges the shortcuts: the first vibscape in the list is `1`, the second `2`, and so on. With the shipped order that makes `0` Machine, `-` Warp, `[` Constellation, `]` Nyan Cat, `;` Hamster Dance, `'` Badger Badger, `\` Whooping Llama, `,` Dance Floor, `.` The Band.
+- `1`–`9`, `0`, `-`, `[`, `]`, `;`, `'`, `\` — switch vibescape. The keys follow the order of the vibescape list, so rearranging it in View All rearranges the shortcuts: the first vibescape in the list is `1`, the second `2`, and so on. With the shipped order that makes `0` Machine, `-` Warp, `[` Constellation, `]` Nyan Cat, `;` Hamster Dance, `'` Badger Badger, `\` Whooping Llama, `,` Dance Floor, `.` The Band.
 - `Space` / `Esc` — toggle intro overlay
 
 ## Implementation notes
@@ -416,4 +416,4 @@ For visual regression / sanity checks:
 SNAPSHOT_DIR=/tmp/viz_snapshots ./build/Vibresia.app/Contents/MacOS/Vibresia --snapshot
 ```
 
-This renders one frame of each vibscape to PNG and exits.
+This renders one frame of each vibescape to PNG and exits.

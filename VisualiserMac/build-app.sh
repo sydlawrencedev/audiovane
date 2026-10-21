@@ -49,7 +49,9 @@ if [ -z "$REPORT_TOKEN" ]; then
 fi
 
 if [ "$CONFIG" = "release" ]; then
-    swift build -c release
+    # Preserve DWARF in the optimized binary so dsymutil can emit the symbols
+    # PostHog Error Tracking needs to symbolicate production crashes.
+    swift build -c release -Xswiftc -g
     BIN_PATH=".build/release/$APP_NAME"
     WATCHER_PATH=".build/release/VibresiaWatcher"
 else
@@ -64,7 +66,11 @@ if [ ! -f "$BIN_PATH" ]; then
 fi
 
 APP_BUNDLE="build/$APP_NAME.app"
+DSYM_PATH="build/$APP_NAME.app.dSYM"
 rm -rf "$APP_BUNDLE"
+if [ "$CONFIG" = "release" ]; then
+    rm -rf "$DSYM_PATH"
+fi
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 # The watcher runs from inside the bundle as a launchd agent — see
@@ -125,7 +131,7 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
     <key>ReportToken</key>
     <string>${REPORT_TOKEN}</string>
     <!-- Register Vibresia as the handler for vibresia:// URLs so a shared
-         vibscape link handed to us (vibresia://open?p=ribbons or ?d=...) lands
+         vibescape link handed to us (vibresia://open?p=ribbons or ?d=...) lands
          in the app rather than in the browser. The handler is wired up in
          AppDelegate.applicationWillFinishLaunching. -->
     <key>CFBundleURLTypes</key>
@@ -194,6 +200,36 @@ fi
 if ! codesign --verify --deep --strict "$APP_BUNDLE" 2>/dev/null; then
     echo "ERROR: signature does not verify — the app would not open." >&2
     exit 1
+fi
+
+if [ "$CONFIG" = "release" ]; then
+    dsymutil "$BIN_PATH" -o "$DSYM_PATH"
+
+    # Teammate and pull-request builds may not have upload credentials. Keep
+    # producing the dSYM in that case, and upload only when the full CLI
+    # credential set is available from the environment or the root .env file.
+    if [ -n "${POSTHOG_CLI_API_KEY:-}" ] && \
+       [ -n "${POSTHOG_CLI_PROJECT_ID:-}" ] && \
+       [ -n "${POSTHOG_CLI_HOST:-}" ]; then
+        CONFIGURATION=Release \
+        DEBUG_INFORMATION_FORMAT=dwarf-with-dsym \
+        ENABLE_USER_SCRIPT_SANDBOXING=NO \
+        DWARF_DSYM_FOLDER_PATH="$SCRIPT_DIR/build" \
+        DWARF_DSYM_FILE_NAME="$APP_NAME.app.dSYM" \
+        EXECUTABLE_NAME="$APP_NAME" \
+        TARGET_BUILD_DIR="$SCRIPT_DIR/build" \
+        EXECUTABLE_PATH="$APP_NAME.app/Contents/MacOS/$APP_NAME" \
+        SRCROOT="$SCRIPT_DIR" \
+        INFOPLIST_FILE="$SCRIPT_DIR/$APP_BUNDLE/Contents/Info.plist" \
+        PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE_ID" \
+        MARKETING_VERSION="$VERSION" \
+        CURRENT_PROJECT_VERSION="$VERSION" \
+        POSTHOG_INCLUDE_SOURCE=1 \
+        POSTHOG_CLI_DOTENV_FILE="$SCRIPT_DIR/.env" \
+        "$SCRIPT_DIR/.build/checkouts/posthog-ios/build-tools/upload-symbols.sh"
+    else
+        echo "NOTE: PostHog upload credentials are incomplete — dSYM upload skipped."
+    fi
 fi
 
 echo ""

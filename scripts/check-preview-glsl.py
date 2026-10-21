@@ -7,7 +7,7 @@ way to fetch them from the app at runtime. A copy is a promise that it gets
 refreshed when the original changes.
 
 It didn't get refreshed once already: `fbm` was added to the prelude, the app
-got it, and the browser's copy did not. Every shared vibscape that used noise
+got it, and the browser's copy did not. Every shared vibescape that used noise
 then failed to draw, on the live site, with nothing on the page to say why —
 the picture just wasn't there. Found by rendering a shared link in a browser,
 which is the only thing that would have caught it.
@@ -88,7 +88,7 @@ if bad:
     for b in bad:
         print(f"  x {b}")
     print()
-    print("  A shared vibscape won't draw in the browser if the prelude is stale.")
+    print("  A shared vibescape won't draw in the browser if the prelude is stale.")
     print("  Regenerate the embedded shaders, or add noise helpers to the")
     print("  reference doc too if that's what changed.")
     sys.exit(1)

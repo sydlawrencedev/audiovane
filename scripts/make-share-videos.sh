@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Renders a short looping clip of every built-in vibescape for its share page.
 #
-# The share pages used to show a still. A still of a vibscape that moves is a
+# The share pages used to show a still. A still of a vibescape that moves is a
 # lie by omission — a tunnel that doesn't tunnel — so each page now plays a few
 # seconds of the real thing, rendered by the app itself and encoded here.
 #
@@ -54,7 +54,7 @@ for slug in "${slugs[@]}"; do
   frames="$work/$slug"
   rm -rf "$frames"; mkdir -p "$frames"
 
-  # One vibscape per run: --video-only keeps this from paying for all of them.
+  # One vibescape per run: --video-only keeps this from paying for all of them.
   "$app" --video "$frames" \
          --video-size "${width}x${height}" \
          --video-fps "$fps" \

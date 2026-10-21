@@ -26,16 +26,16 @@ extension View {
     }
 }
 
-/// The View All panel: every vibscape the app has, with a picture of it, and a
-/// switch to say whether it appears in the vibscape list and takes part in Auto
+/// The View All panel: every vibescape the app has, with a picture of it, and a
+/// switch to say whether it appears in the vibescape list and takes part in Auto
 /// Scan.
 ///
-/// This is where a vibscape the user has never seen becomes findable. The drop-
+/// This is where a vibescape the user has never seen becomes findable. The drop-
 /// down is a list of names; this is a wall of pictures, so someone browsing
 /// on the hunt for something to look at can find it by sight. It is also
-/// where the vibscape list gets curated — a person with twenty vibscapes wants
+/// where the vibescape list gets curated — a person with twenty vibescapes wants
 /// three in the list and the rest kept, not deleted.
-struct VibscapesView: View {
+struct VibescapesView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
 
@@ -58,7 +58,7 @@ struct VibscapesView: View {
     /// The editor, if it's open. The panel is itself a sheet, so it
     /// presents its own rather than asking the window to — two sheets on
     /// the same view can't both be up.
-    @State private var editor: AppState.CustomVibscapeSheet?
+    @State private var editor: AppState.CustomVibescapeSheet?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -75,20 +75,20 @@ struct VibscapesView: View {
         .frame(width: 720, height: height)
         .background(Color(red: 0.05, green: 0.02, blue: 0.09))
         .sheet(item: $editor) { sheet in
-            CustomVibscapeView(editing: sheet.mode)
+            CustomVibescapeView(editing: sheet.mode)
                 .environmentObject(app)
         }
         .onAppear {
-            // Draw a picture of each of the user's own vibscapes, so the panel
+            // Draw a picture of each of the user's own vibescapes, so the panel
             // shows what they look like.
-            app.refreshCustomVibscapePreviews()
+            app.refreshCustomVibescapePreviews()
         }
     }
 
     private var header: some View {
         HStack(alignment: .firstTextBaseline) {
             VStack(alignment: .leading, spacing: 3) {
-                Text("Vibscapes")
+                Text("Vibescapes")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.white)
                 Text("Switch off the ones you don't want in the list or in Auto Scan. Drag them to change the order.")
@@ -100,7 +100,7 @@ struct VibscapesView: View {
             // Put the list back the way it shipped. Only worth offering
             // when it's actually been rearranged.
             if app.hasCustomOrder {
-                Button("Reset Order") { app.resetVibscapeOrder() }
+                Button("Reset Order") { app.resetVibescapeOrder() }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color(white: 0.75))
@@ -111,7 +111,7 @@ struct VibscapesView: View {
                             .fill(Color.white.opacity(0.08))
                     )
                     .pointingHand()
-                    .help("Put the vibscapes back in their original order")
+                    .help("Put the vibescapes back in their original order")
             }
             Button("Done") { dismiss() }
                 .buttonStyle(.plain)
@@ -136,18 +136,18 @@ struct VibscapesView: View {
     private var grid: some View {
         VStack(spacing: 14) {
             ForEach(rows, id: \.self) { row in
-                VibscapeRow(entries: row, columns: columnsPerRow,
+                VibescapeRow(entries: row, columns: columnsPerRow,
                         editor: $editor, dropTargetIndex: dropTargetIndex)
             }
         }
         .padding(18)
     }
 
-    /// The vibscapes, dealt into rows, with a card for making a new one at the
+    /// The vibescapes, dealt into rows, with a card for making a new one at the
     /// end.
-    private var rows: [[VibscapeEntry]] {
-        var all = app.allVibscapes
-        all.append(VibscapeEntry(newVibscapeCard: true))
+    private var rows: [[VibescapeEntry]] {
+        var all = app.allVibescapes
+        all.append(VibescapeEntry(newVibescapeCard: true))
         return stride(from: 0, to: all.count, by: columnsPerRow).map {
             Array(all[$0..<min($0 + columnsPerRow, all.count)])
         }
@@ -158,11 +158,11 @@ struct VibscapesView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.4))
-            Text("Your own vibscapes are marked ★. Add another with the card at the end.")
+            Text("Your own vibescapes are marked ★. Add another with the card at the end.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.45))
             Spacer()
-            Text("\(app.enabledVibscapes.count) of \(app.allVibscapes.count) switched on")
+            Text("\(app.enabledVibescapes.count) of \(app.allVibescapes.count) switched on")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(white: 0.5))
         }
@@ -173,16 +173,16 @@ struct VibscapesView: View {
 
 /// One row of cards. Split out of the panel because the type-checker
 /// struggles with the whole grid in one expression.
-private struct VibscapeRow: View {
+private struct VibescapeRow: View {
     @EnvironmentObject var app: AppState
-    let entries: [VibscapeEntry]
+    let entries: [VibescapeEntry]
     let columns: Int
 
     /// The editor, if it's open.
-    @Binding var editor: AppState.CustomVibscapeSheet?
+    @Binding var editor: AppState.CustomVibescapeSheet?
 
-    /// The card a dragged vibscape is currently over, so it can say so.
-    @State private var dropTargetID: VibscapeID?
+    /// The card a dragged vibescape is currently over, so it can say so.
+    @State private var dropTargetID: VibescapeID?
 
     /// Which card to draw as the drop target, for the headless UI shots.
     var dropTargetIndex: Int?
@@ -203,32 +203,32 @@ private struct VibscapeRow: View {
     }
 
     @ViewBuilder
-    private func card(_ entry: VibscapeEntry) -> some View {
-        let base = VibscapeCard(entry: entry, onEdit: { target in
-            guard let mode = app.customVibscape(id: target.id.slug) else { return }
+    private func card(_ entry: VibescapeEntry) -> some View {
+        let base = VibescapeCard(entry: entry, onEdit: { target in
+            guard let mode = app.customVibescape(id: target.id.slug) else { return }
             editor = .editing(mode)
         }, onCreate: {
             editor = .new
         }, onSelect: { target in
-            if target.isNewVibscapeCard {
+            if target.isNewVibescapeCard {
                 editor = .new
                 return
             }
-            // Picking a vibscape that was switched off would leave it chosen
+            // Picking a vibescape that was switched off would leave it chosen
             // but missing from the list, so switch it back on.
             if !target.isEnabled {
-                app.setVibscapeEnabled(target.id, enabled: true)
+                app.setVibescapeEnabled(target.id, enabled: true)
             }
             app.viaPicker = true
-            app.activeVibscape = target.id
-            app.showVibscapesSheet = false
+            app.activeVibescape = target.id
+            app.showVibescapesSheet = false
         }, isDropTarget: isDropTarget(entry))
             .contentShape(Rectangle())
-        if entry.isNewVibscapeCard {
-            // The "make your own" card isn't a vibscape, so it isn't dragged
+        if entry.isNewVibescapeCard {
+            // The "make your own" card isn't a vibescape, so it isn't dragged
             // and nothing can be dropped onto it. Its placeholder id is
-            // also another vibscape's, so letting a drop through would move
-            // that vibscape instead.
+            // also another vibescape's, so letting a drop through would move
+            // that vibescape instead.
             base
         } else {
             base
@@ -240,24 +240,24 @@ private struct VibscapeRow: View {
                 }
                 .dropDestination(for: String.self) { items, _ in
                     guard let raw = items.first,
-                          let dragged = VibscapeID(rawValue: raw),
-                          let index = app.allVibscapes.firstIndex(where: { $0.id == entry.id })
+                          let dragged = VibescapeID(rawValue: raw),
+                          let index = app.allVibescapes.firstIndex(where: { $0.id == entry.id })
                     else { return false }
-                    app.moveVibscape(dragged, to: index)
+                    app.moveVibescape(dragged, to: index)
                     return true
                 } isTargeted: { targeted in
                     // While something is being dragged over this card, the
                     // card says so — otherwise there's no sign of where the
-                    // vibscape would land.
+                    // vibescape would land.
                     dropTargetID = targeted ? entry.id : (dropTargetID == entry.id ? nil : dropTargetID)
                 }
         }
     }
 
-    /// True for the card a dragged vibscape would land on.
-    private func isDropTarget(_ entry: VibscapeEntry) -> Bool {
+    /// True for the card a dragged vibescape would land on.
+    private func isDropTarget(_ entry: VibescapeEntry) -> Bool {
         if let dropTargetIndex,
-           let index = app.allVibscapes.firstIndex(where: { $0.id == entry.id }),
+           let index = app.allVibescapes.firstIndex(where: { $0.id == entry.id }),
            index == dropTargetIndex {
             return true
         }
@@ -265,7 +265,7 @@ private struct VibscapeRow: View {
     }
 }
 
-/// What follows the cursor while a vibscape is being dragged.
+/// What follows the cursor while a vibescape is being dragged.
 ///
 /// Deliberately small. A copy of the whole card would sit right on top of
 /// the card being aimed at, hiding the drop indicator — and the drag image
@@ -295,12 +295,12 @@ private struct DragChip: View {
     }
 }
 
-/// One vibscape in the grid: a picture, its name, and a switch.
-private struct VibscapeCard: View {
+/// One vibescape in the grid: a picture, its name, and a switch.
+private struct VibescapeCard: View {
     @EnvironmentObject var app: AppState
-    let entry: VibscapeEntry
+    let entry: VibescapeEntry
     /// Called when the card's edit button is pressed.
-    var onEdit: ((VibscapeEntry) -> Void)?
+    var onEdit: ((VibescapeEntry) -> Void)?
     /// Called when the card is pressed, for the "make your own" card.
     var onCreate: (() -> Void)?
 
@@ -308,10 +308,10 @@ private struct VibscapeCard: View {
     /// instead of taking up room all the time.
     @State private var isHovering = false
 
-    /// Called when the picture is pressed: pick this vibscape.
-    var onSelect: ((VibscapeEntry) -> Void)?
-    /// True when a dragged vibscape is over this card, so it can show where
-    /// the vibscape would land.
+    /// Called when the picture is pressed: pick this vibescape.
+    var onSelect: ((VibescapeEntry) -> Void)?
+    /// True when a dragged vibescape is over this card, so it can show where
+    /// the vibescape would land.
     var isDropTarget = false
 
     /// Set when the delete button is pressed, so the confirmation can ask.
@@ -321,12 +321,12 @@ private struct VibscapeCard: View {
         VStack(alignment: .leading, spacing: 7) {
             preview
             HStack(spacing: 6) {
-                if entry.isNewVibscapeCard {
+                if entry.isNewVibescapeCard {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 11))
                         .foregroundStyle(Color(red: 1, green: 0.17, blue: 0.84))
                 } else if entry.isCustom {
-                    // Only the user's own vibscapes are marked. The numbers that
+                    // Only the user's own vibescapes are marked. The numbers that
                     // sit next to the names in the drop-down are keyboard
                     // shortcuts, and this panel isn't about keys.
                     Text("★")
@@ -342,7 +342,7 @@ private struct VibscapeCard: View {
                     .truncationMode(.tail)
                 Spacer(minLength: 4)
                 if entry.isCustom {
-                    // Only the user's own vibscapes can be changed. The
+                    // Only the user's own vibescapes can be changed. The
                     // shipped ones are part of the app.
                     Button {
                         onEdit?(entry)
@@ -353,7 +353,7 @@ private struct VibscapeCard: View {
                     }
                     .buttonStyle(.plain)
                     .pointingHand()
-                    .help("Edit this vibscape")
+                    .help("Edit this vibescape")
                     Button {
                         pendingDelete = true
                     } label: {
@@ -363,23 +363,23 @@ private struct VibscapeCard: View {
                     }
                     .buttonStyle(.plain)
                     .pointingHand()
-                    .help("Delete this vibscape")
+                    .help("Delete this vibescape")
                     .confirmationDialog(
                         "Delete “\(entry.title)”?",
                         isPresented: $pendingDelete,
                         titleVisibility: .visible
                     ) {
                         Button("Delete", role: .destructive) {
-                            app.deleteCustomVibscape(id: entry.id.slug)
+                            app.deleteCustomVibescape(id: entry.id.slug)
                         }
                         Button("Cancel", role: .cancel) {}
                     } message: {
-                        Text("The vibscape and its code are removed from this Mac. This can't be undone.")
+                        Text("The vibescape and its code are removed from this Mac. This can't be undone.")
                     }
                 }
-                if !entry.isNewVibscapeCard {
-                    VibscapeSwitch(isOn: entry.isEnabled) {
-                        app.setVibscapeEnabled(entry.id, enabled: !entry.isEnabled)
+                if !entry.isNewVibescapeCard {
+                    VibescapeSwitch(isOn: entry.isEnabled) {
+                        app.setVibescapeEnabled(entry.id, enabled: !entry.isEnabled)
                     }
                 }
             }
@@ -388,7 +388,7 @@ private struct VibscapeCard: View {
             // Who made it. Always shown, and clickable — the name and the
             // link both lead to the same place.
             HStack(spacing: 4) {
-                if !entry.isNewVibscapeCard {
+                if !entry.isNewVibescapeCard {
                     if let link = entry.link {
                         Link(destination: link) {
                             HStack(spacing: 4) {
@@ -424,7 +424,7 @@ private struct VibscapeCard: View {
                 }
             }
             .frame(height: 12, alignment: .leading)
-            if let problem = app.customVibscapeProblems[entry.id.slug] {
+            if let problem = app.customVibescapeProblems[entry.id.slug] {
                 Label("Needs a fix", systemImage: "exclamationmark.triangle.fill")
                     .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(Color(red: 1, green: 0.55, blue: 0.2))
@@ -441,7 +441,7 @@ private struct VibscapeCard: View {
                 )
         )
         .overlay(alignment: .bottom) {
-            // The drop zone. While a vibscape is being dragged over this card,
+            // The drop zone. While a vibescape is being dragged over this card,
             // a bar appears along the bottom showing it would land here.
             if isDropTarget {
                 RoundedRectangle(cornerRadius: 2)
@@ -472,14 +472,14 @@ private struct VibscapeCard: View {
     /// "make your own" card always stands out a little.
     private var borderColour: Color {
         if isDropTarget { return Color(red: 1, green: 0.17, blue: 0.84) }
-        if entry.isNewVibscapeCard { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.45) }
+        if entry.isNewVibescapeCard { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.45) }
         if entry.isEnabled { return Color(red: 1, green: 0.17, blue: 0.84).opacity(0.28) }
         return Color.white.opacity(0.06)
     }
 
     /// The author, and where to find more.
     private var tooltip: String {
-        if entry.isNewVibscapeCard {
+        if entry.isNewVibescapeCard {
             return "Make a mode of your own"
         }
         var text = entry.author.isEmpty ? "Made by an unknown author" : "Made by \(entry.author)"
@@ -492,17 +492,17 @@ private struct VibscapeCard: View {
         return text
     }
 
-    /// The picture. A user's own vibscape is drawn for real, so the panel shows
+    /// The picture. A user's own vibescape is drawn for real, so the panel shows
     /// what it looks like rather than a stand-in.
     ///
-    /// Clicking it picks the vibscape: the panel closes and that vibscape is what
+    /// Clicking it picks the vibescape: the panel closes and that vibescape is what
     /// gets drawn.
     @ViewBuilder
     private var preview: some View {
         Button {
             onSelect?(entry)
         } label: {
-            if entry.isNewVibscapeCard {
+            if entry.isNewVibescapeCard {
                 VStack(spacing: 6) {
                     Image(systemName: "wand.and.stars")
                         .font(.system(size: 22, weight: .light))
@@ -520,7 +520,7 @@ private struct VibscapeCard: View {
                 .clipped()
                 .clipShape(RoundedRectangle(cornerRadius: 5))
             } else if entry.isCustom {
-                if let image = app.customVibscapePreviews[entry.id.slug] {
+                if let image = app.customVibescapePreviews[entry.id.slug] {
                     Image(nsImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
@@ -539,7 +539,7 @@ private struct VibscapeCard: View {
                         .clipped()
                         .clipShape(RoundedRectangle(cornerRadius: 5))
                 }
-            } else if let image = VibscapePreviewImage.builtIn(entry.id) {
+            } else if let image = VibescapePreviewImage.builtIn(entry.id) {
                 Image(nsImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -547,14 +547,14 @@ private struct VibscapeCard: View {
                     .clipped()
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             } else {
-                CustomVibscapeCover(name: entry.title, seed: entry.id.slug)
+                CustomVibescapeCover(name: entry.title, seed: entry.id.slug)
                     .frame(height: 96)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
             }
         }
         .buttonStyle(.plain)
         .pointingHand()
-        .help(entry.isNewVibscapeCard ? "Make a vibscape of your own" : "Switch to \(entry.title)")
+        .help(entry.isNewVibescapeCard ? "Make a vibescape of your own" : "Switch to \(entry.title)")
     }
 }
 
@@ -562,9 +562,9 @@ private struct VibscapeCard: View {
 ///
 /// SwiftUI's own `Toggle` renders through an NSView that `ImageRenderer`
 /// can't capture — it comes out as the "unsupported" placeholder — which is
-/// the same reason the vibscape drop-down is hand-rolled. This one is drawn, so
+/// the same reason the vibescape drop-down is hand-rolled. This one is drawn, so
 /// it looks the same everywhere and can be reviewed in a screenshot.
-struct VibscapeSwitch: View {
+struct VibescapeSwitch: View {
     let isOn: Bool
     let action: () -> Void
 
@@ -589,16 +589,16 @@ struct VibscapeSwitch: View {
     }
 }
 
-/// Loads the vibscape pictures that ship with the app's website.
+/// Loads the vibescape pictures that ship with the app's website.
 ///
 /// They're in the site folder rather than in the bundle because the app
 /// doesn't ship them today. If they're not there — a build from source, or
 /// a trimmed bundle — the card falls back to a generated cover rather than
 /// showing a broken image.
-enum VibscapePreviewImage {
+enum VibescapePreviewImage {
     private static var cache: [String: NSImage] = [:]
 
-    static func builtIn(_ id: VibscapeID) -> NSImage? {
+    static func builtIn(_ id: VibescapeID) -> NSImage? {
         guard let builtin = id.builtin, builtin != .autoScan else { return nil }
         let key = builtin.rawValue
         if let cached = cache[key] { return cached }
@@ -607,7 +607,7 @@ enum VibscapePreviewImage {
         return image
     }
 
-    private static func load(builtin: Vibscape) -> NSImage? {
+    private static func load(builtin: Vibescape) -> NSImage? {
         // The pictures live beside the site, and the app is usually run from
         // a build in the same checkout. Look in a few places rather than
         // insisting on one layout.
@@ -630,12 +630,12 @@ enum VibscapePreviewImage {
     }
 }
 
-/// A generated cover for a vibscape with no picture: the user's own, or any
+/// A generated cover for a vibescape with no picture: the user's own, or any
 /// built-in whose picture couldn't be found.
 ///
-/// It's drawn from the name, so the same vibscape always gets the same cover and
+/// It's drawn from the name, so the same vibescape always gets the same cover and
 /// a wall of them looks like a set rather than a row of grey boxes.
-struct CustomVibscapeCover: View {
+struct CustomVibescapeCover: View {
     let name: String
     let seed: String
 

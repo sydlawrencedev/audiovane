@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-/// One of ten music genres the band vibscape can present. The integer raw value is
+/// One of ten music genres the band vibescape can present. The integer raw value is
 /// the `uGenre` uniform the band fragment shader switches on, so re-ordering or
 /// renumbering these breaks the shader — add new genres at the end.
 enum Genre: Int, CaseIterable, Identifiable {

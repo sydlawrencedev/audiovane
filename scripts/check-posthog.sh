@@ -20,7 +20,7 @@
 # reading an event back, and it skips unless a personal API key is configured.
 #
 # VisualiserMac/.env is the source of truth for the key (build-app.sh bakes it
-# into Info.plist). Runs as part of release.sh, same as check-vibscapes.sh.
+# into Info.plist). Runs as part of release.sh, same as check-vibescapes.sh.
 set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

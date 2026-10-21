@@ -58,7 +58,7 @@
    *     custom payload, just the CTA to open or download Vibresia.
    *
    *   - `?d=…` is a base64-url payload. Decode the JSON here; if it parses,
-   *     show the vibscape name and the shader source as a preview. The
+   *     show the vibescape name and the shader source as a preview. The
    *     opening dance is the same as for built-ins.
    */
   (function () {
@@ -133,7 +133,7 @@
     var wrap = document.getElementById("shot");
     var canvas = document.getElementById("shot-canvas");
     if (!wrap || !canvas || !window.vibresiaPreview) return;
-    // The canvas carries the vibscape's name, which is from the URL.
+    // The canvas carries the vibescape's name, which is from the URL.
     canvas.setAttribute("aria-label", "“" + payload.name + "”, drawn by Vibresia");
 
     var reduce = window.matchMedia

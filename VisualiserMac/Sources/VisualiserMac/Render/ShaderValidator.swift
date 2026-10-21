@@ -1,6 +1,6 @@
 import Foundation
 
-/// What went wrong with a custom vibscape, in words a person can act on.
+/// What went wrong with a custom vibescape, in words a person can act on.
 ///
 /// The OpenGL compiler's messages are precise and close to unreadable: they
 /// name internal symbols and point at lines in a program the user has never
@@ -24,7 +24,6 @@ struct ShaderProblem: Error {
         case notReady
     }
 
-
     var kind: Kind
     /// What to do about it, in one sentence.
     var message: String
@@ -36,7 +35,7 @@ struct ShaderProblem: Error {
 
     var title: String {
         switch kind {
-        case .missingRenderFunction: return "There's no vibscape in there yet"
+        case .missingRenderFunction: return "There's no vibescape in there yet"
         case .wroteMainInstead: return "This is written the wrong way round"
         case .hasVersionDirective: return "Remove the #version line"
         case .empty: return "There's nothing to try"
@@ -47,10 +46,30 @@ struct ShaderProblem: Error {
     }
 }
 
-/// Checks a candidate vibscape before it's saved, and explains the failure.
+/// A stable name for the kind of failure, for grouping in analytics.
+///
+/// Deliberately not derived from `message`: that is written to read well as a
+/// sentence for whoever hit the error, and would change the moment the wording
+/// is improved. `driverLog` is never sent anywhere — it can quote the person's
+/// own shader source straight back, which is theirs to keep.
+extension ShaderProblem {
+    var analyticsKindName: String {
+        switch kind {
+        case .missingRenderFunction: return "missingRenderFunction"
+        case .wroteMainInstead: return "wroteMainInstead"
+        case .hasVersionDirective: return "hasVersionDirective"
+        case .empty: return "empty"
+        case .compileFailed: return "compileFailed"
+        case .wrongOutput: return "wrongOutput"
+        case .notReady: return "notReady"
+        }
+    }
+}
+
+/// Checks a candidate vibescape before it's saved, and explains the failure.
 enum ShaderValidator {
 
-    /// The function every vibscape must define. Matched loosely enough to allow
+    /// The function every vibescape must define. Matched loosely enough to allow
     /// a line break or a space between the return type and the name.
     private static let renderSignature = ##"vec3\s+render\s*\(\s*vec2\s+\w+\s*,\s*float\s+\w+\s*\)"##
 
@@ -66,10 +85,10 @@ enum ShaderValidator {
         guard !trimmed.isEmpty else {
             return .failed(ShaderProblem(
                 kind: .empty,
-                message: "There's nothing in the box yet. Paste in a vibscape, or start from the example."))
+                message: "There's nothing in the box yet. Paste in a vibescape, or start from the example."))
         }
 
-        // The user pasted a whole standalone shader rather than a vibscape body.
+        // The user pasted a whole standalone shader rather than a vibescape body.
         // The prelude already supplies the version line, the uniforms and
         // main(), so all of it has to come out.
         if trimmed.contains("#version") {
@@ -80,7 +99,7 @@ enum ShaderValidator {
         if trimmed.contains("#include") {
             return .failed(ShaderProblem(
                 kind: .hasVersionDirective,
-                message: "Delete any line starting with #include. Vibresia already provides everything a vibscape needs."))
+                message: "Delete any line starting with #include. Vibresia already provides everything a vibescape needs."))
         }
         // main() is the standard entry point, so a first attempt very often
         // writes one. It's the single most likely mistake, so it's worth its
@@ -88,7 +107,7 @@ enum ShaderValidator {
         if trimmed.range(of: ##"void\s+main\s*\("##, options: .regularExpression) != nil {
             return .failed(ShaderProblem(
                 kind: .wroteMainInstead,
-                message: "Vibscapes use a function called render, not main. Change \"void main()\" to \"vec3 render(vec2 p, float t)\", and at the end return your colour instead of assigning to fragColor."))
+                message: "Vibescapes use a function called render, not main. Change \"void main()\" to \"vec3 render(vec2 p, float t)\", and at the end return your colour instead of assigning to fragColor."))
         }
 
         let withoutComments = stripComments(trimmed)
@@ -101,7 +120,7 @@ enum ShaderValidator {
         if withoutComments.contains("fragColor") || withoutComments.contains("gl_FragColor") {
             return .failed(ShaderProblem(
                 kind: .wrongOutput,
-                message: "You wrote to fragColor, but a vibscape's colour is what render() returns. Take the fragColor line out and return the colour instead — `return vec3(1.0, 0.0, 0.5);` for red, green and blue."))
+                message: "You wrote to fragColor, but a vibescape's colour is what render() returns. Take the fragColor line out and return the colour instead — `return vec3(1.0, 0.0, 0.5);` for red, green and blue."))
         }
 
         if withoutComments.range(of: renderSignature, options: .regularExpression) == nil {
@@ -114,7 +133,7 @@ enum ShaderValidator {
             }
             return .failed(ShaderProblem(
                 kind: .missingRenderFunction,
-                message: "A vibscape needs a function called render that returns a colour. Copy the example above to start from a working one."))
+                message: "A vibescape needs a function called render that returns a colour. Copy the example above to start from a working one."))
         }
         return .ok
     }

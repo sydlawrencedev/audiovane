@@ -98,9 +98,9 @@ struct PreviewImage {
 
 // MARK: - Drawing
 
-/// Draws vibscapes off-screen, outside the app's window.
+/// Draws vibescapes off-screen, outside the app's window.
 ///
-/// The app already knows how to draw a vibscape, but it draws it into a window
+/// The app already knows how to draw a vibescape, but it draws it into a window
 /// with whatever the music happens to be doing at the time. That is the right
 /// thing for the app and the wrong thing for someone writing one: to ask "what
 /// does this look like with the bass at 0.8" you need to choose the uniforms and
@@ -108,9 +108,9 @@ struct PreviewImage {
 ///
 /// So this does the drawing with the uniforms handed to it, applies the same
 /// palette grade the app applies, and hands back a picture. It runs against
-/// `VibscapeCompiler`'s standalone context, which is why the MCP server needs no
+/// `VibescapeCompiler`'s standalone context, which is why the MCP server needs no
 /// window and can't freeze the app if a shader hangs the GPU.
-enum VibscapeRender {
+enum VibescapeRender {
 
     // MARK: Cached GL objects
 
@@ -126,7 +126,7 @@ enum VibscapeRender {
     private static var gradeProgram: GLuint = 0
     private static var quadVAO: GLuint = 0
 
-    /// Scene target: where the vibscape draws.
+    /// Scene target: where the vibescape draws.
     private static var sceneFBO: GLuint = 0
     private static var sceneTex: GLuint = 0
     private static var sceneSize = (width: 0, height: 0)
@@ -142,10 +142,10 @@ enum VibscapeRender {
 
     // MARK: - Entry point
 
-    /// Renders a vibscape and returns the picture.
+    /// Renders a vibescape and returns the picture.
     ///
     /// Broken code comes back as a `ShaderProblem`, in words, rather than a
-    /// picture of nothing — but a vibscape that compiles and then draws badly
+    /// picture of nothing — but a vibescape that compiles and then draws badly
     /// still gets its picture, because seeing the wrong thing is how you work
     /// out that it's wrong.
     static func render(body: String, options: PreviewOptions) -> Result<PreviewImage, ShaderProblem> {
@@ -157,36 +157,36 @@ enum VibscapeRender {
         }
         return renderSource(FunShaders.customSource(body: body),
                             options: options,
-                            label: "vibscape-preview")
+                            label: "vibescape-preview")
     }
 
-    /// Renders one of the built-in vibscapes, for the gallery.
+    /// Renders one of the built-in vibescapes, for the gallery.
     ///
     /// The built-ins aren't `render()` bodies — each writes its own `main()` —
     /// so they take a different path through the same machinery. They're drawn
     /// ungraded: some of them opt out of the grade anyway, and the point here
-    /// is to show what a vibscape looks like, not what the current palette does
+    /// is to show what a vibescape looks like, not what the current palette does
     /// to it.
-    static func render(builtin vibscape: Vibscape, options: PreviewOptions) -> Result<PreviewImage, ShaderProblem> {
-        guard let entry = FunShaders.modes.first(where: { $0.0 == vibscape }) else {
+    static func render(builtin vibescape: Vibescape, options: PreviewOptions) -> Result<PreviewImage, ShaderProblem> {
+        guard let entry = FunShaders.modes.first(where: { $0.0 == vibescape }) else {
             return .failure(ShaderProblem(
                 kind: .compileFailed,
-                message: "There isn't a shader for \(vibscape.displayName)."))
+                message: "There isn't a shader for \(vibescape.displayName)."))
         }
         var ungraded = options
         ungraded.grade = false
         return renderSource(FunShaders.prelude + entry.1,
                             options: ungraded,
-                            label: "builtin-\(vibscape.rawValue)")
+                            label: "builtin-\(vibescape.rawValue)")
     }
 
     /// The shared pipeline: compile once, draw every frame, grade, compose.
     private static func renderSource(_ source: String, options: PreviewOptions,
                                       label: String) -> Result<PreviewImage, ShaderProblem> {
-        guard VibscapeCompiler.ensureContext() else {
+        guard VibescapeCompiler.ensureContext() else {
             return .failure(ShaderProblem(
                 kind: .compileFailed,
-                message: "This Mac wouldn't give the graphics system a context, so the vibscape couldn't be drawn."))
+                message: "This Mac wouldn't give the graphics system a context, so the vibescape couldn't be drawn."))
         }
 
         let width = max(1, min(options.width, 2048))
@@ -266,7 +266,7 @@ enum VibscapeRender {
     private static func cachedProgram(source: String, label: String) -> Result<GLuint, ShaderProblem> {
         if let cached = programCache[source] { return .success(cached) }
 
-        let built = VibscapeCompiler.buildProgram(vs: Shaders.liquidVS, fs: source, label: label)
+        let built = VibescapeCompiler.buildProgram(vs: Shaders.liquidVS, fs: source, label: label)
         guard built.ok else {
             return .failure(ShaderValidator.explain(built.log,
                                                     preludeLines: FunShaders.customPreludeLineCount))
@@ -284,7 +284,7 @@ enum VibscapeRender {
 
     private static func buildGradeIfNeeded() -> Bool {
         if gradeProgram != 0 { return true }
-        let built = VibscapeCompiler.buildProgram(vs: Shaders.gradeVS, fs: Shaders.gradeFS, label: "preview-grade")
+        let built = VibescapeCompiler.buildProgram(vs: Shaders.gradeVS, fs: Shaders.gradeFS, label: "preview-grade")
         guard built.ok else { return false }
         gradeProgram = built.program
         return true
@@ -313,7 +313,7 @@ enum VibscapeRender {
                                   width: Int, height: Int) -> CGImage? {
         guard ensureTarget(&sceneFBO, &sceneTex, &sceneSize, width, height) else { return nil }
 
-        // Pass one: the vibscape itself, into the scene target.
+        // Pass one: the vibescape itself, into the scene target.
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), sceneFBO)
         glViewport(0, 0, GLsizei(width), GLsizei(height))
         glClearColor(0, 0, 0, 1)
@@ -327,7 +327,7 @@ enum VibscapeRender {
         glBindVertexArray(0)
 
         // Pass two: the palette grade, so the picture matches what the app puts
-        // on screen. A user's vibscape is graded like ribbons or silk, so
+        // on screen. A user's vibescape is graded like ribbons or silk, so
         // skipping this is how you end up picking cyan and getting teal.
         guard ensureTarget(&outFBO, &outTex, &outSize, width, height) else { return nil }
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), outFBO)
@@ -574,7 +574,7 @@ private struct UniformValues {
 
     /// Reads the music if the app is running, otherwise stands in for it.
     ///
-    /// The stand-in is deliberately busy — a vibscape previewed against silence
+    /// The stand-in is deliberately busy — a vibescape previewed against silence
     /// looks broken even when it isn't, and the whole complaint is about not
     /// being able to see what you wrote.
     static func resolve(overrides: UniformOverrides) -> UniformValues {
@@ -631,7 +631,7 @@ private struct UniformValues {
 
         // uActive is forced on unless the caller says otherwise, and this is
         // not a convenience: it is the difference between a usable preview and
-        // a black rectangle. Every vibscape multiplies by uActive at the end,
+        // a black rectangle. Every vibescape multiplies by uActive at the end,
         // and uActive is 0 whenever the music isn't playing — which is most of
         // the time, and always true when the app is running but waiting on a
         // permission, or the room is quiet, or nothing is playing. Previewing
@@ -639,7 +639,7 @@ private struct UniformValues {
         // situation where you're trying to write one.
         //
         // The same reasoning applies to presence and idle, which describe
-        // whether there's music at all. A preview is a picture of a vibscape
+        // whether there's music at all. A preview is a picture of a vibescape
         // working, not of the room it happens to be in. Pass uActive: 0 to see
         // what it looks like when it isn't.
         if overrides.active == nil { v.active = 1 }
@@ -677,7 +677,7 @@ private struct UniformValues {
     /// Feeds the shader. Uniforms the shader doesn't use come back as -1, and
     /// `glUniform` ignores those, so there's no need to check each one.
     fileprivate func bind(to program: GLuint, width: Int, height: Int, palette: Palette?) {
-        func loc(_ name: String) -> GLint { VibscapeRender.location(program, name) }
+        func loc(_ name: String) -> GLint { VibescapeRender.location(program, name) }
 
         glUniform1f(loc("uTime"), time)
         glUniform1f(loc("uBass"), bass)

@@ -1,5 +1,5 @@
 #!/usr/bin/env swift
-// Renders per-vibscape share graphics for the OG image metadata on
+// Renders per-vibescape share graphics for the OG image metadata on
 // `site/share/<slug>.html`. Takes the existing `site/media/modes/<slug>.jpg`
 // and lays it down on a 1200x630 canvas with the Vibresia mark top-left and
 // "Made with ❤ by Minith Labs" bottom-right.
@@ -7,8 +7,8 @@
 // Run from the repo root:
 //   swift scripts/build-share-graphics.swift
 //
-// Idempotent: existing files are overwritten. Re-run any time a vibscape
-// image changes, or after adding a new vibscape to the lookup table below.
+// Idempotent: existing files are overwritten. Re-run any time a vibescape
+// image changes, or after adding a new vibescape to the lookup table below.
 import AppKit
 import Foundation
 
@@ -17,7 +17,7 @@ let modesDir = root.appendingPathComponent("site/media/modes")
 let outDir = root.appendingPathComponent("site/share")
 try? FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
 
-// One entry per built-in vibscape. Slug is what `VibscapeEntry.id.slug`
+// One entry per built-in vibescape. Slug is what `VibescapeEntry.id.slug`
 // produces on the app side, so the share URL `vibresia.com/share/<slug>`
 // round-trips cleanly.
 struct Spec {
@@ -100,7 +100,7 @@ func render(_ spec: Spec) -> Data {
         options: [.drawsBeforeStartLocation, .drawsAfterEndLocation]
     )
 
-    // 2. Vibscape frame in the middle of the canvas, 16:9. Vertical
+    // 2. Vibescape frame in the middle of the canvas, 16:9. Vertical
     //    extents in flipped coords: image "bottom" is `imgBase`,
     //    image "top" is `imgBase + imgH`. A dark frame on either side
     //    keeps the eye on the picture.
@@ -118,9 +118,9 @@ func render(_ spec: Spec) -> Data {
     ctx.stroke(imgRect)
     modeImage.draw(in: imgRect)
 
-    // 3. Subtitle — small uppercase "A vibscape by…" between the title
+    // 3. Subtitle — small uppercase "A vibescape by…" between the title
     //    and the image, in flipped coords that's just above `imgBase + imgH`.
-    let subtitleText = "A VIBSCAPE BY \(spec.author.uppercased())"
+    let subtitleText = "A VIBESCAPE BY \(spec.author.uppercased())"
     let subAttrs: [NSAttributedString.Key: Any] = [
         .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .semibold),
         .foregroundColor: muted,

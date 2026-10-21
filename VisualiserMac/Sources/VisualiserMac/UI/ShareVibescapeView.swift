@@ -2,25 +2,25 @@ import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
 
-/// The sheet `ShareVibscapeButton` opens. Shows the share URL for the
-/// currently-active vibscape and routes the three sharing actions a person
+/// The sheet `ShareVibescapeButton` opens. Shows the share URL for the
+/// currently-active vibescape and routes the three sharing actions a person
 /// actually reaches for: copy the link, drop it into a chat/email via the
 /// system share sheet, or save a PNG preview image to attach to a service
 /// that doesn't render link previews.
 ///
-/// Built-in vibscapes get a short, readable URL (`vibresia.com/share/<slug>`).
-/// Custom vibscapes carry the shader in the URL fragment as base64; the
+/// Built-in vibescapes get a short, readable URL (`vibresia.com/share/<slug>`).
+/// Custom vibescapes carry the shader in the URL fragment as base64; the
 /// page on the other end (`site/share?d=…`) decodes the payload and gives
-/// the recipient a working vibscape without any backend storage.
+/// the recipient a working vibescape without any backend storage.
 ///
 /// The view's input is captured once when the sheet is presented — the URL
-/// and preview render against the active vibscape at that moment. Switch
-/// vibscapes first and then open the share sheet; switching underneath it
+/// and preview render against the active vibescape at that moment. Switch
+/// vibescapes first and then open the share sheet; switching underneath it
 /// would look like the URL magically updates mid-share.
-struct ShareVibscapeView: View {
+struct ShareVibescapeView: View {
     @EnvironmentObject var app: AppState
     @Environment(\.dismiss) private var dismiss
-    @State private var vibscape: VibscapeID
+    @State private var vibescape: VibescapeID
     @State private var copied: Bool = false
     @State private var isSharing: Bool = false
     @State private var savingPreview: Bool = false
@@ -28,33 +28,33 @@ struct ShareVibscapeView: View {
     @State private var hoverShare = false
     @State private var hoverSave = false
 
-    init(vibscape: VibscapeID) {
-        _vibscape = State(initialValue: vibscape)
+    init(vibescape: VibescapeID) {
+        _vibescape = State(initialValue: vibescape)
     }
 
     /// The URL the recipient gets. Recomputed by SwiftUI on each render,
     /// which is cheap (a couple of `URLComponents` operations) and keeps
-    /// the URL box in sync if the active vibscape ever changes.
+    /// the URL box in sync if the active vibescape ever changes.
     private var shareURL: URL {
-        getShareURL(for: vibscape)
+        getShareURL(for: vibescape)
     }
 
     /// A short, human-readable summary of what the URL contains, used as
     /// the pitch on the system share sheet and for analytics. Title-cased
-    /// so the share doesn't read like the vibscape name is shouting.
+    /// so the share doesn't read like the vibescape name is shouting.
     private var pitch: String {
-        switch vibscape {
+        switch vibescape {
         case .builtin(let m):
             let name = titleCased(m.displayName)
             return "Try this Vibresia vibescape — \(name) — free, no account."
         case .custom(let id):
-            let name = app.customVibscape(id: id)?.name ?? "custom"
+            let name = app.customVibescape(id: id)?.name ?? "custom"
             return "Try this Vibresia vibescape — \(name) — free, no account."
         }
     }
 
     private func titleCased(_ s: String) -> String {
-        // Vibscape.displayName returns upper-case titles ("RIBBONS"); "as-is"
+        // Vibescape.displayName returns upper-case titles ("RIBBONS"); "as-is"
         // in a chat pitch reads like shouting, so title-case for messages.
         s.lowercased().capitalized
     }
@@ -151,7 +151,7 @@ struct ShareVibscapeView: View {
         Button {
             isSharing = true
             Task { await Analytics.shared.track("share_sheet_opened", [
-                "kind": vibscape.isCustom ? "custom" : "builtin"
+                "kind": vibescape.isCustom ? "custom" : "builtin"
             ]) }
         } label: {
             Text("Share…")
@@ -168,7 +168,7 @@ struct ShareVibscapeView: View {
         }
         .buttonStyle(.plain)
         .onHover { hoverShare = $0 }
-        .background(VibscapeSharePickerAnchor(isPresented: $isSharing, items: [pitch, shareURL]))
+        .background(VibescapeSharePickerAnchor(isPresented: $isSharing, items: [pitch, shareURL]))
     }
     private var savePreviewButton: some View {
         Button {
@@ -206,7 +206,7 @@ struct ShareVibscapeView: View {
         NSPasteboard.general.setString(shareURL.absoluteString, forType: .string)
         copied = true
         Task { await Analytics.shared.track("share_link_copied", [
-            "kind": vibscape.isCustom ? "custom" : "builtin"
+            "kind": vibescape.isCustom ? "custom" : "builtin"
         ]) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
     }
@@ -220,47 +220,47 @@ struct ShareVibscapeView: View {
         let downloads = FileManager.default.urls(for: .downloadsDirectory,
                                                  in: .userDomainMask).first
             ?? URL(fileURLWithPath: NSHomeDirectory() + "/Downloads")
-        let url = downloads.appendingPathComponent("vibscape-\(slug).png")
+        let url = downloads.appendingPathComponent("vibescape-\(slug).png")
         // Render against the same renderer that powers the live display —
         // 1280x720 is the existing snapshot size and a reasonable attachment
         // for chats that don't show link previews.
         DispatchQueue.global(qos: .userInitiated).async {
             app.renderer.renderToPNG(width: 1280, height: 720,
-                                     mode: vibscape, frames: 60,
+                                     mode: vibescape, frames: 60,
                                      path: url.path)
             DispatchQueue.main.async {
                 savingPreview = false
                 savedPreviewPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 Task { await Analytics.shared.track("share_preview_saved", [
-                    "kind": vibscape.isCustom ? "custom" : "builtin"
+                    "kind": vibescape.isCustom ? "custom" : "builtin"
                 ]) }
             }
         }
     }
 
     private func previewFilenameSlug() -> String {
-        switch vibscape {
+        switch vibescape {
         case .builtin(let m): return m.rawValue
         case .custom(let id): return id
         }
     }
 
     private var secondaryTitle: String {
-        switch vibscape {
+        switch vibescape {
         case .builtin(let m):
             return m == .autoScan
                 ? "Auto Scan is cycling — share one specific vibescape instead."
-                : "Made with ❤ by \(VibscapeMetadata.author) — share it with someone."
+                : "Made with ❤ by \(VibescapeMetadata.author) — share it with someone."
         case .custom(let id):
-            let m = app.customVibscape(id: id)
+            let m = app.customVibescape(id: id)
             let author = m?.author.isEmpty == false ? m!.author : "Minith Labs"
             return "Made with ❤ by \(author) — share it with someone."
         }
     }
 
     private var recipientHint: String {
-        switch vibscape {
+        switch vibescape {
         case .builtin:
             return "Anyone who clicks it sees a page with the vibescape preview and an “Open in Vibresia” button — works whether they already have the app or not."
         case .custom:
@@ -270,7 +270,7 @@ struct ShareVibscapeView: View {
 
     // MARK: - URL construction
 
-    private func getShareURL(for id: VibscapeID) -> URL {
+    private func getShareURL(for id: VibescapeID) -> URL {
         switch id {
         case .builtin(let mode):
             // Auto Scan isn't itself a stable vibescape — share the
@@ -281,7 +281,7 @@ struct ShareVibscapeView: View {
                 : mode
             return URL(string: "https://vibresia.com/share/\(stable.rawValue)")!
         case .custom(let id):
-            guard let mode = app.customVibscape(id: id) else {
+            guard let mode = app.customVibescape(id: id) else {
                 return URL(string: "https://vibresia.com/share")!
             }
             let encoded = ShareImporter.encodePayload(mode)
@@ -298,7 +298,7 @@ struct ShareVibscapeView: View {
 /// vibescape-specific copy (kept separate from the private one in
 /// `AboutButton.swift` so the share feature doesn't have to widen the
 /// credit popover's API surface to reach in).
-struct VibscapeSharePickerAnchor: NSViewRepresentable {
+struct VibescapeSharePickerAnchor: NSViewRepresentable {
     @Binding var isPresented: Bool
     let items: [Any]
 

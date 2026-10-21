@@ -3,10 +3,10 @@ import simd
 
 /// The uniform values the app is drawing with, right now.
 ///
-/// These are the numbers a vibscape actually gets: the levels straight off the
+/// These are the numbers a vibescape actually gets: the levels straight off the
 /// analyser, plus the clocks and smoothed values the renderer derives from them
 /// (`uBeats`, `uScroll`, `uLevelSmooth`, `uPresence` and the rest). Without this
-/// someone writing a vibscape has to guess the range of `uBeatStrength`, and
+/// someone writing a vibescape has to guess the range of `uBeatStrength`, and
 /// guess low — the visible effect of a wrong coefficient is "it doesn't pulse",
 /// which looks identical to "it's not reacting to the music".
 ///
@@ -39,7 +39,7 @@ final class LiveUniforms {
         var beatsPerSecond: Float = 2
         var bpm: Double = 0
         var palette: String = "NEON"
-        var vibscape: String = ""
+        var vibescape: String = ""
         var rms: Float = 0
         var at: Date = Date()
 
@@ -82,7 +82,7 @@ final class LiveUniforms {
             bpm = state["bpm"] as? Double ?? 0
             rms = f("rms")
             palette = state["palette"] as? String ?? "NEON"
-            vibscape = state["vibscape"] as? String ?? ""
+            vibescape = state["vibescape"] as? String ?? ""
             at = Date(timeIntervalSince1970: state["at"] as? Double ?? 0)
         }
     }
@@ -158,7 +158,7 @@ final class LiveUniforms {
             "bpm": value.bpm,
             "rms": value.rms,
             "palette": value.palette,
-            "vibscape": value.vibscape,
+            "vibescape": value.vibescape,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: state) else { return }
         // Written to a temporary file and moved into place, so a reader never

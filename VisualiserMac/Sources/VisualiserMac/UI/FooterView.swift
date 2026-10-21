@@ -8,12 +8,12 @@ struct FooterView: View {
         let _ = app.audio.displayTick
         let snap = app.audio.snapshot
         HStack(spacing: 0) {
-            // While auto-scanning, report the vibscape actually on screen
+            // While auto-scanning, report the vibescape actually on screen
             // rather than the "AUTO SCAN" that was selected.
-            FooterCell(key: "VIBSCAPE", value: app.activeVibscape.isAutoScan
+            FooterCell(key: "VIBESCAPE", value: app.activeVibescape.isAutoScan
                        ? app.displayName(for: app.scanTarget)
-                       : app.displayName(for: app.activeVibscape))
-            // The vibscape is the one value someone watching actually wants.
+                       : app.displayName(for: app.activeVibescape))
+            // The vibescape is the one value someone watching actually wants.
             // The other five are diagnostics — ours, not theirs — so they're
             // the first thing to go when the window narrows.
             if app.layout.showsFooterNumbers {

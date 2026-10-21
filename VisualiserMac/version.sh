@@ -53,7 +53,7 @@ VERSION="$major.$month.$day$build"
 if [ "${1:-}" = "--write" ]; then
     printf '%s\n' "$VERSION" > "$SCRIPT_DIR/VERSION"
     # The landing page states the version in its structured data, and
-    # scripts/check-vibscapes.sh fails the release if the two drift apart.
+    # scripts/check-vibescapes.sh fails the release if the two drift apart.
     site="$SCRIPT_DIR/../site/index.html"
     if [ -f "$site" ]; then
         python3 - "$site" "$VERSION" <<'PY'
