@@ -27,6 +27,7 @@ Run from the repo root:
 import json
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -109,13 +110,12 @@ def render(slug: str, title: str, desc: str) -> str:
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
 <link rel="stylesheet" href="/share/share-page.css">
+<link rel="stylesheet" href="/chrome.css">
 </head>
 <body>
 <div class="wrap">
-  <a class="brand" href="/">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    VIBRESIA
-  </a>
+  <!-- chrome:nav -->
+  <!-- /chrome:nav -->
 
   <section class="hero">
     <h1>{safe_title}.</h1>
@@ -143,7 +143,8 @@ def render(slug: str, title: str, desc: str) -> str:
 
   <p class="share-cta"><small>Press <strong>Open in Vibresia</strong> and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small></p>
 
-  <p class="credit">Made with ❤ by Minith Labs</p>
+  <!-- chrome:footer -->
+  <!-- /chrome:footer -->
 </div>
 
 <script src="/analytics.js" defer></script>
@@ -183,6 +184,12 @@ def main() -> int:
     print(f"[share-pages] wrote {manifest_path.relative_to(ROOT)}")
 
     print(f"[share-pages] {len(cards)} vibescapes generated")
+
+    # Fill in the shared navbar and footer straight away. Emitting the markers
+    # alone would leave nineteen pages that pass --check and show nothing.
+    injector = ROOT / "scripts" / "inject-chrome.py"
+    if injector.exists():
+        subprocess.run([sys.executable, str(injector), str(ROOT)], check=False)
     return 0
 
 

@@ -30,13 +30,26 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
 <link rel="stylesheet" href="/share/share-page.css">
+<link rel="stylesheet" href="/chrome.css">
 </head>
 <body>
 <div class="wrap">
-  <a class="brand" href="/">
-    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
-    VIBRESIA
-  </a>
+  <!-- chrome:nav -->
+  <header class="site-header">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      VIBRESIA
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/#vibescapes">Vibescapes</a>
+      <a href="/#make">Make your own</a>
+      <a href="/agents">Agents</a>
+      <a href="/#install">Install</a>
+      <a href="/#changelog">Changelog</a>
+      <a href="https://github.com/sydlawrencedev/vibresia">GitHub</a>
+    </nav>
+  </header>
+  <!-- /chrome:nav -->
 
   <section class="hero">
     <h1>Nyan Cat.</h1>
@@ -64,7 +77,12 @@
 
   <p class="share-cta"><small>Press <strong>Open in Vibresia</strong> and the app will switch to Nyan Cat. You’ll need Vibresia on your Mac — free, no account.</small></p>
 
-  <p class="credit">Made with ❤ by Minith Labs</p>
+  <!-- chrome:footer -->
+  <footer class="site-footer">
+    <p>Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
+    <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+  </footer>
+  <!-- /chrome:footer -->
 </div>
 
 <script src="/analytics.js" defer></script>

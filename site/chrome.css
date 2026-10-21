@@ -1,0 +1,89 @@
+/* The navbar and footer, shared by every page on the site.
+ *
+ * These rules used to live in the inline <style> of index.html, then again
+ * slightly differently in agents.html, and a third time on the share pages —
+ * three definitions of `.brand`, two of `header`, two of `footer`. One
+ * definition now, injected into every page by scripts/inject-chrome.py.
+ *
+ * Everything is scoped under .site-header / .site-footer rather than styling
+ * bare `header` and `footer` elements. The share pages bring their own
+ * stylesheet with their own opinions about those, and a bare-element rule here
+ * would win or lose depending on load order — which is the kind of thing that
+ * looks fine until one page's stylesheet is reordered.
+ *
+ * Only the custom properties the pages already agree on are used, so this
+ * renders correctly on the homepage, the agents page and the share pages
+ * without any of them having to know this file exists. */
+
+.site-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 22px 0;
+}
+
+.site-header .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.site-header .brand svg {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  filter: drop-shadow(0 0 8px rgba(255, 43, 214, 0.7));
+}
+
+.site-nav {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+}
+
+.site-nav a {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  color: var(--text);
+}
+
+/* The homepage hides its nav on narrow screens, which left a page with no way
+ * to reach another page at all. The footer carries the same links, so it is
+ * the thing that has to survive the squeeze. */
+.site-footer {
+  border-top: 1px solid var(--line);
+  margin-top: 48px;
+  padding: 26px 0 40px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.site-footer a { color: var(--muted); }
+.site-footer a:hover { color: var(--text); }
+
+.site-footer p { margin: 0 0 8px; }
+
+/* The analytics opt-out sits in the footer because the footer is the one piece
+ * of chrome every page shares, so the control that stops measurement is never
+ * missing from a page that is being measured. */
+.site-footer .privacy {
+  display: inline-block;
+  max-width: 640px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+@media (max-width: 640px) {
+  .site-nav { font-size: 13px; gap: 16px; }
+}

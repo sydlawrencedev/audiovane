@@ -32,20 +32,6 @@ code, .mono {
 
 .wrap { max-width: 720px; margin: 0 auto; padding: 28px 24px 80px; }
 
-.brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-decoration: none;
-  color: var(--text);
-}
-.brand svg {
-  width: 30px; height: 30px;
-  filter: drop-shadow(0 0 8px rgba(255, 43, 214, 0.7));
-}
-
 .hero {
   margin: 56px 0 28px;
   text-align: center;

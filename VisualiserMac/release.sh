@@ -2,8 +2,9 @@
 # Publishes a release of Vibresia:
 #   1. checks the landing page lists every visualiser mode,
 #   2. checks the landing page and the app report to the same PostHog project,
-#   3. checks no Discord webhook URL has been committed, and that the share
-#      page's copy of the shaders hasn't drifted from the app's,
+#   3. checks no Discord webhook URL has been committed, that the share
+#      page's copy of the shaders hasn't drifted from the app's, and that
+#      every page still carries the shared navbar and footer,
 #   4. builds the release app and zips it as Vibresia.zip,
 #   5. creates GitHub release v$VERSION with the zip attached.
 # The installer and the in-app update checker always fetch the latest
@@ -29,6 +30,10 @@ TAG="v$VERSION"
 # The share page embeds a copy of the app's shaders, because a browser can't
 # reach the app to ask for them. That copy has to move with the original.
 ../scripts/check-preview-glsl.py
+# Every page's navbar and footer come from site/_partials. Nothing enforces
+# that by itself: three definitions of .brand is survivable, three that drift
+# apart quietly is not.
+python3 ../scripts/inject-chrome.py --check "$(pwd)/.."
 
 if gh release view "$TAG" -R "$REPO" >/dev/null 2>&1; then
     echo "Release $TAG already exists — build again to get a new one." >&2

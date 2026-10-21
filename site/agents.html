@@ -20,6 +20,8 @@
 <meta name="twitter:title" content="Vibe with your AI — Vibresia">
 <meta name="twitter:description" content="Point any AI assistant at Vibresia and it can write a vibescape, check it compiles, look at the result and try again.">
 <meta name="twitter:image" content="https://vibresia.com/media/share.jpg">
+<meta name="posthog-key" content="phc_pzYyxiM6u2pYa6FbCkRY8HPudHDopu5LrTwnoamHaeg2">
+<meta name="posthog-host" content="https://us.i.posthog.com">
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="/media/share.jpg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -38,14 +40,6 @@
   code { font-family: "JetBrains Mono", ui-monospace, monospace; }
   .wrap { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
 
-  header { display: flex; align-items: center; justify-content: space-between; gap: 20px;
-    padding: 22px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
-  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: 3px;
-    font-size: 15px; color: var(--text); text-decoration: none; }
-  .brand svg { width: 26px; height: 26px; }
-  nav { display: flex; gap: 22px; flex-wrap: wrap; }
-  nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
-  nav a:hover { color: var(--text); }
 
   main { padding: 48px 0 40px; }
   .eyebrow { font: 700 12px/1 "JetBrains Mono", ui-monospace, monospace; letter-spacing: 3.4px;
@@ -85,23 +79,27 @@
   th { color: var(--muted); font: 600 12px "JetBrains Mono", monospace; letter-spacing: 1px; text-transform: uppercase; }
   td code { color: var(--cyan); font-size: 13.5px; }
 
-  footer { border-top: 1px solid var(--line); margin-top: 48px; padding: 26px 0 40px; color: var(--muted); font-size: 14px; }
 </style>
+<link rel="stylesheet" href="/chrome.css">
 </head>
 <body>
 <div class="wrap">
-  <header>
+  <!-- chrome:nav -->
+  <header class="site-header">
     <a class="brand" href="/">
       <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M3 16 L7 16 L9 8 L13 24 L17 12 L21 20 L25 16 L29 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
       VIBRESIA
     </a>
-    <nav>
+    <nav class="site-nav" aria-label="Main">
       <a href="/#vibescapes">Vibescapes</a>
       <a href="/#make">Make your own</a>
+      <a href="/agents">Agents</a>
       <a href="/#install">Install</a>
-      <a href="/">Home</a>
+      <a href="/#changelog">Changelog</a>
+      <a href="https://github.com/sydlawrencedev/vibresia">GitHub</a>
     </nav>
   </header>
+  <!-- /chrome:nav -->
 
   <main>
     <p class="eyebrow">Vibe with your AI</p>
@@ -241,10 +239,14 @@ mcp-server-config:
     <p>Prefer to write it yourself? In the app, <b>View All → + Custom Vibescape</b> takes the same route: paste the code, press <b>Test</b>, and you'll see the picture before you keep it.</p>
   </main>
 
-  <footer>
-    <a href="/">Vibresia</a> — your music, your world. Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a>
+  <!-- chrome:footer -->
+  <footer class="site-footer">
+    <p>Made with ❤️ by <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
+    <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
   </footer>
+  <!-- /chrome:footer -->
 </div>
+<script src="/analytics.js" defer></script>
 <script>
   document.querySelectorAll("[data-copy]").forEach(function (b) {
     b.addEventListener("click", function () {
