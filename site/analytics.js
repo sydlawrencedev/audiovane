@@ -163,7 +163,12 @@
 
   // --- Events -----------------------------------------------------------
 
-  track("page_view", {
+  // PostHog has a pageview of its own — "$pageview" — and it counts as a
+  // visit in the way a custom event does not: it is what the web analytics
+  // built-ins are built on, so the paths, the referrers and the "where did
+  // this person come from" panel all work without anybody having to
+  // reconstruct them from an event with a different name.
+  track("$pageview", {
     $current_url: location.href.split("?")[0],
     $referrer: document.referrer || ""
   });

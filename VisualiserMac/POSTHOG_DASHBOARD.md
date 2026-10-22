@@ -178,10 +178,10 @@ link.
 
 | Insight | Type | Query |
 |---|---|---|
-| Visits | Trends | `count()` where event = `page_view` and `surface` = `web`, interval = day |
-| Unique visitors | Trends | `uniques(distinct_id)` where event = `page_view` |
+| Visits | Trends | `count()` where event = `$pageview` and `surface` = `web`, interval = day |
+| Unique visitors | Trends | `uniques(distinct_id)` where event = `$pageview` |
 | Downloads | Trends | `count()` where event = `download_clicked` |
-| Page → download | Funnel | `page_view` → `download_clicked` |
+| Page → download | Funnel | `$pageview` → `download_clicked` |
 | Install command copied | Bar chart | `count()` where event = `install_command_copied`, breakdown by `properties.command` |
 | Coffee clicks (web) | Trends | `count()` where event = `coffee_clicked`, breakdown by `properties.placement` |
 | Modes people scroll to | Bar chart | `count()` where event = `mode_card_viewed`, breakdown by `properties.target` |
@@ -189,7 +189,7 @@ link.
 
 Two things worth watching together: if `mode_card_viewed` is concentrated on one
 card but downloads aren't, the cards aren't selling what the page is; and if
-`page_view` climbs while `download_clicked` flattens, the CTA or the install
+`$pageview` climbs while `download_clicked` flattens, the CTA or the install
 instructions are where the drop is.
 
 ## Dashboard 4 — "Vibresia — crashes"

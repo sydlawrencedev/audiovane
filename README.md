@@ -77,7 +77,7 @@ MAJOR.MINOR.PATCH
 no cookies — reporting into the same PostHog project as the app, separated by a
 `surface` property (`web` vs `mac_app`).
 
-Events: `page_view`, `demo_played`, `vibescape_card_viewed` (which vibescape cards got
+Events: `$pageview`, `demo_played`, `vibescape_card_viewed` (which vibescape cards got
 scrolled to), `download_clicked`, `install_command_copied` (`ask-ai` or `curl` —
 the interesting split, since they are different audiences), `coffee_clicked`
 (by placement) and `outbound_clicked`.
