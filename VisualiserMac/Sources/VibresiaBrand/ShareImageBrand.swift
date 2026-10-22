@@ -132,16 +132,21 @@ public enum ShareImageBrand {
 
         var baseline = margin + 4
         if let author = title.author {
+            // The author line is the app's credit line: smaller, neutral grey,
+            // and a shade lower, so the name keeps the top of the block. The
+            // gold is for the track artist in the other corner.
             let creditAttrs: [NSAttributedString.Key: Any] = [
-                .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .regular),
-                .foregroundColor: gold,
+                .font: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular),
+                .foregroundColor: NSColor(white: 0.55, alpha: 1),
                 .shadow: textShadow(),
                 .paragraphStyle: truncating(),
             ]
             let credit = NSAttributedString(
                 string: "Made with 💜 by \(author)", attributes: creditAttrs)
-            credit.draw(in: CGRect(x: x, y: baseline, width: maxWidth, height: 40))
-            baseline += credit.size().height + 6
+            credit.draw(in: CGRect(x: x, y: margin + 1, width: maxWidth, height: 40))
+            // The name's place is fixed, so that the credit line can be
+            // resized without moving it.
+            baseline = margin + 29
         }
 
         let nameAttrs: [NSAttributedString.Key: Any] = [
