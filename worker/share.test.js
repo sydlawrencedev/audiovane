@@ -211,7 +211,11 @@ test("a share comes back with a short URL on this domain", async () => {
 
 test("a payload that is not a payload is refused", async () => {
   const { env } = makeEnv();
-  for (const payload of ["", "not base64!", "x".repeat(9000), "../../etc/passwd"]) {
+  // The last one is longer than the site will hold. It used to be nine
+  // thousand characters, because the payload used to travel in the query
+  // string of the link; the short link stores it instead, so there is room
+  // for twice that.
+  for (const payload of ["", "not base64!", "x".repeat(20000), "../../etc/passwd"]) {
     // The rate limiter runs before the validation, so a burst of rubbish
     // still counts against the budget — that is the point of it. Reset
     // between cases so this is testing the validation and not the limiter.

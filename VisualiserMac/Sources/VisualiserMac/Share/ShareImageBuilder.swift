@@ -19,13 +19,14 @@ import VibresiaBrand
 enum ShareImageBuilder {
     /// The share picture, as JPEG data.
     static func jpeg(renderer: OpenGLRenderer, mode: VibescapeID,
-                      width: Int, height: Int, time: Double, author: String) async -> Data? {
+                      width: Int, height: Int, time: Double, author: String,
+                      maxBytes: Int = ShareLinkStore.maxImageBytes) async -> Data? {
         guard let image = await stillImage(renderer: renderer, mode: mode,
                                            width: width, height: height, time: time) else {
             return nil
         }
         guard let branded = await brand(image, author: author) else { return nil }
-        return encodeJPEG(branded, quality: 0.82)
+        return encodeJPEG(branded, quality: 0.82, maxBytes: maxBytes)
     }
 
     /// The same picture as PNG data.
@@ -92,5 +93,21 @@ enum ShareImageBuilder {
         ] as CFDictionary)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return out as Data
+    }
+
+    /// Encodes a picture small enough for the site to take.
+    ///
+    /// A detailed vibescape produces a picture twice the size the site will
+    /// store: a screen full of fine detail does not compress. So the quality
+    /// comes down until the picture fits, and if it will not fit at any
+    /// sensible quality the picture is left out — a share with a generic
+    /// preview is much better than a share that does not exist.
+    private static func encodeJPEG(_ image: CGImage, quality: CGFloat, maxBytes: Int) -> Data? {
+        for quality in [quality, 0.65, 0.5, 0.4] {
+            guard let data = encodeJPEG(image, quality: quality) else { continue }
+            if data.count <= maxBytes { return data }
+        }
+        // Nothing fitted. The share is still worth having.
+        return nil
     }
 }

@@ -39,9 +39,9 @@ struct ShareVibescapeView: View {
     /// The short link, once the site has made it. Nil until then, and nil
     /// for good if the site could not be reached.
     @State private var shortLink: String?
-    /// That the site could not make the link, so the sheet says so rather
+    /// Why the site could not make the link, so the sheet says so rather
     /// than handing out the long form.
-    @State private var linkFailed: Bool = false
+    @State private var linkFailure: ShareLinkStore.Failure?
     @State private var makingLink = false
     /// The make that is running, so the Share button can wait for it rather
     /// than starting a second one.
@@ -127,7 +127,7 @@ struct ShareVibescapeView: View {
     private var urlBoxText: String {
         if let shareURL { return shareURL.absoluteString }
         if makingLink { return "Making the link…" }
-        if linkFailed { return "Couldn't reach the site" }
+        if let linkFailure { return linkFailure.message }
         return "Preparing the link…"
     }
 
@@ -193,7 +193,7 @@ struct ShareVibescapeView: View {
             // to put in a message.
             Task { @MainActor in
                 guard vibescape.isCustom else { return }
-                if await shortLinkWhenReady() == nil { linkFailed = true }
+                _ = await shortLinkWhenReady()
             }
         }
     }
@@ -334,9 +334,9 @@ struct ShareVibescapeView: View {
             app.setCustomVibescapeAuthor(id: id, author: wanted)
         }
         shortLink = nil
-        linkFailed = false
+        linkFailure = nil
         Task { @MainActor in
-            if await shortLinkWhenReady() == nil { linkFailed = true }
+            _ = await shortLinkWhenReady()
         }
     }
 
@@ -396,7 +396,7 @@ struct ShareVibescapeView: View {
             // Another go, when the site could not make the link. The long
             // form would still work, but it is not the link, so the sheet
             // asks again rather than handing one out.
-            if linkFailed {
+            if let linkFailure {
                 Button {
                     retryLink()
                 } label: {
@@ -415,7 +415,7 @@ struct ShareVibescapeView: View {
                         .foregroundStyle(.white)
                 }
                 .buttonStyle(.plain)
-                .help("Try making the link again")
+                .help("Try making the link again — the site said: \(linkFailure.detail)")
             }
 
             Button {
@@ -550,9 +550,16 @@ struct ShareVibescapeView: View {
             return shortLink
         }
 
-        // The shader as it is, compressed — not minified. The link is short
-        // whatever this is, and the recipient gets the code somebody wrote.
-        let payload = ShareImporter.encodePayload(mode, minify: false)
+        // The shader as it is, compressed — not minified unless it has to
+        // be. The link is short whatever this is, and the recipient gets the
+        // code somebody wrote; a big vibescape is minified rather than
+        // refused, because a share that is a little less pretty is much
+        // better than a share that does not exist.
+        guard let payload = ShareLinkStore.payload(for: mode) else {
+            linkFailure = .tooBig
+            NSLog("[SHARE] the code is too big to share")
+            return nil
+        }
         let name = mode.name
         let target = vibescape
         // The share this one supersedes, if there is one. Changing your
@@ -562,19 +569,25 @@ struct ShareVibescapeView: View {
 
         // The picture is rendered off the main thread — it is a GPU job and
         // takes a moment — so the sheet doesn't stutter while it is made.
+        // It is also made small enough for the site to take: a detailed
+        // vibescape makes a picture twice the size the site will store.
         let image = await ShareImageBuilder.jpeg(
             renderer: app.renderer, mode: target,
             width: 1200, height: 630, time: 6.0, author: author)
 
-        let link = await ShareLinkStore().makeLink(
+        let made = await ShareLinkStore().makeLink(
             payload: payload, name: name, author: author, image: image,
             key: key, inGallery: inGallery, replaces: replaces)
-        shortLink = link?.url
-        if let shareID = link?.id {
-            ShareLinkCache.remember(shareID: shareID, for: key, isPublic: link?.inGallery ?? inGallery)
+        switch made {
+        case .success(let link):
+            shortLink = link.url
+            ShareLinkCache.remember(shareID: link.id, for: key, isPublic: link.inGallery)
             // The vibescape remembers its own link, so that changing your
             // name later knows which share to replace.
-            app.setCustomVibescapeShare(id: id, shareID: shareID, key: key)
+            app.setCustomVibescapeShare(id: id, shareID: link.id, key: key)
+        case .failure(let why):
+            linkFailure = why
+            NSLog("[SHARE] could not make the link: %@", why.detail)
         }
         return shortLink
     }
@@ -604,10 +617,7 @@ struct ShareVibescapeView: View {
     /// would win.
     private func shareTapped() {
         Task { @MainActor in
-            guard await linkToShare() != nil else {
-                linkFailed = true
-                return
-            }
+            guard await linkToShare() != nil else { return }
             isSharing = true
         }
         Task { await Analytics.shared.track("share_sheet_opened", [
@@ -631,7 +641,7 @@ struct ShareVibescapeView: View {
 
     /// Asks the site for the link again, after it could not be reached.
     private func retryLink() {
-        linkFailed = false
+        linkFailure = nil
         makingLink = false
         Task { @MainActor in
             _ = await shortLinkWhenReady()
@@ -657,10 +667,7 @@ struct ShareVibescapeView: View {
     /// rather than quietly handing one out.
     private func copyLink() {
         Task { @MainActor in
-            guard let url = await linkToShare() else {
-                linkFailed = true
-                return
-            }
+            guard let url = await linkToShare() else { return }
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(url.absoluteString, forType: .string)
             copied = true

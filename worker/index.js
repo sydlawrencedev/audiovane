@@ -404,7 +404,15 @@ const SHARE_ID_PATTERN = new RegExp(`^[${SHARE_ID_ALPHABET}]{${SHARE_ID_LENGTH}}
 // Caps on what one share can be. The image is the big one: a row is a
 // megabyte or two of the free tier's storage per share, and the picture is
 // the only part of it that is worth having at a size.
-const MAX_PAYLOAD_CHARS = 8192;
+//
+// The payload is the cap that bites: it is the code, base64url of the
+// deflated JSON, and a big vibescape is a lot of code. It was eight
+// kilobytes because the payload used to travel in the query string of the
+// link, and a URL is about eight kilobytes before servers start refusing
+// it. The short link stores the payload instead, so the cap is now about
+// what the database will hold and about the long form still being a URL
+// somebody can open — which is now only ever a fallback.
+const MAX_PAYLOAD_CHARS = 16384;
 const MAX_NAME_CHARS = 120;
 const MAX_AUTHOR_CHARS = 120;
 const MAX_IMAGE_BYTES = 400 * 1024;

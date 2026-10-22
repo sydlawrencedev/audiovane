@@ -202,6 +202,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // Making a share — the same path the share sheet takes, without the
+        // sheet, so the sharing can be checked on its own.
+        if CommandLine.arguments.contains("--make-share") {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
+                self.runMakeShare()
+            }
+        }
+
         // Video export — record the last ten seconds of the vibescape, with
         // the music, and say where it went.
         if CommandLine.arguments.contains("--export-video") {
@@ -643,7 +651,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let data = await ShareImageBuilder.jpeg(
                     renderer: app.renderer, mode: mode,
                     width: 1200, height: 630, time: 6.0,
-                    author: author.isEmpty ? VibescapeMetadata.author : author) else {
+                    author: author.isEmpty ? VibescapeMetadata.author : author,
+                    // This one is written to a file rather than sent to the
+                    // site, so it is not squeezed to the site's limit.
+                    maxBytes: Int.max) else {
                     NSLog("[SHARE-IMAGE] could not render")
                     exit(1)
                 }
@@ -704,6 +715,50 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // And a moment for the ring buffer to fill.
             DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) {
                 self.exportVideoNow(mode: mode, out: out)
+            }
+        }
+    }
+
+    /// Makes a share for one of the user's own vibescapes, and says what
+    /// happened.
+    ///
+    ///   Vibresia --make-share <slug>
+    ///
+    /// The same path the share sheet takes, without the sheet — so the
+    /// sharing can be checked on its own.
+    private func runMakeShare() {
+        let args = CommandLine.arguments
+        func value(_ flag: String) -> String {
+            if let i = args.firstIndex(of: flag), i + 1 < args.count { return args[i + 1] }
+            return ""
+        }
+        let slug = value("--make-share")
+        guard let app = AppState.shared, !slug.isEmpty else { exit(1) }
+        guard let mode = app.customVibescapes.first(where: { $0.id == slug }) else {
+            NSLog("[SHARE] no vibescape called \(slug)"); exit(1)
+        }
+        Task { @MainActor in
+            let author = ShareIdentity.shownAuthor(mode.author)
+            let key = ShareIdentity.key(name: mode.name, author: author,
+                                        url: mode.url, shader: mode.shader)
+            guard let payload = ShareLinkStore.payload(for: mode) else {
+                NSLog("[SHARE] the code is too big to share")
+                exit(1)
+            }
+            let image = await ShareImageBuilder.jpeg(
+                renderer: app.renderer, mode: .custom(mode.id),
+                width: 1200, height: 630, time: 6.0, author: author)
+            NSLog("[SHARE] payload %d chars, picture %d bytes", payload.count, image?.count ?? 0)
+            let made = await ShareLinkStore().makeLink(
+                payload: payload, name: mode.name, author: author,
+                image: image, key: key, inGallery: false)
+            switch made {
+            case .success(let link):
+                NSLog("[SHARE] link %@", link.url)
+                exit(0)
+            case .failure(let why):
+                NSLog("[SHARE] it did not work: %@", why.detail)
+                exit(1)
             }
         }
     }
