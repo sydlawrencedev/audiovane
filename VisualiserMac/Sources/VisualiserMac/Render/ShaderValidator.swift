@@ -254,7 +254,9 @@ enum ShaderValidator {
     private static func knownUniformName(_ name: String) -> String? {
         let real = ["uTime", "uBass", "uMid", "uTreble", "uBeat", "uBeatStrength", "uLevel",
                     "uResolution", "uIdle", "uBands", "uActive", "uBeats", "uScroll",
-                    "uClock", "uLevelSmooth", "uBassSmooth", "uPalette"]
+                    "uClock", "uLevelSmooth", "uBassSmooth", "uPalette",
+                    "uMouse", "uMouseDown", "uKey", "uKeyDown",
+                    "uMidiNote", "uMidiVelocity", "uMidiNotes", "uMidiCC", "uMidiCCValue"]
         guard !real.contains(name) else { return nil }
         // Cheap edit distance: close enough to suggest, far enough to be sure.
         if let best = real.min(by: { editDistance($0, name) < editDistance($1, name) }),

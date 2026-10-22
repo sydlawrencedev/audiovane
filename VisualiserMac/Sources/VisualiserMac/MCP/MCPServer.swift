@@ -143,6 +143,16 @@ final class MCPServer {
     `what_i_hear` says what the music currently is — genre, tempo, spectrum — so \
     you can write something that suits it.
 
+    ## The person is there too
+
+    A vibescape can react to the person, not only to the music: `uMouse` is \
+    the pointer in the same coordinates as `p`, `uMouseDown` says whether a \
+    button is held, `uKey` and `uKeyDown` are the keyboard, and `uMidiNote`, \
+    `uMidiVelocity`, `uMidiNotes`, `uMidiCC` and `uMidiCCValue` are the MIDI \
+    keyboard. Set them on a preview to see what a vibescape does with them. \
+    The app's own shortcuts still work, so a vibescape that reacts to a \
+    number key sees the vibescape change as well.
+
     ## The app knows more than the waveform
 
     The app has three things a shader cannot work out for itself, and they are all \

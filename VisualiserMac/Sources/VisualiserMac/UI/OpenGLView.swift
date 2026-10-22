@@ -38,6 +38,18 @@ final class GLVisualizerNSView: NSOpenGLView {
     /// link skips queueing while one is pending, so a slow frame drops frames
     /// instead of building an unbounded backlog that freezes the app.
     private let renderPending = OSAllocatedUnfairLock(initialState: false)
+    /// The area the mouse is watched over.
+    private var tracking: NSTrackingArea?
+    /// The keyboard, watched rather than taken.
+    ///
+    /// The view is not the first responder — SwiftUI's hosting view is — so
+    /// the keys are watched instead. They are not consumed: the app's own
+    /// shortcuts still work, and a vibescape can see the key as well.
+    private var keyDownMonitor: Any?
+    private var keyUpMonitor: Any?
+    /// The MIDI listener, kept here so that it stays alive: a listener
+    /// nobody holds is a listener nobody listens with.
+    private var midiListener: MidiListener?
 
     init(renderer: OpenGLRenderer) {
         self.renderer = renderer
@@ -62,12 +74,91 @@ final class GLVisualizerNSView: NSOpenGLView {
         if let link = displayLink {
             CVDisplayLinkStop(link)
         }
+        if let keyDownMonitor { NSEvent.removeMonitor(keyDownMonitor) }
+        if let keyUpMonitor { NSEvent.removeMonitor(keyUpMonitor) }
+    }
+
+    // MARK: - What the person is doing
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        // A window does not deliver mouse-moved events unless it says it
+        // will, and a vibescape that follows the pointer needs them.
+        window?.acceptsMouseMovedEvents = true
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let tracking { removeTrackingArea(tracking) }
+        // `.activeAlways` rather than `.activeInKeyWindow`: the pointer
+        // keeps being tracked when the app is in the background, so a
+        // vibescape that follows it does not stop dead the moment
+        // somebody clicks somewhere else.
+        let area = NSTrackingArea(rect: bounds,
+                                 options: [.mouseMoved, .activeAlways, .inVisibleRect],
+                                 owner: self, userInfo: nil)
+        addTrackingArea(area)
+        tracking = area
+    }
+
+    /// The pointer, in the shader's own coordinates.
+    ///
+    /// The same numbers `screenP()` produces, so a shader can use it
+    /// without knowing anything about the window: x across the screen, y up
+    /// from the middle, both scaled by the height.
+    override func mouseMoved(with event: NSEvent) {
+        let point = convert(event.locationInWindow, from: nil)
+        let height = bounds.height
+        guard height > 0 else { return }
+        renderer.input.setMouse(CGPoint(
+            x: (point.x - bounds.width / 2) / height,
+            y: (point.y - bounds.height / 2) / height))
+    }
+
+    override func mouseDown(with event: NSEvent) { renderer.input.setMouseDown(true) }
+    override func mouseUp(with event: NSEvent) { renderer.input.setMouseDown(false) }
+    override func rightMouseDown(with event: NSEvent) { renderer.input.setMouseDown(true) }
+    override func rightMouseUp(with event: NSEvent) { renderer.input.setMouseDown(false) }
+
+    /// The keyboard, watched.
+    ///
+    /// The last key is the character code of the key that was pressed, so
+    /// a shader can ask whether it was the space bar (32) or a letter (65
+    /// for A). Zero means nothing has been pressed.
+    private func watchKeys() {
+        keyDownMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            // Typing a name into a text field is not a performance.
+            if let field = self?.window?.firstResponder as? NSTextView,
+               field.isEditable {
+                return event
+            }
+            // A key with no character — an arrow, a function key — leaves
+            // the last character alone rather than blanking it: a shader
+            // that asks "was that the space bar?" should not be told "no"
+            // because somebody pressed an arrow afterwards.
+            if let characters = event.characters,
+               let first = characters.unicodeScalars.first {
+                self?.renderer.input.pressKey(Float(first.value))
+            }
+            self?.renderer.input.pressKeyDown()
+            return event
+        }
+        keyUpMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyUp) { [weak self] event in
+            self?.renderer.input.releaseKey()
+            return event
+        }
     }
 
     override func prepareOpenGL() {
         super.prepareOpenGL()
         if didSetup { return }
         didSetup = true
+
+        // The keyboard, and the MIDI ports.
+        watchKeys()
+        let midi = MidiListener(state: renderer.input)
+        midi.start()
+        midiListener = midi
 
         // Render at 1x: full-screen shaders at Retina resolution are ~4x the
         // GPU work and can't hold 60fps in a large window.

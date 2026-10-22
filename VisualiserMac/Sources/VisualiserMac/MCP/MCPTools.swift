@@ -179,6 +179,16 @@ enum MCPTools {
             "uClock": ["type": "number", "description": "Wall-clock seconds. Keeps running in silence."],
             "uTrackPos": ["type": "number", "description": "Seconds into the track, for a preview that needs a position. 0 when there is none to know."],
             "uTrackDuration": ["type": "number", "description": "The length of the track in seconds."],
+            "uMouse": ["type": "array", "items": ["type": "number"],
+                       "description": "The pointer, in the shader's own coordinates: [x, y], x across the screen and y up from the middle. The same space p is in."],
+            "uMouseDown": ["type": "number", "description": "1 while a mouse button is held, 0 otherwise."],
+            "uKey": ["type": "number", "description": "The last key pressed, as its character code. 32 is the space bar, 65 is A."],
+            "uKeyDown": ["type": "number", "description": "1 while a key is held, 0 otherwise."],
+            "uMidiNote": ["type": "number", "description": "The MIDI note, 0..127. 60 is middle C."],
+            "uMidiVelocity": ["type": "number", "description": "How hard that note was hit, 0..1."],
+            "uMidiNotes": ["type": "number", "description": "How many MIDI notes are held right now."],
+            "uMidiCC": ["type": "number", "description": "The MIDI controller number, 0..127."],
+            "uMidiCCValue": ["type": "number", "description": "Where that controller is, 0..1."],
         ]
         return props
     }
@@ -310,6 +320,16 @@ enum MCPTools {
         o.trackDuration = num("uTrackDuration")
         if let bands = bag["uBands"] as? [Double] { o.bands = bands.map { Float($0) } }
         else if let bands = bag["uBands"] as? [Int] { o.bands = bands.map { Float($0) } }
+        if let pointer = bag["uMouse"] as? [Double] { o.mouse = pointer.map { Float($0) } }
+        else if let pointer = bag["uMouse"] as? [Int] { o.mouse = pointer.map { Float($0) } }
+        o.mouseDown = num("uMouseDown")
+        o.key = num("uKey")
+        o.keyDown = num("uKeyDown")
+        o.midiNote = num("uMidiNote")
+        o.midiVelocity = num("uMidiVelocity")
+        o.midiNotes = num("uMidiNotes")
+        o.midiCC = num("uMidiCC")
+        o.midiCCValue = num("uMidiCCValue")
         // uActive is forced on unless asked otherwise: a preview that respects
         // the room's silence is a preview of a black rectangle.
         if o.active == nil { o.active = 1 }
@@ -483,6 +503,8 @@ enum MCPTools {
         }
         lines.append("")
         lines.append("uBeats advances at \(d(beatsPerSecond)) beats/sec\(bpm > 0 ? " (\(Int(bpm.rounded())) bpm detected)" : ""), so `uBeats * 0.5` is a quarter-cycle per beat at the current tempo.")
+        lines.append("")
+        lines.append("The input uniforms — uMouse, uMouseDown, uKey, uKeyDown, uMidiNote, uMidiVelocity, uMidiNotes, uMidiCC, uMidiCCValue — are not in this list on purpose. They are what the person at the keyboard is doing, not what the music is doing, and they are not written down: the app does not put them in a file and this server cannot see them, because it runs without the app's window. Set them yourself on a preview to see what a vibescape does with them — `preview_vibescape({ code, options: { uniforms: { uMouse: [0.2, -0.1] } } })`.")
 
         if !bands.isEmpty {
             lines.append("")

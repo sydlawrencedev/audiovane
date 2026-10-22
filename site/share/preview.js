@@ -46,6 +46,15 @@ uniform float uTrackPos;    // seconds into the track, 0 when there is no positi
 uniform float uTrackDuration; // the length of the track in seconds, 0 when unknown
 uniform float uTrackProgress; // 0..1 through the track, 0 when unknown
 uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
+uniform vec2 uMouse;         // the pointer, in the same coordinates as p: x across, y up from the middle
+uniform float uMouseDown;    // 1 while a mouse button is held
+uniform float uKey;          // the last key pressed, as its character code; 0 when nothing has been pressed
+uniform float uKeyDown;      // 1 while a key is held
+uniform float uMidiNote;     // the last MIDI note, 0..127
+uniform float uMidiVelocity; // how hard it was hit, 0..1
+uniform float uMidiNotes;    // how many MIDI notes are held right now
+uniform float uMidiCC;       // the last MIDI controller that moved, 0..127
+uniform float uMidiCCValue;  // where that controller is, 0..1
 out vec4 fragColor;
 
 const float PI = 3.14159265;
@@ -334,6 +343,8 @@ void main() {
       "uLevelSmooth", "uBassSmooth", "uBeat", "uBeatStrength", "uResolution",
       "uIdle", "uActive", "uBeats", "uScroll", "uClock", "uPresence", "uGenre",
       "uTrackPos", "uTrackDuration", "uTrackProgress", "uTrackKnown",
+      "uMouse", "uMouseDown", "uKey", "uKeyDown",
+      "uMidiNote", "uMidiVelocity", "uMidiNotes", "uMidiCC", "uMidiCCValue",
       "uBands[0]", "uPalette[0]"]);
     var g = uniforms(gl, grade, ["uTex", "uShadow", "uHighlight", "uSaturation",
       "uDuotone", "uLift"]);
@@ -349,6 +360,27 @@ void main() {
       fbo: fbo, tex: tex, vao: vao,
       palette: [].concat(PALETTE.shadow, PALETTE.highlight, mid)
     };
+  }
+
+  // The pointer, in the same coordinates the shader's p is in: x across the
+  // screen, y up from the middle, both scaled by the height.
+  var pointer = { x: 0, y: 0, down: false };
+
+  function watchPointer(canvas) {
+    if (!canvas || !canvas.addEventListener) return;
+    function move(event) {
+      var rect = canvas.getBoundingClientRect();
+      if (!rect || !rect.height) return;
+      pointer.x = (event.clientX - rect.left - rect.width / 2) / rect.height;
+      pointer.y = (rect.top + rect.height / 2 - event.clientY) / rect.height;
+    }
+    canvas.addEventListener("pointermove", move);
+    canvas.addEventListener("pointerdown", function (event) {
+      move(event);
+      pointer.down = true;
+    });
+    canvas.addEventListener("pointerup", function () { pointer.down = false; });
+    canvas.addEventListener("pointerleave", function () { pointer.down = false; });
   }
 
   function draw(gl, canvas, s, t) {
@@ -387,6 +419,17 @@ void main() {
     // The browser has no idea what is playing, so the preview says it is
     // rock. A shader that branches on the genre still draws.
     gl.uniform1i(u.uGenre, 2);
+    // The pointer, if there is a person at the page. A browser has no MIDI
+    // and no keyboard to spare, so those stay at their neutral values.
+    gl.uniform2f(u.uMouse, pointer.x, pointer.y);
+    gl.uniform1f(u.uMouseDown, pointer.down ? 1 : 0);
+    gl.uniform1f(u.uKey, 0);
+    gl.uniform1f(u.uKeyDown, 0);
+    gl.uniform1f(u.uMidiNote, 0);
+    gl.uniform1f(u.uMidiVelocity, 0);
+    gl.uniform1f(u.uMidiNotes, 0);
+    gl.uniform1f(u.uMidiCC, 0);
+    gl.uniform1f(u.uMidiCCValue, 0);
     gl.uniform1fv(u["uBands[0]"], bands(a));
     gl.uniform3fv(u["uPalette[0]"], s.palette);
     gl.bindVertexArray(s.vao);
@@ -449,6 +492,8 @@ void main() {
       return { ok: false, error: String(e.message || e) };
     }
     if (!s) return { ok: false, error: "framebuffer incomplete" };
+
+    watchPointer(canvas);
 
     draw(gl, canvas, s, T0);   // the image, before anything moves
 

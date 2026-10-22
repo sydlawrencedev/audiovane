@@ -6,6 +6,12 @@ import simd
 /// OpenGL 3.3 Core renderer. Drives NSOpenGLView's draw loop.
 /// Uses CVDisplayLink for vsync-paced redraws.
 final class OpenGLRenderer: NSObject {
+    /// What the person is doing: the pointer, the keys and the MIDI notes.
+    ///
+    /// The window writes into it and the renderer reads from it, so the
+    /// input is the same for every vibescape and for every frame.
+    let input = InputState.shared
+
     let audio: AudioEngine
     private(set) var glContext: NSOpenGLContext?
     private(set) var pixelFormat: NSOpenGLPixelFormat?
@@ -102,6 +108,9 @@ final class OpenGLRenderer: NSObject {
         /// `uPalette[0]` — vibescapes with deliberate colours read the palette
         /// themselves instead of being duotoned afterwards. -1 when absent.
         let palette: GLint
+        /// The pointer, the keys and the MIDI notes. -1 when absent.
+        let mouse, mouseDown, key, keyDown: GLint
+        let midiNote, midiVelocity, midiNotes, midiCC, midiCCValue: GLint
     }
     private var shaderVibescapes: [Vibescape: ShaderMode] = [:]
 
@@ -1289,7 +1298,12 @@ final class OpenGLRenderer: NSObject {
             presence: loc("uPresence"), genre: loc("uGenre"),
             trackPos: loc("uTrackPos"), trackDuration: loc("uTrackDuration"),
             trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
-            palette: loc("uPalette[0]"))
+            palette: loc("uPalette[0]"),
+            mouse: loc("uMouse"), mouseDown: loc("uMouseDown"),
+            key: loc("uKey"), keyDown: loc("uKeyDown"),
+            midiNote: loc("uMidiNote"), midiVelocity: loc("uMidiVelocity"),
+            midiNotes: loc("uMidiNotes"), midiCC: loc("uMidiCC"),
+            midiCCValue: loc("uMidiCCValue"))
         return .success(m)
     }
 
@@ -1903,6 +1917,24 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.trackDuration, Float(length))
         glUniform1f(m.trackProgress, Float(min(1, max(0, length > 0 ? tracks.position / length : 0))))
         glUniform1f(m.trackKnown, tracks.positionIsKnown ? 1 : 0)
+        // The pointer, the keys and the MIDI notes, for the vibescapes that
+        // react to the person rather than to the music.
+        //
+        // Offscreen renders — the share picture, the share video, the
+        // thumbnails — get the neutral values instead: the pointer in the
+        // middle, nothing pressed, no keys, no notes. An exported video
+        // replays the recorded music, and it should not also replay
+        // wherever the pointer happened to be.
+        let input = isRenderingOffscreen ? InputState.Snapshot() : InputState.shared.snapshot()
+        glUniform2f(m.mouse, GLfloat(input.mouse.x), GLfloat(input.mouse.y))
+        glUniform1f(m.mouseDown, input.mouseDown ? 1 : 0)
+        glUniform1f(m.key, input.key)
+        glUniform1f(m.keyDown, input.keyDown ? 1 : 0)
+        glUniform1f(m.midiNote, input.midiNote)
+        glUniform1f(m.midiVelocity, input.midiVelocity)
+        glUniform1f(m.midiNotes, input.midiNotes)
+        glUniform1f(m.midiCC, input.midiCC)
+        glUniform1f(m.midiCCValue, input.midiCCValue)
         if m.palette >= 0 { bindPalette(to: m.palette) }
         // Everything drawn from here on is exactly this: the values, the clocks
         // and the palette. Publishing them means an agent tuning a coefficient
@@ -2130,7 +2162,12 @@ final class OpenGLRenderer: NSObject {
                 presence: loc("uPresence"), genre: loc("uGenre"),
             trackPos: loc("uTrackPos"), trackDuration: loc("uTrackDuration"),
             trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
-            palette: loc("uPalette[0]"))
+            palette: loc("uPalette[0]"),
+            mouse: loc("uMouse"), mouseDown: loc("uMouseDown"),
+            key: loc("uKey"), keyDown: loc("uKeyDown"),
+            midiNote: loc("uMidiNote"), midiVelocity: loc("uMidiVelocity"),
+            midiNotes: loc("uMidiNotes"), midiCC: loc("uMidiCC"),
+            midiCCValue: loc("uMidiCCValue"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")
                 uBandVocal = loc("uVocal"); uBandKeys = loc("uKeys[0]")

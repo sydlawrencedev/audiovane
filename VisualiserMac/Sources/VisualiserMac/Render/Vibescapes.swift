@@ -426,6 +426,30 @@ enum CustomVibescapeGuide {
       uTrackKnown        1 when the position is real, 0 when there is none to
                          know — so "no position" is not mistaken for "the
                          start of the track"
+      uMouse           the pointer, in the same coordinates as p: x across
+                       the screen, y up from the middle
+      uMouseDown  0..1 1 while a mouse button is held
+      uKey             the last key pressed, as its character code — 32 is
+                       the space bar — 0 when nothing has been pressed
+      uKeyDown   0..1  1 while a key is held
+      uMidiNote        the last MIDI note, 0..127
+      uMidiVelocity    how hard it was hit, 0..1
+      uMidiNotes       how many notes are held right now
+      uMidiCC          the last MIDI controller that moved, 0..127
+      uMidiCCValue     where that controller is, 0..1
+
+    The last nine are what the person is doing rather than what the music is
+    doing. `uMouse` is in the same coordinates as `p`, so it survives a change
+    of window shape and can be compared with `p` directly. The keys are
+    watched, not taken: the app's own shortcuts still work, so a vibescape
+    that reacts to "1" sees the vibescape change as well. Reading MIDI needs
+    no permission prompt, and a machine with nothing plugged in simply reports
+    nothing.
+
+    None of it is ever logged or sent anywhere. On a page with nobody at it —
+    a shared link, an exported video — the pointer sits in the middle,
+    nothing is pressed, no keys are held and no notes are playing, so a
+    vibescape that uses them still draws.
 
     Anything that looks like a cloud, a flame or smoke is `fbm`:
 
@@ -582,6 +606,25 @@ enum CustomVibescapeGuide {
     - Keep transitions eased. Smoothness is about the transition, not the \
     amplitude — strong reactivity does not mean camera jolts, discontinuities \
     or constant flashing.
+
+    ### Input (only if somebody is there)
+
+    - The pointer is `uMouse` — a vec2 in the same coordinates as `p`, so it
+      can be compared with `p` directly, with no conversion. `uMouseDown` is 1
+      while a button is held.
+    - The keys are `uKey`, the character code of the last key pressed (32 is
+      the space bar, 65 is A), and `uKeyDown`, 1 while a key is held.
+    - The MIDI notes are `uMidiNote` (0..127), `uMidiVelocity` (0..1) and
+      `uMidiNotes` (how many are held), with `uMidiCC` and `uMidiCCValue` for
+      a controller that moved.
+    - The keys are watched, not taken: the app's own shortcuts still work, so
+      reacting to "1" means the vibescape changes as well.
+    - Ease anything that can jump. The pointer can teleport on a click, so
+      smooth it yourself rather than letting it jolt the picture — the same
+      rule as the music.
+    - With nobody there the pointer sits in the middle, nothing is pressed,
+      no keys are held and no notes are playing, so a vibescape that uses
+      them still draws.
 
     ### Reactivity (must be obvious)
 

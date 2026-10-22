@@ -32,6 +32,25 @@ struct UniformOverrides {
     var trackPos: Float?
     /// How long the track is, in seconds.
     var trackDuration: Float?
+    /// The pointer, in the shader's own coordinates: x across the screen, y
+    /// up from the middle. Two numbers, because a shader wants both.
+    var mouse: [Float]?
+    /// Whether a mouse button is down.
+    var mouseDown: Float?
+    /// The key that was pressed, as its character code. 32 is the space bar.
+    var key: Float?
+    /// Whether a key is held.
+    var keyDown: Float?
+    /// The MIDI note, 0..127.
+    var midiNote: Float?
+    /// How hard it was hit, 0..1.
+    var midiVelocity: Float?
+    /// How many notes are held.
+    var midiNotes: Float?
+    /// The MIDI controller number, 0..127.
+    var midiCC: Float?
+    /// Where that controller is, 0..1.
+    var midiCCValue: Float?
 
     var isEmpty: Bool {
         bass == nil && mid == nil && treble == nil && level == nil
@@ -39,6 +58,9 @@ struct UniformOverrides {
             && beatStrength == nil && beats == nil && active == nil
             && idle == nil && presence == nil && scroll == nil && clock == nil
             && bands == nil && trackPos == nil && trackDuration == nil
+            && mouse == nil && mouseDown == nil && key == nil && keyDown == nil
+            && midiNote == nil && midiVelocity == nil && midiNotes == nil
+            && midiCC == nil && midiCCValue == nil
     }
 
     var names: [String] {
@@ -60,6 +82,15 @@ struct UniformOverrides {
         if bands != nil { out.append("uBands") }
         if trackPos != nil { out.append("uTrackPos") }
         if trackDuration != nil { out.append("uTrackDuration") }
+        if mouse != nil { out.append("uMouse") }
+        if mouseDown != nil { out.append("uMouseDown") }
+        if key != nil { out.append("uKey") }
+        if keyDown != nil { out.append("uKeyDown") }
+        if midiNote != nil { out.append("uMidiNote") }
+        if midiVelocity != nil { out.append("uMidiVelocity") }
+        if midiNotes != nil { out.append("uMidiNotes") }
+        if midiCC != nil { out.append("uMidiCC") }
+        if midiCCValue != nil { out.append("uMidiCCValue") }
         return out
     }
 }
@@ -568,6 +599,25 @@ private struct UniformValues {
     var trackDuration: Float = 0
     var trackProgress: Float = 0
     var trackKnown: Float = 0
+    /// The pointer, in the shader's own coordinates.
+    var mouseX: Float = 0
+    var mouseY: Float = 0
+    /// Whether a mouse button is down.
+    var mouseDown: Float = 0
+    /// The last key pressed, as its character code.
+    var key: Float = 0
+    /// Whether a key is held.
+    var keyDown: Float = 0
+    /// The last MIDI note, 0..127.
+    var midiNote: Float = 0
+    /// How hard it was hit, 0..1.
+    var midiVelocity: Float = 0
+    /// How many notes are held.
+    var midiNotes: Float = 0
+    /// The last MIDI controller that moved.
+    var midiCC: Float = 0
+    /// Where that controller is, 0..1.
+    var midiCCValue: Float = 0
     /// Whether these numbers came from the app or from a stand-in.
     var source = "stand-in values"
 
@@ -646,6 +696,35 @@ private struct UniformValues {
         if let x = overrides.bands { v.bands = padded(x) }
         if let x = overrides.trackPos { v.trackPos = x }
         if let x = overrides.trackDuration { v.trackDuration = x }
+
+        // The input. The app knows where the pointer is and what the person
+        // is playing, so a preview in the app shows the real thing; a
+        // preview from a server with no window shows the neutral values,
+        // which are the same ones a shared page and an exported video get.
+        let input = InputState.shared.snapshot()
+        v.mouseX = Float(input.mouse.x)
+        v.mouseY = Float(input.mouse.y)
+        v.mouseDown = input.mouseDown ? 1 : 0
+        v.key = input.key
+        v.keyDown = input.keyDown ? 1 : 0
+        v.midiNote = input.midiNote
+        v.midiVelocity = input.midiVelocity
+        v.midiNotes = input.midiNotes
+        v.midiCC = input.midiCC
+        v.midiCCValue = input.midiCCValue
+
+        if let x = overrides.mouse, x.count >= 2 {
+            v.mouseX = x[0]
+            v.mouseY = x[1]
+        }
+        if let x = overrides.mouseDown { v.mouseDown = x }
+        if let x = overrides.key { v.key = x }
+        if let x = overrides.keyDown { v.keyDown = x }
+        if let x = overrides.midiNote { v.midiNote = x }
+        if let x = overrides.midiVelocity { v.midiVelocity = x }
+        if let x = overrides.midiNotes { v.midiNotes = x }
+        if let x = overrides.midiCC { v.midiCC = x }
+        if let x = overrides.midiCCValue { v.midiCCValue = x }
         // The progress and the "is it real" flag follow the two, so an
         // override of one is enough.
         if overrides.trackPos != nil || overrides.trackDuration != nil {
@@ -724,6 +803,15 @@ private struct UniformValues {
         glUniform1f(loc("uTrackDuration"), trackDuration)
         glUniform1f(loc("uTrackProgress"), trackProgress)
         glUniform1f(loc("uTrackKnown"), trackKnown)
+        glUniform2f(loc("uMouse"), mouseX, mouseY)
+        glUniform1f(loc("uMouseDown"), mouseDown)
+        glUniform1f(loc("uKey"), key)
+        glUniform1f(loc("uKeyDown"), keyDown)
+        glUniform1f(loc("uMidiNote"), midiNote)
+        glUniform1f(loc("uMidiVelocity"), midiVelocity)
+        glUniform1f(loc("uMidiNotes"), midiNotes)
+        glUniform1f(loc("uMidiCC"), midiCC)
+        glUniform1f(loc("uMidiCCValue"), midiCCValue)
         if !bands.isEmpty {
             glUniform1fv(loc("uBands[0]"), GLsizei(bands.count), bands)
         }

@@ -48,6 +48,15 @@ enum FunShaders {
     uniform float uTrackDuration; // the length of the track in seconds, 0 when unknown
     uniform float uTrackProgress; // 0..1 through the track, 0 when unknown
     uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
+    uniform vec2 uMouse;         // the pointer, in the same coordinates as p: x across, y up from the middle
+    uniform float uMouseDown;    // 1 while a mouse button is held
+    uniform float uKey;          // the last key pressed, as its character code; 0 when nothing has been pressed
+    uniform float uKeyDown;      // 1 while a key is held
+    uniform float uMidiNote;     // the last MIDI note, 0..127
+    uniform float uMidiVelocity; // how hard it was hit, 0..1
+    uniform float uMidiNotes;    // how many MIDI notes are held right now
+    uniform float uMidiCC;       // the last MIDI controller that moved, 0..127
+    uniform float uMidiCCValue;  // where that controller is, 0..1
     out vec4 fragColor;
 
     const float PI = 3.14159265;
