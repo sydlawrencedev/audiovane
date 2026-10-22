@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Privacy — Vibresia</title>
+<meta name="description" content="What Vibresia collects, what it doesn't, and how to stop it.">
+<link rel="canonical" href="https://vibresia.com/privacy">
+<meta name="robots" content="noindex, follow">
+<meta name="theme-color" content="#06010d">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/media/share.jpg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/chrome.css">
+<link rel="stylesheet" href="/legal.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- chrome:nav -->
+  <header class="site-header">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M1.6 16 L7.94 16 L10.82 7.36 L14.56 24.64 L18.3 10.24 L21.76 20.32 L24.06 16 L30.4 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      VIBRESIA
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/vibescapes">Vibescapes</a>
+      <a href="/vibe">Vibe your own</a>
+      <a href="/agents">Agents</a>
+      <a href="/#install">Install</a>
+      <a href="/#changelog">Changelog</a>
+      <a href="https://github.com/sydlawrencedev/vibresia">GitHub</a>
+    </nav>
+  </header>
+  <!-- /chrome:nav -->
+
+  <main class="legal">
+    <p class="eyebrow">Privacy</p>
+    <h1>What Vibresia collects.</h1>
+    <p class="lede">Short version: your audio never leaves your Mac, there is no account, and every measurement here can be switched off.</p>
+
+    <h2>Your audio stays on your Mac</h2>
+    <p>Vibresia listens to the music to draw with it — the levels, the beat, the shape of the spectrum. All of that is worked out on your Mac and drawn on your Mac. No audio is uploaded, stored or transmitted. Ever.</p>
+    <p>The same is true of the assistant server inside the app: it draws vibescapes on your Mac and hands the pictures back to whoever asked, on your own machine.</p>
+
+    <h2>The app</h2>
+    <p>The app sends anonymous usage statistics to the same analytics service the website uses. It covers which features get used and whether things work — which vibescape is on screen, which palette, whether you clicked the support button — and never what you are playing, never the name of a vibescape you wrote yourself, never what is in it, and never anything typed into the app.</p>
+    <ul>
+      <li>It is <strong>on by default</strong>, and it can be switched off in the app: the About panel, the one with the credits, has a <strong>“Share anonymous usage”</strong> switch. Switching it off stops the usage statistics and the crash reports, and nothing is sent afterwards — not even a note that you switched it off.</li>
+      <li>One thing that switch does not stop: if the audio source fails — usually because the permission for screen recording was refused — the app tells us, because that is a bug we cannot see any other way. That report is the app's own state: the version, the system, what was on screen. No audio.</li>
+      <li>Each install gets a random identifier, kept in the app's own settings on your Mac. It is not linked to you, and it is not joined up with anything else you do.</li>
+      <li>If the app crashes, the crash report goes out with the statistics: the error, the state of the app at the time, and a stack trace. Never audio, never a track name, never a window title.</li>
+    </ul>
+
+    <h2>The website</h2>
+    <p>The website counts visits and clicks anonymously: which pages are looked at, which buttons are pressed, which vibescape cards are scrolled to. No account, no sign-in, no form, and no cookies — the anonymous identifier is kept in your browser's local storage, and a Do Not Track setting is respected.</p>
+    <p>Every page has a link in the footer that stops the measurement for your visits, and it takes effect on the next page.</p>
+
+    <h2>Downloads</h2>
+    <p>The download link goes through our server, because that is where the app lives — so, as with any website you visit, the request that fetches it carries your IP address. What we do with it is this: we record that a download happened, roughly where from, and which page sent it, and we post a note to our own chat so we know the app is getting out. The note does not include your IP address.</p>
+    <p>The count itself is done on our side, so the number of downloads is right even when an ad blocker stops the website's own count. The count is anonymous: it is a count, not a list of who.</p>
+
+    <h2>Shared vibescapes</h2>
+    <p>When you share a vibescape, the code for it, the name you gave it and who you said made it are stored on our server, so the link you send people works. If you put it in the public gallery, the name and the author on it are shown at <a href="/vibescapes">vibresia.com/vibescapes</a>, where anybody can find it.</p>
+    <p>We do not review what goes into the gallery before it goes in. If something should not be there, tell us and we will take it down.</p>
+    <p>You can also take a share out of the gallery, or delete it and the link with it, at any time — ask, and we will do it.</p>
+
+    <h2>Somebody else's music</h2>
+    <p>When a music app tells Vibresia what it is playing, the title and the artist are looked up in Apple's public catalogue to work out the genre, so the band's stage suits the track. The title and the artist go to Apple for that lookup and we do not keep a copy of them. Nothing about the audio itself is sent.</p>
+
+    <h2>Who else sees anything</h2>
+    <ul>
+      <li><strong>Cloudflare</strong> — the site, the download link and the shared vibescapes are hosted there.</li>
+      <li><strong>PostHog</strong> — the analytics for the site and the app, on servers in the United States.</li>
+      <li><strong>GitHub</strong> — the releases, and the changelog and issue list on this website, which are fetched from GitHub in your browser.</li>
+      <li><strong>Discord</strong> — our own chat, where the download notes and the crash reports go.</li>
+      <li><strong>Stripe</strong> — only if you choose to buy the author a coffee.</li>
+    </ul>
+
+    <h2>Your rights</h2>
+    <p>If you are in the UK, the EU or anywhere else with laws about this, you can ask what we hold about you, ask us to correct it, ask us to delete it, or ask for it in a form you can take elsewhere. We will answer, and we will not charge you for it or make you jump through hoops.</p>
+    <p>The app's statistics are tied to a random install identifier rather than to you, so there is usually nothing to hand over. If you have shared vibescapes, the name and the author on them are the things to ask about, and we can take them down.</p>
+    <p>To ask for anything: <a href="https://github.com/sydlawrencedev/vibresia/issues">open an issue</a>, or write to <a href="https://minithlabs.com">Minith Labs</a>.</p>
+
+    <h2>Changes</h2>
+    <p>If this changes, this page changes with it. There is no separate policy that says something else.</p>
+  </main>
+
+  <!-- chrome:footer -->
+  <footer class="site-footer">
+    <p>🩷 from <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
+    <p class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+  </footer>
+  <!-- /chrome:footer -->
+</div>
+
+<script src="/analytics.js" defer></script>
+</body>
+</html>

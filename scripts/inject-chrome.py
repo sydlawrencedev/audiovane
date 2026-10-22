@@ -30,7 +30,7 @@ REGIONS = {"nav": "nav.html", "footer": "footer.html"}
 # edit — but they are in the repo as files that ship, so they are checked like
 # anything else. generate-share-pages.py calls this at the end for that reason.
 PAGES = ["site/index.html", "site/agents.html", "site/vibescapes.html", "site/vibe.html",
-         "site/admin.html"]
+         "site/admin.html", "site/privacy.html", "site/terms.html"]
 
 
 def pages(root):

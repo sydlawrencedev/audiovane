@@ -254,7 +254,9 @@ enum ShareImporter {
             case .success(let saved):
                 app.setVibescape(saved.modeID)
                 bringAppToFront()
-                Task { await Analytics.shared.track("share_opened", ["kind": "custom", "name": saved.name]) }
+                // No name: a vibescape's name is its author's own, and the
+                // gallery already shows it where it belongs.
+                Task { await Analytics.shared.track("share_opened", ["kind": "custom"]) }
                 completion?(request)
             case .failure(let problem):
                 Task { await Analytics.shared.track("share_import_failed", ["reason": problem.message]) }

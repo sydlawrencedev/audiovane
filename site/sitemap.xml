@@ -4,7 +4,11 @@
      assistant, and the two plain-text pages an assistant reads (install.md,
      llms.txt). Submit to Google Search Console at
      https://search.google.com/search-console/sitemaps/submit
-     after each `npx wrangler deploy`. -->
+     after each `npx wrangler deploy`.
+
+     The privacy and terms pages (/privacy, /terms) are deliberately not
+     here: they say `noindex`, and a sitemap is a list of pages to put in
+     search results. They are linked from the footer of every page instead. -->
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
     <loc>https://vibresia.com/</loc>

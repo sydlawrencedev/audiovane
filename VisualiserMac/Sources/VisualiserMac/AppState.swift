@@ -19,12 +19,12 @@ final class AppState: ObservableObject {
                 // only wants the histogram.
                 Task { await Analytics.shared.countInSession("mode_switches") }
                 Task {
-                    await Analytics.shared.countInSession("mode:\(activeVibescape.rawValue)")
+                    await Analytics.shared.countInSession("mode:\(activeVibescape.analyticsName)")
                 }
                 Task {
                     await Analytics.shared.track("mode_changed", [
-                        "mode": activeVibescape.rawValue,
-                        "from_mode": oldValue.rawValue,
+                        "mode": activeVibescape.analyticsName,
+                        "from_mode": oldValue.analyticsName,
                         "via": viaPicker ? "picker" : (viaAutoScan ? "auto_scan" : "system"),
                     ])
                 }

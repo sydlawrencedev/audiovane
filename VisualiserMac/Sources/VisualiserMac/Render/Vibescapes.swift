@@ -14,6 +14,23 @@ enum VibescapeID: Hashable, Identifiable {
 
     var id: String { rawValue }
 
+    /// The name to use in the analytics.
+    ///
+    /// A custom vibescape's id is a short version of the name its author
+    /// gave it, and a name is the author's own business. Which built-in
+    /// somebody is looking at is worth knowing — it says what the app is
+    /// for — but which of their own things they made is not.
+    ///
+    /// So the analytics get "custom" and nothing more. The id itself stays
+    /// where it belongs: on the Mac, in the saved preference and in a crash
+    /// report, where it is the owner's own business too.
+    var analyticsName: String {
+        switch self {
+        case .builtin(let m): return m.rawValue
+        case .custom: return "custom"
+        }
+    }
+
     /// Stable string form, used for `UserDefaults` and the analytics
     /// `vibescape` property. The `custom:` prefix keeps a custom vibescape from ever
     /// colliding with a built-in that happens to share its slug.

@@ -1,0 +1,83 @@
+/* The legal pages: privacy and terms.
+ *
+ * Plain pages on purpose — the words are the point, and they should read
+ * like something a person wrote rather than something a template filled in. */
+
+:root {
+  --bg: #06010d;
+  --text: #f4f0ff;
+  --muted: #a79fc4;
+  --line: rgba(255, 255, 255, 0.10);
+  --pink: #ff2bd6;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Space Grotesk", system-ui, -apple-system, sans-serif;
+  line-height: 1.65;
+}
+
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 24px 40px;
+}
+
+a { color: var(--pink); }
+a:hover { color: var(--text); }
+
+.eyebrow {
+  margin: 0 0 10px;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--pink);
+}
+
+.legal h1 {
+  margin: 0 0 16px;
+  font-size: clamp(28px, 5vw, 42px);
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+}
+
+.legal .lede {
+  margin: 0 0 34px;
+  color: var(--muted);
+  font-size: 17px;
+}
+
+.legal h2 {
+  margin: 34px 0 10px;
+  font-size: 20px;
+  letter-spacing: -0.005em;
+}
+
+.legal p {
+  margin: 0 0 14px;
+  color: #ded8ee;
+}
+
+.legal ul {
+  margin: 0 0 16px;
+  padding-left: 22px;
+  color: #ded8ee;
+}
+
+.legal li {
+  margin-bottom: 8px;
+}
+
+.legal strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 16px 32px; }
+}

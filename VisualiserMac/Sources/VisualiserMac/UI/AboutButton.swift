@@ -98,10 +98,39 @@ struct AboutButton: View {
             Divider().overlay(Color.white.opacity(0.1))
 
             AnalyticsToggle()
+
+            Divider().overlay(Color.white.opacity(0.1))
+
+            LegalLinks()
         }
         .padding(18)
         .frame(width: 320)
         .background(Color(red: 0.06, green: 0.03, blue: 0.11))
+    }
+}
+
+/// The privacy policy and the terms.
+///
+/// Both are on the website, in plain English, and linked from every page of
+/// it — but somebody asking "what does this thing collect?" should not have
+/// to go looking for the answer.
+private struct LegalLinks: View {
+    private static let privacy = URL(string: "https://vibresia.com/privacy")!
+    private static let terms = URL(string: "https://vibresia.com/terms")!
+
+    var body: some View {
+        HStack(spacing: 16) {
+            Link(destination: Self.privacy) {
+                Text("Privacy")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(white: 0.62))
+            }
+            Link(destination: Self.terms) {
+                Text("Terms")
+                    .font(.system(size: 10))
+                    .foregroundStyle(Color(white: 0.62))
+            }
+        }
     }
 }
 
