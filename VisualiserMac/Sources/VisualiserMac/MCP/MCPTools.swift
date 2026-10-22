@@ -182,6 +182,7 @@ enum MCPTools {
             "uMouse": ["type": "array", "items": ["type": "number"],
                        "description": "The pointer, in the shader's own coordinates: [x, y], x across the screen and y up from the middle. The same space p is in."],
             "uMouseDown": ["type": "number", "description": "1 while a mouse button is held, 0 otherwise."],
+            "uMouseHere": ["type": "number", "description": "1 when there is a pointer to react to, 0 when there is not. Setting uMouse implies this is 1."],
             "uKey": ["type": "number", "description": "The last key pressed, as its character code. 32 is the space bar, 65 is A."],
             "uKeyDown": ["type": "number", "description": "1 while a key is held, 0 otherwise."],
             "uMidiNote": ["type": "number", "description": "The MIDI note, 0..127. 60 is middle C."],
@@ -323,6 +324,7 @@ enum MCPTools {
         if let pointer = bag["uMouse"] as? [Double] { o.mouse = pointer.map { Float($0) } }
         else if let pointer = bag["uMouse"] as? [Int] { o.mouse = pointer.map { Float($0) } }
         o.mouseDown = num("uMouseDown")
+        o.mouseHere = num("uMouseHere")
         o.key = num("uKey")
         o.keyDown = num("uKeyDown")
         o.midiNote = num("uMidiNote")

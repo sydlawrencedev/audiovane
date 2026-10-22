@@ -50,6 +50,7 @@ enum FunShaders {
     uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
     uniform vec2 uMouse;         // the pointer, in the same coordinates as p: x across, y up from the middle
     uniform float uMouseDown;    // 1 while a mouse button is held
+    uniform float uMouseHere;    // 1 when there is a pointer to react to, 0 when there is not
     uniform float uKey;          // the last key pressed, as its character code; 0 when nothing has been pressed
     uniform float uKeyDown;      // 1 while a key is held
     uniform float uMidiNote;     // the last MIDI note, 0..127
@@ -63,6 +64,18 @@ enum FunShaders {
 
     // Centered coords: y spans -0.5..0.5, x scales with aspect ratio.
     vec2 screenP() { return (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y; }
+
+    // Where the pointer is, in the same coordinates as p: x across the
+    // screen, y up from the middle. It is eased on its way here, so it
+    // never teleports from one place to another.
+    vec2 pointerAt() { return uMouse; }
+
+    // Where the pointer is, in 0..1 screen coordinates, y up. For the
+    // vibescapes that draw in that space rather than in p.
+    vec2 pointerUV() {
+        return vec2(0.5 + uMouse.x * uResolution.y / uResolution.x, 0.5 + uMouse.y);
+    }
+
     // Anti-alias width for a shape drawn at scale `s`.
     float aaw(float s) { return 1.5 / (uResolution.y * s); }
 
@@ -272,7 +285,9 @@ enum FunShaders {
         float env = smoothstep(0.0, 0.15, uEventAge) * (1.0 - smoothstep(1.3, 1.6, uEventAge));
         if (uEventKind > 0.5 && uEventKind < 1.5) {
             col = mix(col, vec3(1.0, 0.95, 0.97), 0.2 * env);
-            mushroomAt(col, p - vec2(0.0, -0.08 - (1.0 - env) * 0.5), 0.55 + uBass * 0.1 + uBeatStrength * 0.1);
+            // The mushroom comes up where you are pointing.
+            mushroomAt(col, p - vec2(pointerAt().x * uMouseHere, -0.08 - (1.0 - env) * 0.5),
+                       0.55 + uBass * 0.1 + uBeatStrength * 0.1);
         } else if (uEventKind > 1.5) {
             snakeAt(col, p, env);
         }
@@ -321,10 +336,22 @@ enum FunShaders {
         // the whoop: mouth opens and sound rings burst out on beats
         float whoop = smoothstep(0.35, 0.8, uBeatStrength);
         col = mix(col, vec3(0.25, 0.05, 0.08), fill(sdEllipse(hq - vec2(0.14, -0.03), vec2(0.03, 0.005 + 0.03 * whoop)), w));
-        float ringR = 0.06 + (1.0 - uBeatStrength) * 0.3;
-        float ring = abs(sdCircle(hq - vec2(0.16, -0.03), ringR)) - 0.008;
-        ring = max(ring, -(hq.x - 0.16));      // only the half in front of the mouth
-        col = mix(col, vec3(1.0, 0.95, 0.6), fill(ring, w) * whoop);
+        // The llama you are pointing at is the one that calls at you: how
+        // near the pointer is. Measured on the screen, where the pointer is.
+        vec2 toMouse = pointerAt() - pos;
+        float near = exp(-dot(toMouse, toMouse) * 7.0) * uMouseHere;
+        // Its head turns toward the pointer, so the call comes from that one
+        // rather than from all of them.
+        float turn = clamp(atan(toMouse.y, toMouse.x), -0.8, 0.8) * near;
+        vec2 hqTurned = rot(turn) * hq;
+        // and it calls harder for you
+        float call = whoop + near * 0.6;
+        col = mix(col, vec3(0.25, 0.05, 0.08), fill(sdEllipse(hqTurned - vec2(0.14, -0.03), vec2(0.03, 0.005 + 0.055 * call)), w));
+        vec2 mouth = vec2(0.16, -0.03);
+        float ringR = 0.06 + (1.0 - uBeatStrength) * 0.3 + near * 0.14;
+        float ring = abs(sdCircle(hqTurned - mouth, ringR)) - 0.008;
+        ring = max(ring, -(hqTurned.x - 0.16));  // only the half in front of the mouth
+        col = mix(col, vec3(1.0, 0.95, 0.6), fill(ring, w) * clamp(call, 0.0, 1.0));
     }
 
     void main() {
@@ -359,9 +386,13 @@ enum FunShaders {
     // MARK: - Hamster Dance
 
     static let hamster = """
-    void hamsterAt(inout vec3 col, vec2 q, float w, float kind, float ph) {
+    void hamsterAt(inout vec3 col, vec2 q, float w, float kind, float ph, float hot) {
         float d = dance(ph);
-        float g = groove();
+        // The hamster you are pointing at gets going: it dances twice as hard,
+        // and it grows a little, the way a hamster does when it thinks it is
+        // being watched.
+        float g = groove() * (1.0 + hot * 2.2);
+        q *= 1.0 - hot * 0.22;
         // four dance styles, picked per tile
         if (kind < 0.25)      q.y -= abs(sin(uBeats * PI + ph * 0.35)) * 0.15 * g;   // bounce
         else if (kind < 0.5)  q = rot(uTime * 3.0 + ph) * q;                        // spin
@@ -417,18 +448,29 @@ enum FunShaders {
         vec2 id = floor(sp / tile);
         vec2 q = (fract(sp / tile) - 0.5) * 1.0;
         float h = hash21(id);
+        // The tile under the pointer is the one that lights up and dances.
+        vec2 mouseId = floor((pointerAt() + vec2(uTime * 0.03, uTime * 0.02)) / tile);
+        float hot = (abs(id.x - mouseId.x) < 0.5 && abs(id.y - mouseId.y) < 0.5) ? 1.0 : 0.0;
 
         // pastel checkerboard that shifts hue on beats
         float checker = mod(id.x + id.y, 2.0);
         vec3 bg = 0.78 + 0.22 * cos(PI * 2.0 * (h * 0.3 + checker * 0.5 + uTime * 0.05 + vec3(0.0, 0.33, 0.67)));
         bg = mix(bg, vec3(1.0), 0.35 * uBeatStrength * checker);
+        // The tile under the pointer is lit, and lit warmly: it is the one
+        // you are pointing at, and it should look like it.
+        bg = mix(bg, vec3(1.0, 0.95, 0.78), 0.9 * hot * uMouseHere);
         vec3 col = bg;
         if (uSpriteKinds > 0) {
             col = mix(vec3(1.0), vec3(1.0, 0.92, 0.97), uBeatStrength);   // white page, flashes on beats
             spriteWallpaper(col);
         } else {
-            hamsterAt(col, q * 1.25, aaw(tile / 1.25), hash21(id + 7.0), h * 6.28);
+            hamsterAt(col, q * 1.25, aaw(tile / 1.25), hash21(id + 7.0), h * 6.28, hot);
         }
+        // A follow-spot, over the top of whichever hamsters are dancing —
+        // ours or the person's own GIFs. The light follows the cursor, and
+        // the one it lands on is the one that gets going.
+        vec2 toSpot = p - pointerAt();
+        col += vec3(1.0, 0.86, 0.55) * exp(-dot(toSpot, toSpot) * 7.0) * uMouseHere * 0.30;
         fragColor = vec4(col, 1.0);
     }
     """
@@ -461,7 +503,9 @@ enum FunShaders {
 
         float catX = 0.12;
         float bob = (mod(step8, 2.0) < 1.0 ? 0.0 : PIX) + floor(uBeatStrength * 3.0) * PIX;
-        float cy = bob;
+        // The cat flies at the height you point at, in whole pixels so the
+        // picture stays pixel art.
+        float cy = bob + floor(pointerAt().y * 0.55 / PIX) * PIX * uMouseHere;
 
         // rainbow trail: six stripes, stepping up and down in 8-pixel segments
         float stripeH = PIX * (3.0 + floor(uBass * 3.0));
@@ -537,6 +581,9 @@ extension FunShaders {
         col += vec3(0.03, 0.03, 0.06) * grid;
 
         const float BARS = 48.0;
+        // The analyser is tuned to where you are pointing: the band under the
+        // pointer is marked, the way a bench analyser is.
+        float mBand = floor(pointerUV().x * BARS);
         float peak = uPeaks[int(min(floor(uv.x * BARS), BARS - 1.0))] * (1.0 - 0.18 - 0.06);
         const float SEGS = 28.0;
         float base = 0.18;
@@ -553,7 +600,9 @@ extension FunShaders {
                                 : mix(vec3(0.9, 1.0, 0.1), vec3(1.0, 0.15, 0.1), (t - 0.55) / 0.45);
             if (y >= 0.0 && sy < 0.75) {
                 float lit = step(seg / SEGS, h);
-                col = mix(col, led * (0.12 + 0.88 * lit), 1.0);
+                // The pointed-at band is brighter.
+                float focused = (abs(bi - mBand) < 0.5) ? 1.0 : 0.0;
+                col = mix(col, led * (0.12 + 0.88 * lit) * (1.0 + 0.9 * focused * uMouseHere), 1.0);
                 // falling peak cap
                 if (peak > 0.01 && seg == floor(peak * SEGS)) col = vec3(1.0);
             }
@@ -563,6 +612,10 @@ extension FunShaders {
                 col = mix(col, led * 0.6, 0.35 * (1.0 - ry / (h * 0.5 + 1e-4)));
             }
         }
+        // The cursor: a line up the display where you are pointing, the way
+        // a bench analyser has a marker you slide across it.
+        float cursor = 1.0 - smoothstep(0.0, 0.006, abs(uv.x - pointerUV().x));
+        col += vec3(0.35, 1.0, 0.55) * cursor * 0.45 * uMouseHere;
         fragColor = vec4(col, 1.0);
     }
     """
@@ -573,8 +626,11 @@ extension FunShaders {
     void main() {
         vec2 p = screenP();
         p *= 1.15 - uBass * 0.3 - uBeatStrength * 0.15;     // punch in on the bass
-        float r = length(p);
-        float a = atan(p.y, p.x) + uTime * 0.12;
+        // The centre of the folds follows the pointer: the kaleidoscope is
+        // pointed at whatever you are pointing at.
+        vec2 pc = p - pointerAt() * 0.45 * uMouseHere;
+        float r = length(pc);
+        float a = atan(pc.y, pc.x) + uTime * 0.12;
         float segs = 8.0;
         float seg = 2.0 * PI / segs;
         a = mod(a, seg);
@@ -605,7 +661,9 @@ extension FunShaders {
 
     static let warp = """
     void main() {
-        vec2 p = screenP();
+        // The stars flow toward the pointer: the centre of the field moves
+        // to it, so the streaks run where you are looking.
+        vec2 p = screenP() - pointerAt() * 0.40 * uMouseHere;
         float r = length(p);
         float a = atan(p.y, p.x);
         vec3 col = vec3(0.01, 0.0, 0.03);
@@ -1347,6 +1405,16 @@ extension FunShaders {
         // front near the bottom and give the extra room to the curtain above.
         v.y += max(0.0, floor(uResolution.y / scale * 0.5 - 108.0));
 
+        // A follow-spot: the stage light follows the cursor, and the
+        // performers it lands on are lit. The pointer is in the shader's own
+        // coordinates and the stage is in pixel-art ones, so it is converted
+        // on the way: the same arithmetic v was built with, applied to the
+        // pointer instead of to this pixel.
+        vec2 mp = vec2(floor(pointerAt().x * uResolution.y / scale) + 0.5,
+                       floor(pointerAt().y * uResolution.y / scale) + 0.5
+                       + max(0.0, floor(uResolution.y / scale * 0.5 - 108.0)));
+        float lamp = exp(-dot(v - mp, v - mp) / 4200.0) * uMouseHere;
+
         // uPlay: singers and guitarists play as they walk; drums and keys at their instrument.
         float pDr = uPlay[0], pBa = uPlay[1], pGu = uPlay[2], pKe = uPlay[3];
         float beat = uBeats;
@@ -1509,6 +1577,10 @@ extension FunShaders {
             col = mix(vec3(0.02, 0.015, 0.04), uAccent, 0.12) + uAccent * 0.08 * (1.0 + uBass);
         }
 
+        // The follow-spot over the top, so the performers it lands on are
+        // lit and not just the floor behind them.
+        col += vec3(1.0, 0.95, 0.78) * lamp * 0.55;
+
         fragColor = vec4(col, 1.0);
     }
 
@@ -1650,7 +1722,9 @@ extension FunShaders {
         float halo = 0.0, core = 0.0;
         const float eps = 0.002;
         for (int i = 0; i < 7; i++) {
-            float y = wave(p.x, aspect, i);
+            // The pointer drags the trace up and down, the way you would
+            // with a scope's position control.
+            float y = wave(p.x, aspect, i) + pointerAt().y * 0.34 * uMouseHere;
             float slope = (wave(p.x + eps, aspect, i) - y) / eps;
             float d = abs(p.y - y) / sqrt(1.0 + slope * slope);   // distance to the curve, not just vertical
             float w = 0.0012 + 0.0006 * float(i);
@@ -1688,7 +1762,10 @@ extension FunShaders {
         vec2 p = rot(roll) * screenP();
         float pan = sin(uBeats * 0.25) * 1.15 * (0.3 + 0.7 * uBass) * uActive;   // strafe
         float travel = cos(uBeats * 0.5) * 0.55 * uActive;                      // up and down the floor
-        float look = sin(uBeats * 0.125) * 0.30 * uActive;                      // which way we face
+        // The floor slides with the pointer, so moving the mouse walks you
+        // across the dance floor.
+        float look = sin(uBeats * 0.125) * 0.30 * uActive
+                   + pointerAt().x * 0.32 * uMouseHere;                        // which way we face
         float horizon = 0.10 - kick * 0.035 - uBass * 0.02 * uActive;            // dips on the kick
 
         vec3 col = vec3(0.015, 0.012, 0.03);         // the room is nearly dark
@@ -1809,7 +1886,9 @@ extension FunShaders {
 
     void main() {
         vec3 col = vec3(0.0);
-        vortexAt(col, screenP(), uTime);
+        // The tunnel steers: its vanishing point moves to the pointer, so the
+        // grid converges where you are looking.
+        vortexAt(col, screenP() - pointerAt() * 0.55 * uMouseHere, uTime);
         fragColor = vec4(min(col * uActive, vec3(1.0)), 1.0);
     }
     """
@@ -2342,14 +2421,17 @@ extension FunShaders {
         // sound-gated clock); it leans in a little on the bass. In silence it
         // turns to face straight ahead, so the lines lie level.
         // The scene itself slides left past it (sceneShift).
-        float yaw = 0.12 * sin(uTime * 0.07) * gPlay;
+        // The camera turns toward the pointer, so moving the mouse looks
+        // around the room the ribbons are flying through. It is a small
+        // turn: the ribbons are the subject, not the camera.
+        float yaw = 0.12 * sin(uTime * 0.07) * gPlay + pointerAt().x * 0.22 * uMouseHere;
         // The lens is shifted up rather than tilted, so the horizon sits low and
         // the glass stays upright.
         vec3 ro = vec3(0.0, -0.40, -3.3 + 0.06 * gSwell);
         ro.xz = rot(yaw) * ro.xz;
         vec3 fw = vec3(-sin(yaw), 0.0, cos(yaw));
         vec3 rt = vec3(cos(yaw), 0.0, sin(yaw));
-        vec3 rd = normalize(p.x * rt + vec3(0.0, p.y + 0.24, 0.0) + 1.3 * fw);
+        vec3 rd = normalize(p.x * rt + vec3(0.0, p.y + 0.24 + pointerAt().y * 0.10 * uMouseHere, 0.0) + 1.3 * fw);
 
         float tFloor = rd.y < 0.0 ? (kFloorY - ro.y) / rd.y : 1e5;
         vec3 sky = skyColour(rd);
@@ -2857,7 +2939,9 @@ extension FunShaders {
         gSilkBs = smoothstep(0.0, 0.4, uBassSmooth);
         p = rot(0.06 * sin(uTime * 0.05)) * p;
         float travel = silkTravel();
-        vec2 rd = p * 1.25 + vec2(0.04 * sin(uTime * 0.11), 0.03 * sin(uTime * 0.083 + 1.0));
+        // The flight steers: the corridor leans toward the pointer.
+        vec2 rd = p * 1.25 + vec2(0.04 * sin(uTime * 0.11), 0.03 * sin(uTime * 0.083 + 1.0))
+                 + pointerAt() * 0.26 * uMouseHere;
 
         vec4 sc0 = silkScene(p, rd, travel);
         vec3 col = sc0.rgb;
@@ -3052,7 +3136,9 @@ extension FunShaders {
         // the vanishing point drifts slowly round the middle; the view rolls
         // the vanishing point circles slowly round the middle (a circle never
         // reverses), and the camera leans in as the flight eases up
-        vec2 v = vec2(-0.05, 0.03) + vec2(0.09 * cos(clk * 0.12), 0.055 * sin(clk * 0.12));
+        // The eye of the storm follows the pointer.
+        vec2 v = vec2(-0.05, 0.03) + vec2(0.09 * cos(clk * 0.12), 0.055 * sin(clk * 0.12))
+               + pointerAt() * 0.32 * uMouseHere;
         vec2 q = (p - v) / (1.0 + 0.06 * uActive * gPlay);
         float r = max(length(q), 1e-4);
         float lr = log(r);

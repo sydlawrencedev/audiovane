@@ -66,6 +66,8 @@ final class OpenGLRenderer: NSObject {
     private var uTunnelBass: GLint = -1
     private var uTunnelBeat: GLint = -1
     private var uTunnelBeatStrength: GLint = -1
+    private var uTunnelMouse: GLint = -1
+    private var uTunnelMouseHere: GLint = -1
 
     private var uParticleMVP: GLint = -1
     private var uParticleTime: GLint = -1
@@ -78,6 +80,8 @@ final class OpenGLRenderer: NSObject {
     private var uParticleResolution: GLint = -1
     private var uParticleActive: GLint = -1
     private var uParticleBands: GLint = -1
+    private var uParticleMouse: GLint = -1
+    private var uParticleMouseHere: GLint = -1
     private var uLiquidActive: GLint = -1
 
     private var uLiquidTime: GLint = -1
@@ -90,6 +94,8 @@ final class OpenGLRenderer: NSObject {
     private var uLiquidResolution: GLint = -1
     private var uLiquidIdle: GLint = -1
     private var uLiquidBands: GLint = -1
+    private var uLiquidMouse: GLint = -1
+    private var uLiquidMouseHere: GLint = -1
 
     /// Full-screen fragment-shader vibescapes (see FunShaders) share one uniform layout.
     struct ShaderMode {
@@ -109,7 +115,7 @@ final class OpenGLRenderer: NSObject {
         /// themselves instead of being duotoned afterwards. -1 when absent.
         let palette: GLint
         /// The pointer, the keys and the MIDI notes. -1 when absent.
-        let mouse, mouseDown, key, keyDown: GLint
+        let mouse, mouseDown, mouseHere, key, keyDown: GLint
         let midiNote, midiVelocity, midiNotes, midiCC, midiCCValue: GLint
     }
     private var shaderVibescapes: [Vibescape: ShaderMode] = [:]
@@ -1312,6 +1318,7 @@ final class OpenGLRenderer: NSObject {
             trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
             palette: loc("uPalette[0]"),
             mouse: loc("uMouse"), mouseDown: loc("uMouseDown"),
+            mouseHere: loc("uMouseHere"),
             key: loc("uKey"), keyDown: loc("uKeyDown"),
             midiNote: loc("uMidiNote"), midiVelocity: loc("uMidiVelocity"),
             midiNotes: loc("uMidiNotes"), midiCC: loc("uMidiCC"),
@@ -1450,6 +1457,19 @@ final class OpenGLRenderer: NSObject {
 
     // MARK: - Tunnel
 
+    /// The pointer, for the vibescapes drawn outside the shared shader path.
+    ///
+    /// The same numbers the shared shaders get: the pointer in the
+    /// shader's own coordinates, and how much of a pointer there is to
+    /// react to. Offscreen renders get the neutral values, so a share
+    /// picture and an exported video look the way they always did.
+    private var pointerInput: (x: GLfloat, y: GLfloat, here: GLfloat) {
+        let snapshot = (isRenderingOffscreen && InputState.shared.forced == nil)
+            ? InputState.Snapshot()
+            : InputState.shared.snapshot()
+        return (GLfloat(snapshot.mouse.x), GLfloat(snapshot.mouse.y), snapshot.mouseHere)
+    }
+
     private func drawTunnel(time: Float, snap: AudioSnapshot) {
         updateTunnel(snap: snap)
         glUseProgram(tunnelProgram)
@@ -1459,6 +1479,9 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(uTunnelBass, snap.bass)
         glUniform1f(uTunnelBeat, snap.beat ? 1.0 : 0.0)
         glUniform1f(uTunnelBeatStrength, snap.beatStrength)
+        let pointer = pointerInput
+        glUniform2f(uTunnelMouse, pointer.x, pointer.y)
+        glUniform1f(uTunnelMouseHere, pointer.here)
 
         // Aspect-corrected ortho projection (tunnel is rendered via vertex shader logic)
         let aspect = viewWidth / viewHeight
@@ -1543,6 +1566,9 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(uParticleBeatStrength, snap.beatStrength)
         glUniform1f(uParticleLevel, snap.level)
         glUniform2f(uParticleResolution, viewWidth, viewHeight)
+        let pointer = pointerInput
+        glUniform2f(uParticleMouse, pointer.x, pointer.y)
+        glUniform1f(uParticleMouseHere, pointer.here)
         glUniform1f(uParticleActive, Float(danceActivity))
         snap.bands.withUnsafeBufferPointer { ptr in
             glUniform1fv(uParticleBands, GLsizei(AudioAnalyzer.bandCount), ptr.baseAddress)
@@ -1598,6 +1624,18 @@ final class OpenGLRenderer: NSObject {
                 cam = (SIMD3<Float>(n[0], n[1], n[2]), SIMD3<Float>(n[3], n[4], n[5]))
             }
         }
+        // The camera looks where you point: the pointer swings the view
+        // round the machine, so you can walk your eye around the contraption
+        // without touching the controls. It is a look, not a move — the
+        // camera stays on its path.
+        let pointer = pointerInput
+        if pointer.here > 0 {
+            let forward = simd_normalize(cam.target - cam.pos)
+            let right = simd_normalize(simd_cross(forward, SIMD3<Float>(0, 1, 0)))
+            let up = simd_cross(right, forward)
+            cam.target += right * (pointer.x * 34.0) + up * (pointer.y * 24.0)
+        }
+
         let aspect = viewWidth / max(1, viewHeight)
         let viewProj = makeViewProj(eye: cam.pos, target: cam.target,
                                     up: SIMD3<Float>(0, 1, 0),
@@ -1616,6 +1654,9 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(uLiquidBeatStrength, snap.beatStrength)
         glUniform1f(uLiquidLevel, snap.level)
         glUniform2f(uLiquidResolution, viewWidth, viewHeight)
+        let pointer = pointerInput
+        glUniform2f(uLiquidMouse, pointer.x, pointer.y)
+        glUniform1f(uLiquidMouseHere, pointer.here)
         glUniform1f(uLiquidIdle, snap.sourceIsIdle)
         glUniform1f(uLiquidActive, Float(danceActivity))
 
@@ -1937,9 +1978,14 @@ final class OpenGLRenderer: NSObject {
         // middle, nothing pressed, no keys, no notes. An exported video
         // replays the recorded music, and it should not also replay
         // wherever the pointer happened to be.
-        let input = isRenderingOffscreen ? InputState.Snapshot() : InputState.shared.snapshot()
+        // A forced pointer is a deliberate request, so it is honoured even
+        // offscreen: that is how a picture with the pointer in it is made.
+        let input = (isRenderingOffscreen && InputState.shared.forced == nil)
+            ? InputState.Snapshot()
+            : InputState.shared.snapshot()
         glUniform2f(m.mouse, GLfloat(input.mouse.x), GLfloat(input.mouse.y))
         glUniform1f(m.mouseDown, input.mouseDown ? 1 : 0)
+        glUniform1f(m.mouseHere, input.mouseHere)
         glUniform1f(m.key, input.key)
         glUniform1f(m.keyDown, input.keyDown ? 1 : 0)
         glUniform1f(m.midiNote, input.midiNote)
@@ -2127,6 +2173,8 @@ final class OpenGLRenderer: NSObject {
         uTunnelBass = glGetUniformLocation(tunnelProgram, "uBass")
         uTunnelBeat = glGetUniformLocation(tunnelProgram, "uBeat")
         uTunnelBeatStrength = glGetUniformLocation(tunnelProgram, "uBeatStrength")
+        uTunnelMouse = glGetUniformLocation(tunnelProgram, "uMouse")
+        uTunnelMouseHere = glGetUniformLocation(tunnelProgram, "uMouseHere")
 
         particleProgram = makeProgram(vs: Shaders.particleVS, fs: Shaders.particleFS, "particle")
         uParticleMVP = glGetUniformLocation(particleProgram, "uMVP")
@@ -2140,6 +2188,8 @@ final class OpenGLRenderer: NSObject {
         uParticleResolution = glGetUniformLocation(particleProgram, "uResolution")
         uParticleActive = glGetUniformLocation(particleProgram, "uActive")
         uParticleBands = glGetUniformLocation(particleProgram, "uBands[0]")
+        uParticleMouse = glGetUniformLocation(particleProgram, "uMouse")
+        uParticleMouseHere = glGetUniformLocation(particleProgram, "uMouseHere")
 
         liquidProgram = makeProgram(vs: Shaders.liquidVS, fs: Shaders.liquidFS, "liquid")
         uLiquidTime = glGetUniformLocation(liquidProgram, "uTime")
@@ -2153,6 +2203,8 @@ final class OpenGLRenderer: NSObject {
         uLiquidIdle = glGetUniformLocation(liquidProgram, "uIdle")
         uLiquidActive = glGetUniformLocation(liquidProgram, "uActive")
         uLiquidBands = glGetUniformLocation(liquidProgram, "uBands[0]")
+        uLiquidMouse = glGetUniformLocation(liquidProgram, "uMouse")
+        uLiquidMouseHere = glGetUniformLocation(liquidProgram, "uMouseHere")
 
         // MACHINE vibescape
         machine.buildProgram()
@@ -2176,6 +2228,7 @@ final class OpenGLRenderer: NSObject {
             trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
             palette: loc("uPalette[0]"),
             mouse: loc("uMouse"), mouseDown: loc("uMouseDown"),
+            mouseHere: loc("uMouseHere"),
             key: loc("uKey"), keyDown: loc("uKeyDown"),
             midiNote: loc("uMidiNote"), midiVelocity: loc("uMidiVelocity"),
             midiNotes: loc("uMidiNotes"), midiCC: loc("uMidiCC"),

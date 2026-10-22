@@ -37,6 +37,8 @@ struct UniformOverrides {
     var mouse: [Float]?
     /// Whether a mouse button is down.
     var mouseDown: Float?
+    /// Whether there is a pointer to react to.
+    var mouseHere: Float?
     /// The key that was pressed, as its character code. 32 is the space bar.
     var key: Float?
     /// Whether a key is held.
@@ -84,6 +86,7 @@ struct UniformOverrides {
         if trackDuration != nil { out.append("uTrackDuration") }
         if mouse != nil { out.append("uMouse") }
         if mouseDown != nil { out.append("uMouseDown") }
+        if mouseHere != nil { out.append("uMouseHere") }
         if key != nil { out.append("uKey") }
         if keyDown != nil { out.append("uKeyDown") }
         if midiNote != nil { out.append("uMidiNote") }
@@ -604,6 +607,8 @@ private struct UniformValues {
     var mouseY: Float = 0
     /// Whether a mouse button is down.
     var mouseDown: Float = 0
+    /// Whether there is a pointer to react to.
+    var mouseHere: Float = 0
     /// The last key pressed, as its character code.
     var key: Float = 0
     /// Whether a key is held.
@@ -705,6 +710,7 @@ private struct UniformValues {
         v.mouseX = Float(input.mouse.x)
         v.mouseY = Float(input.mouse.y)
         v.mouseDown = input.mouseDown ? 1 : 0
+        v.mouseHere = input.mouseHere
         v.key = input.key
         v.keyDown = input.keyDown ? 1 : 0
         v.midiNote = input.midiNote
@@ -718,6 +724,11 @@ private struct UniformValues {
             v.mouseY = x[1]
         }
         if let x = overrides.mouseDown { v.mouseDown = x }
+        if let x = overrides.mouseHere { v.mouseHere = x }
+        // A pointer set by hand is a pointer there is: without this, an
+        // agent asking for a pointer at the left of the screen would get a
+        // vibescape that ignores it.
+        if overrides.mouseHere == nil, overrides.mouse != nil { v.mouseHere = 1 }
         if let x = overrides.key { v.key = x }
         if let x = overrides.keyDown { v.keyDown = x }
         if let x = overrides.midiNote { v.midiNote = x }
@@ -805,6 +816,7 @@ private struct UniformValues {
         glUniform1f(loc("uTrackKnown"), trackKnown)
         glUniform2f(loc("uMouse"), mouseX, mouseY)
         glUniform1f(loc("uMouseDown"), mouseDown)
+        glUniform1f(loc("uMouseHere"), mouseHere)
         glUniform1f(loc("uKey"), key)
         glUniform1f(loc("uKeyDown"), keyDown)
         glUniform1f(loc("uMidiNote"), midiNote)

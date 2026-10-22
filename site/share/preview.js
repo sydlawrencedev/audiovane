@@ -48,6 +48,7 @@ uniform float uTrackProgress; // 0..1 through the track, 0 when unknown
 uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
 uniform vec2 uMouse;         // the pointer, in the same coordinates as p: x across, y up from the middle
 uniform float uMouseDown;    // 1 while a mouse button is held
+uniform float uMouseHere;    // 1 when there is a pointer to react to, 0 when there is not
 uniform float uKey;          // the last key pressed, as its character code; 0 when nothing has been pressed
 uniform float uKeyDown;      // 1 while a key is held
 uniform float uMidiNote;     // the last MIDI note, 0..127
@@ -61,6 +62,18 @@ const float PI = 3.14159265;
 
 // Centered coords: y spans -0.5..0.5, x scales with aspect ratio.
 vec2 screenP() { return (gl_FragCoord.xy - 0.5 * uResolution) / uResolution.y; }
+
+// Where the pointer is, in the same coordinates as p: x across the
+// screen, y up from the middle. It is eased on its way here, so it
+// never teleports from one place to another.
+vec2 pointerAt() { return uMouse; }
+
+// Where the pointer is, in 0..1 screen coordinates, y up. For the
+// vibescapes that draw in that space rather than in p.
+vec2 pointerUV() {
+    return vec2(0.5 + uMouse.x * uResolution.y / uResolution.x, 0.5 + uMouse.y);
+}
+
 // Anti-alias width for a shape drawn at scale \`s\`.
 float aaw(float s) { return 1.5 / (uResolution.y * s); }
 
@@ -343,7 +356,7 @@ void main() {
       "uLevelSmooth", "uBassSmooth", "uBeat", "uBeatStrength", "uResolution",
       "uIdle", "uActive", "uBeats", "uScroll", "uClock", "uPresence", "uGenre",
       "uTrackPos", "uTrackDuration", "uTrackProgress", "uTrackKnown",
-      "uMouse", "uMouseDown", "uKey", "uKeyDown",
+      "uMouse", "uMouseDown", "uMouseHere", "uKey", "uKeyDown",
       "uMidiNote", "uMidiVelocity", "uMidiNotes", "uMidiCC", "uMidiCCValue",
       "uBands[0]", "uPalette[0]"]);
     var g = uniforms(gl, grade, ["uTex", "uShadow", "uHighlight", "uSaturation",
@@ -364,15 +377,34 @@ void main() {
 
   // The pointer, in the same coordinates the shader's p is in: x across the
   // screen, y up from the middle, both scaled by the height.
-  var pointer = { x: 0, y: 0, down: false };
+  //
+  // Where the pointer really is, and where it has been eased to. A pointer
+  // arrives in whole pixels and jumps when the hand moves quickly, so a
+  // vibescape that drew from it directly would twitch. The eased value is
+  // what the shader gets: it chases the pointer with a time constant of a
+  // few tens of milliseconds, quick enough to feel attached to the hand and
+  // slow enough not to judder. The app eases it the same way.
+  var pointer = { x: 0, y: 0, down: false, here: 0 };
+  var pointerTarget = { x: 0, y: 0 };
+  var pointerLast = 0;
+
+  function easePointer(now) {
+    var dt = pointerLast ? Math.min(0.1, Math.max(0, now - pointerLast)) : 0;
+    pointerLast = now;
+    // A time constant of about 45 milliseconds.
+    var k = dt > 0 ? 1 - Math.exp(-dt / 0.045) : 0;
+    pointer.x += (pointerTarget.x - pointer.x) * k;
+    pointer.y += (pointerTarget.y - pointer.y) * k;
+  }
 
   function watchPointer(canvas) {
     if (!canvas || !canvas.addEventListener) return;
     function move(event) {
       var rect = canvas.getBoundingClientRect();
       if (!rect || !rect.height) return;
-      pointer.x = (event.clientX - rect.left - rect.width / 2) / rect.height;
-      pointer.y = (rect.top + rect.height / 2 - event.clientY) / rect.height;
+      pointerTarget.x = (event.clientX - rect.left - rect.width / 2) / rect.height;
+      pointerTarget.y = (rect.top + rect.height / 2 - event.clientY) / rect.height;
+      pointer.here = 1;
     }
     canvas.addEventListener("pointermove", move);
     canvas.addEventListener("pointerdown", function (event) {
@@ -384,6 +416,7 @@ void main() {
   }
 
   function draw(gl, canvas, s, t) {
+    easePointer(t);
     var a = fakeAudio(t);
     var w = canvas.width, h = canvas.height;
 
@@ -423,6 +456,7 @@ void main() {
     // and no keyboard to spare, so those stay at their neutral values.
     gl.uniform2f(u.uMouse, pointer.x, pointer.y);
     gl.uniform1f(u.uMouseDown, pointer.down ? 1 : 0);
+    gl.uniform1f(u.uMouseHere, pointer.here);
     gl.uniform1f(u.uKey, 0);
     gl.uniform1f(u.uKeyDown, 0);
     gl.uniform1f(u.uMidiNote, 0);

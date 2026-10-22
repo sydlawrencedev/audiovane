@@ -20,6 +20,14 @@ final class InputState: @unchecked Sendable {
     /// which reacts to the pointer can be judged in the app itself.
     static let shared = InputState()
 
+    /// A pointer put somewhere on purpose, for testing and for rendering
+    /// stills. `VIBRESIA_MOUSE="0.2,-0.1"` puts the pointer there.
+    ///
+    /// It is how a picture with the pointer in it can be rendered at all:
+    /// the pointer is read from the window, and an offscreen render has no
+    /// window to read it from.
+    let forced: CGPoint?
+
     /// One frame's worth of input, read in one go.
     struct Snapshot {
         /// The pointer, in the shader's `p` space: x across the screen, y up
@@ -27,6 +35,14 @@ final class InputState: @unchecked Sendable {
         var mouse: CGPoint = .zero
         /// Whether a mouse button is down.
         var mouseDown = false
+        /// Whether there is a pointer to speak of.
+        ///
+        /// Zero until the pointer has actually been over the window, and
+        /// zero everywhere the pointer cannot be: a share image, an exported
+        /// video, a headless preview. It is what lets a vibescape react to
+        /// the pointer without a permanent smudge in the middle of the
+        /// picture where nobody ever pointed.
+        var mouseHere: Float = 0
         /// The last key that was pressed, as its character code. Zero when
         /// nothing has been pressed.
         var key: Float = 0
@@ -44,8 +60,30 @@ final class InputState: @unchecked Sendable {
 
     /// The lock. The keyboard and the MIDI ports write from other threads;
     /// the renderer reads once a frame.
+    init() {
+        forced = InputState.forcedFromEnvironment()
+    }
+
+    /// The pointer the environment asks for, if it asks for one.
+    private static func forcedFromEnvironment() -> CGPoint? {
+        guard let raw = ProcessInfo.processInfo.environment["VIBRESIA_MOUSE"] else { return nil }
+        let parts = raw.split(separator: ",").compactMap { Double($0) }
+        guard parts.count >= 2 else { return nil }
+        return CGPoint(x: parts[0], y: parts[1])
+    }
+
     private let lock = NSLock()
     private var current = Snapshot()
+    /// Where the pointer really is, and where it has been eased to.
+    ///
+    /// A pointer arrives in whole pixels and jumps when the hand moves
+    /// quickly, so a vibescape that drew from it directly would twitch.
+    /// The eased value is what the shaders get: it chases the pointer with
+    /// a time constant of a few tens of milliseconds, which is quick
+    /// enough to feel like the pointer and smooth enough not to judder.
+    private var mouseTarget = CGPoint.zero
+    private var mouseEased = CGPoint.zero
+    private var mouseLastUpdate: CFTimeInterval = 0
     /// The notes that are being held, so that letting go of one is not
     /// mistaken for letting go of another.
     private var held: Set<UInt8> = []
@@ -54,13 +92,41 @@ final class InputState: @unchecked Sendable {
     func snapshot() -> Snapshot {
         lock.lock()
         defer { lock.unlock() }
-        return current
+        var out = current
+        if let forced {
+            out.mouse = forced
+            out.mouseHere = 1
+            return out
+        }
+        out.mouse = easedMouse()
+        return out
+    }
+
+    /// The pointer, eased towards where it really is.
+    ///
+    /// The easing is by elapsed time rather than by frame, so it feels the
+    /// same at 30fps and at 120.
+    private func easedMouse() -> CGPoint {
+        let now = CACurrentMediaTime()
+        let dt = min(0.1, max(0, now - mouseLastUpdate))
+        mouseLastUpdate = now
+        // A time constant of about 45 milliseconds: quick enough that the
+        // pointer feels attached to the hand, slow enough that a flick
+        // does not snap the picture.
+        let k = 1 - exp(-dt / 0.045)
+        mouseEased.x += (mouseTarget.x - mouseEased.x) * k
+        mouseEased.y += (mouseTarget.y - mouseEased.y) * k
+        return mouseEased
     }
 
     // MARK: - The pointer and the keys
 
+    /// The pointer moved. There is a pointer now.
     func setMouse(_ point: CGPoint) {
-        lock.lock(); current.mouse = point; lock.unlock()
+        lock.lock()
+        mouseTarget = point
+        current.mouseHere = 1
+        lock.unlock()
     }
 
     func setMouseDown(_ down: Bool) {

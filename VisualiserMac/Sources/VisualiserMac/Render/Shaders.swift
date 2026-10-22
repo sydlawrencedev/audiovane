@@ -57,6 +57,8 @@ enum Shaders {
     uniform float uBass;
     uniform float uBeat;
     uniform float uBeatStrength;
+    uniform vec2 uMouse;      // the pointer, in the same coordinates as p
+    uniform float uMouseHere; // 1 when there is a pointer to react to
 
     out vec3 vColor;
     out float vDepth01;
@@ -82,9 +84,14 @@ enum Shaders {
         // global scale so the visible ring just fills the viewport
         float scale = 0.18;
 
+        // The tunnel leans toward the pointer: the further a ring is down
+        // the corridor, the more it has drifted that way, so the tunnel
+        // bends where you are looking.
+        float lean = (1.0 - invZ) * uMouseHere;
+
         vec3 worldPos = vec3(
-            aPos.x * invZ * ringExpand * scale,
-            aPos.y * invZ * ringExpand * scale,
+            aPos.x * invZ * ringExpand * scale + uMouse.x * lean * 0.35,
+            aPos.y * invZ * ringExpand * scale + uMouse.y * lean * 0.35,
             z
         );
 
@@ -127,6 +134,8 @@ enum Shaders {
     uniform vec2 uResolution;
     uniform float uActive;      // 0 in silence, 1 with sound
     uniform float uBands[96];
+    uniform vec2 uMouse;      // the pointer, in the same coordinates as p
+    uniform float uMouseHere; // 1 when there is a pointer to react to
 
     out vec3 vColor;
     out float vBeat;
@@ -177,26 +186,39 @@ enum Shaders {
 
         worldPos.y += uMid * 0.5 * sin(aSeed * 6.28);
 
-        float groupRot = uTime * 0.05;
+        // The swarm turns to face the pointer, the way a shoal turns when
+        // something moves past it: the pointer leads it round and tips it.
+        float groupRot = uTime * 0.05 + uMouse.x * 0.85 * uMouseHere;
         float cg = cos(groupRot);
         float sg = sin(groupRot);
         vec3 r1 = vec3(worldPos.x * cg - worldPos.z * sg, worldPos.y, worldPos.x * sg + worldPos.z * cg);
 
-        float tilt = sin(uTime * 0.13) * 0.18 + 0.5;
+        float tilt = sin(uTime * 0.13) * 0.18 + 0.5 + uMouse.y * 0.42 * uMouseHere;
         float ct = cos(tilt);
         float st = sin(tilt);
         vec3 r2 = vec3(r1.x, r1.y * ct - r1.z * st, r1.y * st + r1.z * ct);
 
         vec3 cameraOffset = vec3(sin(uTime * 0.2) * 0.4, cos(uTime * 0.15) * 0.3, 14.0 + uLevel * 1.5);
+
         vec3 viewPos = r2 - cameraOffset;
 
         gl_Position = uMVP * vec4(viewPos, 1.0);
-        vColor = aColor;
+
+        // The orbs under the pointer flare up, the way a crowd leans towards
+        // the light. The pointer is in the shader's own coordinates and the
+        // orbs are in the screen's, so the pointer is converted into the
+        // screen's before the two are compared.
+        float aspect = uResolution.x / max(uResolution.y, 1.0);
+        vec2 pointerNDC = vec2(2.0 * uMouse.x / aspect, 2.0 * uMouse.y);
+        vec2 orbNDC = gl_Position.xy / max(gl_Position.w, 0.001);
+        float near = exp(-dot(orbNDC - pointerNDC, orbNDC - pointerNDC) * 5.0) * uMouseHere;
+
+        vColor = aColor * (1.0 + near * 1.6);
         vBeat = uBeatStrength * (0.5 + band * 0.5);
 
         // point size with perspective shrink
         float dist = max(0.001, -viewPos.z);
-        gl_PointSize = aSize * (260.0 / dist) * (1.0 + uBeatStrength * 1.2 + band * 0.4);
+        gl_PointSize = aSize * (260.0 / dist) * (1.0 + uBeatStrength * 1.2 + band * 0.4 + near * 1.4);
     }
     """
 
@@ -240,6 +262,8 @@ enum Shaders {
     uniform float uIdle;
     uniform float uBands[96];
     uniform float uActive;
+    uniform vec2 uMouse;      // the pointer, in the same coordinates as p
+    uniform float uMouseHere; // 1 when there is a pointer to react to
     out vec4 fragColor;
 
     float lhash(vec2 p) {
@@ -274,6 +298,15 @@ enum Shaders {
     void main() {
         vec2 res = uResolution;
         vec2 p = (gl_FragCoord.xy * 2.0 - res) / min(res.x, res.y);
+
+        // The pointer stirs the liquid: the flow bends around it, and the
+        // surface lifts where it is. The pointer is in the shader's own
+        // coordinates, and this shader works in its own, so it is converted
+        // on the way.
+        vec2 mp = vec2(uMouse.x * res.y / min(res.x, res.y), uMouse.y * res.y / min(res.x, res.y));
+        float md = length(p - mp);
+        vec2 swirl = normalize(p - mp + vec2(1e-5, 0.0)) * uMouseHere * 0.35 * exp(-md * 1.5);
+        p += swirl;
 
         float t = uTime * 0.16;
 
@@ -321,6 +354,9 @@ enum Shaders {
 
         float vig = smoothstep(1.4, 0.3, length(p));
         col *= 0.55 + vig * 0.7;
+
+        // A glow under the pointer, so you can see where you are stirring.
+        col += vec3(0.9, 0.75, 1.0) * exp(-md * 2.6) * 0.16 * uMouseHere;
 
         float grain = lhash(gl_FragCoord.xy + uTime * 0.01) - 0.5;
         col += grain * 0.025;

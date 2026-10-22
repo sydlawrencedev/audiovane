@@ -453,6 +453,9 @@ enum CustomVibescapeGuide {
       uMouse           the pointer, in the same coordinates as p: x across
                        the screen, y up from the middle
       uMouseDown  0..1 1 while a mouse button is held
+      uMouseHere  0..1 1 when there is a pointer to react to, 0 when there
+                       is not — a shared page, an exported video and a
+                       thumbnail have nobody at them
       uKey             the last key pressed, as its character code — 32 is
                        the space bar — 0 when nothing has been pressed
       uKeyDown   0..1  1 while a key is held
@@ -462,18 +465,21 @@ enum CustomVibescapeGuide {
       uMidiCC          the last MIDI controller that moved, 0..127
       uMidiCCValue     where that controller is, 0..1
 
-    The last nine are what the person is doing rather than what the music is
+    The last ten are what the person is doing rather than what the music is
     doing. `uMouse` is in the same coordinates as `p`, so it survives a change
-    of window shape and can be compared with `p` directly. The keys are
+    of window shape and can be compared with `p` directly. `uMouseHere` says
+    whether there is anybody there at all: it is 0 with nobody at the screen,
+    so a reaction to the pointer can be faded out rather than left hanging in
+    the middle of the picture. The keys are
     watched, not taken: the app's own shortcuts still work, so a vibescape
     that reacts to "1" sees the vibescape change as well. Reading MIDI needs
     no permission prompt, and a machine with nothing plugged in simply reports
     nothing.
 
     None of it is ever logged or sent anywhere. On a page with nobody at it —
-    a shared link, an exported video — the pointer sits in the middle,
-    nothing is pressed, no keys are held and no notes are playing, so a
-    vibescape that uses them still draws.
+    a shared link, an exported video — the pointer sits in the middle and
+    `uMouseHere` is 0, nothing is pressed, no keys are held and no notes are
+    playing, so a vibescape that uses them still draws.
 
     Anything that looks like a cloud, a flame or smoke is `fbm`:
 
@@ -495,6 +501,9 @@ enum CustomVibescapeGuide {
     These helpers are already defined for you:
 
       screenP()        centred coordinates, x scaled to the window shape
+      pointerAt()      the pointer, in the same coordinates as p
+      pointerUV()      the pointer, in 0..1 screen coordinates: x from the
+                       left, y from the bottom
       hash21(p)        random number from a position, always 0..1
       vnoise(p)        smooth noise at a position, 0..1
       fbm(p)           four octaves of vnoise, 0..1
@@ -635,7 +644,12 @@ enum CustomVibescapeGuide {
 
     - The pointer is `uMouse` — a vec2 in the same coordinates as `p`, so it
       can be compared with `p` directly, with no conversion. `uMouseDown` is 1
-      while a button is held.
+      while a button is held, and `uMouseHere` is 1 only when there is a
+      pointer to react to: it is 0 on a shared page, an exported video and a
+      thumbnail, so multiply by it when the reaction should not sit in the
+      middle of the picture with nobody there. `pointerAt()` is the pointer in
+      `p`'s coordinates and `pointerUV()` is the pointer in 0..1 screen
+      coordinates.
     - The keys are `uKey`, the character code of the last key pressed (32 is
       the space bar, 65 is A), and `uKeyDown`, 1 while a key is held.
     - The MIDI notes are `uMidiNote` (0..127), `uMidiVelocity` (0..1) and
