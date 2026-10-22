@@ -41,6 +41,13 @@ final class LiveUniforms {
         var palette: String = "NEON"
         var vibescape: String = ""
         var rms: Float = 0
+        /// Where the playhead is in the track, and how long the track is.
+        /// Zero when there is no position to know.
+        var trackPos: Float = 0
+        var trackDuration: Float = 0
+        var trackProgress: Float = 0
+        /// 1 when the position is real, 0 when there is none to know.
+        var trackKnown: Float = 0
         var at: Date = Date()
 
         /// How long ago this reading was taken.
@@ -83,6 +90,10 @@ final class LiveUniforms {
             rms = f("rms")
             palette = state["palette"] as? String ?? "NEON"
             vibescape = state["vibescape"] as? String ?? ""
+            trackPos = f("uTrackPos")
+            trackDuration = f("uTrackDuration")
+            trackProgress = f("uTrackProgress")
+            trackKnown = f("uTrackKnown")
             at = Date(timeIntervalSince1970: state["at"] as? Double ?? 0)
         }
     }
@@ -159,6 +170,10 @@ final class LiveUniforms {
             "rms": value.rms,
             "palette": value.palette,
             "vibescape": value.vibescape,
+            "uTrackPos": value.trackPos,
+            "uTrackDuration": value.trackDuration,
+            "uTrackProgress": value.trackProgress,
+            "uTrackKnown": value.trackKnown,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: state) else { return }
         // Written to a temporary file and moved into place, so a reader never

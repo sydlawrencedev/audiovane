@@ -28,13 +28,17 @@ struct UniformOverrides {
     var clock: Float?
     /// Up to 96 values, low to high. Fewer are padded, more are truncated.
     var bands: [Float]?
+    /// Where in the track we are, in seconds.
+    var trackPos: Float?
+    /// How long the track is, in seconds.
+    var trackDuration: Float?
 
     var isEmpty: Bool {
         bass == nil && mid == nil && treble == nil && level == nil
             && levelSmooth == nil && bassSmooth == nil && beat == nil
             && beatStrength == nil && beats == nil && active == nil
             && idle == nil && presence == nil && scroll == nil && clock == nil
-            && bands == nil
+            && bands == nil && trackPos == nil && trackDuration == nil
     }
 
     var names: [String] {
@@ -54,6 +58,8 @@ struct UniformOverrides {
         if scroll != nil { out.append("uScroll") }
         if clock != nil { out.append("uClock") }
         if bands != nil { out.append("uBands") }
+        if trackPos != nil { out.append("uTrackPos") }
+        if trackDuration != nil { out.append("uTrackDuration") }
         return out
     }
 }
@@ -556,6 +562,12 @@ private struct UniformValues {
     var scroll: Float = 0
     var clock: Float = 0
     var bands = [Float](repeating: 0, count: 96)
+    /// Where the playhead is, and how long the track is. Zero when there is
+    /// no position to know.
+    var trackPos: Float = 0
+    var trackDuration: Float = 0
+    var trackProgress: Float = 0
+    var trackKnown: Float = 0
     /// Whether these numbers came from the app or from a stand-in.
     var source = "stand-in values"
 
@@ -596,6 +608,10 @@ private struct UniformValues {
             v.clock = live.clock
             v.bands = live.bands
             v.beatsPerSecond = live.beatsPerSecond
+            v.trackPos = live.trackPos
+            v.trackDuration = live.trackDuration
+            v.trackProgress = live.trackProgress
+            v.trackKnown = live.trackKnown
             v.source = "the music playing now"
         } else {
             v.bass = 0.62
@@ -628,6 +644,15 @@ private struct UniformValues {
         if let x = overrides.scroll { v.scroll = x }
         if let x = overrides.clock { v.clock = x }
         if let x = overrides.bands { v.bands = padded(x) }
+        if let x = overrides.trackPos { v.trackPos = x }
+        if let x = overrides.trackDuration { v.trackDuration = x }
+        // The progress and the "is it real" flag follow the two, so an
+        // override of one is enough.
+        if overrides.trackPos != nil || overrides.trackDuration != nil {
+            let progress = v.trackDuration > 0 ? v.trackPos / v.trackDuration : 0
+            v.trackProgress = min(1, max(0, progress))
+            v.trackKnown = (overrides.trackPos != nil || overrides.trackDuration != nil) ? 1 : 0
+        }
 
         // uActive is forced on unless the caller says otherwise, and this is
         // not a convenience: it is the difference between a usable preview and
@@ -695,6 +720,10 @@ private struct UniformValues {
         glUniform1f(loc("uLevelSmooth"), levelSmooth)
         glUniform1f(loc("uBassSmooth"), bassSmooth)
         glUniform1f(loc("uPresence"), presence)
+        glUniform1f(loc("uTrackPos"), trackPos)
+        glUniform1f(loc("uTrackDuration"), trackDuration)
+        glUniform1f(loc("uTrackProgress"), trackProgress)
+        glUniform1f(loc("uTrackKnown"), trackKnown)
         if !bands.isEmpty {
             glUniform1fv(loc("uBands[0]"), GLsizei(bands.count), bands)
         }

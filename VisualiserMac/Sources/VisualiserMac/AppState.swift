@@ -363,6 +363,11 @@ final class AppState: ObservableObject {
             "source_idle": snap.sourceIsIdle > 0.5,
             "vibescape": activeVibescape.rawValue,
             "palette": paletteIndex < Palette.all.count ? Palette.all[paletteIndex].name : "?",
+            // Where the playhead is, when the player says. Zero and "not
+            // known" are different things, so the flag goes with them.
+            "uTrackPos": Self.round2(audio.tracks.position),
+            "uTrackDuration": Self.round2(audio.tracks.duration ?? 0),
+            "uTrackKnown": audio.tracks.positionIsKnown ? 1 : 0,
         ]
         guard let data = try? JSONSerialization.data(withJSONObject: state),
               let text = String(data: data, encoding: .utf8),

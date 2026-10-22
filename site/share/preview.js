@@ -42,6 +42,10 @@ uniform float uBassSmooth;  // the same slow easing applied to uBass
 uniform float uPresence;    // music presence, 0..1: eases in and out over ~2.3 s, no chatter
 uniform int uGenre;         // the genre of the music: 0 classical, 1 electronic, 2 rock,
                              // 3 pop, 4 hiphop, 5 jazz, 6 blues, 7 country, 8 rnb, 9 ambient
+uniform float uTrackPos;    // seconds into the track, 0 when there is no position to know
+uniform float uTrackDuration; // the length of the track in seconds, 0 when unknown
+uniform float uTrackProgress; // 0..1 through the track, 0 when unknown
+uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
 out vec4 fragColor;
 
 const float PI = 3.14159265;
@@ -329,6 +333,7 @@ void main() {
     var u = uniforms(gl, program, ["uTime", "uBass", "uMid", "uTreble", "uLevel",
       "uLevelSmooth", "uBassSmooth", "uBeat", "uBeatStrength", "uResolution",
       "uIdle", "uActive", "uBeats", "uScroll", "uClock", "uPresence", "uGenre",
+      "uTrackPos", "uTrackDuration", "uTrackProgress", "uTrackKnown",
       "uBands[0]", "uPalette[0]"]);
     var g = uniforms(gl, grade, ["uTex", "uShadow", "uHighlight", "uSaturation",
       "uDuotone", "uLift"]);
@@ -372,6 +377,13 @@ void main() {
     gl.uniform1f(u.uScroll, a.scroll);
     gl.uniform1f(u.uClock, a.clock);
     gl.uniform1f(u.uPresence, a.presence);
+    // The browser has no idea what is playing, so there is no position to
+    // know: the track is unknown, and the uniforms say so rather than
+    // pretending a shader that wants a progress bar is at the start.
+    gl.uniform1f(u.uTrackPos, 0);
+    gl.uniform1f(u.uTrackDuration, 0);
+    gl.uniform1f(u.uTrackProgress, 0);
+    gl.uniform1f(u.uTrackKnown, 0);
     // The browser has no idea what is playing, so the preview says it is
     // rock. A shader that branches on the genre still draws.
     gl.uniform1i(u.uGenre, 2);

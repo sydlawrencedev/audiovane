@@ -44,6 +44,10 @@ enum FunShaders {
     uniform float uPresence;    // music presence, 0..1: eases in and out over ~2.3 s, no chatter
     uniform int uGenre;         // the genre of the music: 0 classical, 1 electronic, 2 rock,
                                  // 3 pop, 4 hiphop, 5 jazz, 6 blues, 7 country, 8 rnb, 9 ambient
+    uniform float uTrackPos;    // seconds into the track, 0 when there is no position to know
+    uniform float uTrackDuration; // the length of the track in seconds, 0 when unknown
+    uniform float uTrackProgress; // 0..1 through the track, 0 when unknown
+    uniform float uTrackKnown;  // 1 when the position is real, 0 when there is none to know
     out vec4 fragColor;
 
     const float PI = 3.14159265;

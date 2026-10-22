@@ -402,6 +402,13 @@ enum CustomVibescapeGuide {
       uGenre             the genre of the music, as a number:
                          0 classical, 1 electronic, 2 rock, 3 pop, 4 hip-hop,
                          5 jazz, 6 blues, 7 country, 8 r&b, 9 ambient
+      uTrackPos          seconds into the track, 0 when there is no position
+                         to know
+      uTrackDuration     the length of the track in seconds, 0 when unknown
+      uTrackProgress     0..1 through the track, 0 when unknown
+      uTrackKnown        1 when the position is real, 0 when there is none to
+                         know — so "no position" is not mistaken for "the
+                         start of the track"
 
     Anything that looks like a cloud, a flame or smoke is `fbm`:
 
@@ -545,6 +552,13 @@ enum CustomVibescapeGuide {
     on it changes with the music in a way the bass alone cannot. Ask what is
     playing first if you can — the app can tell you the genre, the tempo and the
     shape of the spectrum — and write for that.
+
+    `uTrackPos` is how far into the track we are, in seconds, with
+    `uTrackDuration`, `uTrackProgress` (0 to 1) and `uTrackKnown` (1 when the
+    position is real, 0 when there is nothing to know — a browser tab or a
+    film, where there is no track to be in). The time in the track is there
+    for whatever you want to do with it: a world that unfolds over the length
+    of a song, anything that needs to know where it is, or nothing at all.
 
     Fade gently in silence by scaling the final colour by uActive.
 

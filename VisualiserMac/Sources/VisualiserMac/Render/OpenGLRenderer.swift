@@ -95,6 +95,10 @@ final class OpenGLRenderer: NSObject {
         /// `uGenre` — the genre of the music, so any vibescape can branch on
         /// it and not only the band. -1 when absent.
         let genre: GLint
+        /// Where the playhead is in the track: `uTrackPos`,
+        /// `uTrackDuration`, `uTrackProgress` and `uTrackKnown`. -1 when
+        /// absent.
+        let trackPos, trackDuration, trackProgress, trackKnown: GLint
         /// `uPalette[0]` — vibescapes with deliberate colours read the palette
         /// themselves instead of being duotoned afterwards. -1 when absent.
         let palette: GLint
@@ -1243,6 +1247,8 @@ final class OpenGLRenderer: NSObject {
             scroll: loc("uScroll"), clock: loc("uClock"),
             levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
             presence: loc("uPresence"), genre: loc("uGenre"),
+            trackPos: loc("uTrackPos"), trackDuration: loc("uTrackDuration"),
+            trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
             palette: loc("uPalette[0]"))
         return .success(m)
     }
@@ -1695,6 +1701,12 @@ final class OpenGLRenderer: NSObject {
         reading.rms = snap.rms
         reading.palette = Palette.palette(at: paletteIndex).name
         reading.vibescape = mode?.rawValue ?? ""
+        let tracks = audio.tracks
+        let length = tracks.duration ?? 0
+        reading.trackPos = Float(tracks.position)
+        reading.trackDuration = Float(length)
+        reading.trackProgress = Float(min(1, max(0, length > 0 ? tracks.position / length : 0)))
+        reading.trackKnown = tracks.positionIsKnown ? 1 : 0
         LiveUniforms.shared.record(reading)
         // And out to disk, because the MCP server is a different process and
         // wouldn't otherwise be able to read a single one of these.
@@ -1733,6 +1745,14 @@ final class OpenGLRenderer: NSObject {
         glUniform1f(m.presence, Float(presence))
         // The genre of the music, for any vibescape that branches on it.
         glUniform1i(m.genre, GLint(genre.rawValue))
+        // Where the playhead is, for a vibescape that wants to follow the
+        // track rather than the beat.
+        let tracks = audio.tracks
+        let length = tracks.duration ?? 0
+        glUniform1f(m.trackPos, Float(tracks.position))
+        glUniform1f(m.trackDuration, Float(length))
+        glUniform1f(m.trackProgress, Float(min(1, max(0, length > 0 ? tracks.position / length : 0))))
+        glUniform1f(m.trackKnown, tracks.positionIsKnown ? 1 : 0)
         if m.palette >= 0 { bindPalette(to: m.palette) }
         // Everything drawn from here on is exactly this: the values, the clocks
         // and the palette. Publishing them means an agent tuning a coefficient
@@ -1958,6 +1978,8 @@ final class OpenGLRenderer: NSObject {
                 scroll: loc("uScroll"), clock: loc("uClock"),
                 levelSmooth: loc("uLevelSmooth"), bassSmooth: loc("uBassSmooth"),
                 presence: loc("uPresence"), genre: loc("uGenre"),
+            trackPos: loc("uTrackPos"), trackDuration: loc("uTrackDuration"),
+            trackProgress: loc("uTrackProgress"), trackKnown: loc("uTrackKnown"),
             palette: loc("uPalette[0]"))
             if mode == .band {
                 uBandParts = loc("uParts[0]"); uBandHits = loc("uHits"); uBandPluck = loc("uPluck")

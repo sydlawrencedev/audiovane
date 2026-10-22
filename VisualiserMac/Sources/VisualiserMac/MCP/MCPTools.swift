@@ -177,6 +177,8 @@ enum MCPTools {
             "uPresence": ["type": "number", "description": "Whether there's music at all, 0..1, very slow."],
             "uScroll": ["type": "number", "description": "Forward-only distance. The easiest thing to scroll a vibescape by."],
             "uClock": ["type": "number", "description": "Wall-clock seconds. Keeps running in silence."],
+            "uTrackPos": ["type": "number", "description": "Seconds into the track, for a preview that needs a position. 0 when there is none to know."],
+            "uTrackDuration": ["type": "number", "description": "The length of the track in seconds."],
         ]
         return props
     }
@@ -304,6 +306,8 @@ enum MCPTools {
         o.presence = num("uPresence")
         o.scroll = num("uScroll")
         o.clock = num("uClock")
+        o.trackPos = num("uTrackPos")
+        o.trackDuration = num("uTrackDuration")
         if let bands = bag["uBands"] as? [Double] { o.bands = bands.map { Float($0) } }
         else if let bands = bag["uBands"] as? [Int] { o.bands = bands.map { Float($0) } }
         // uActive is forced on unless asked otherwise: a preview that respects
@@ -467,6 +471,16 @@ enum MCPTools {
         lines.append("  uBeatStrength \(d(f("uBeatStrength")))     uActive       \(d(f("uActive")))   what the built-ins multiply by")
         lines.append("  uIdle         \(d(f("uIdle")))     uScroll       \(d(f("uScroll")))   forward-only distance")
         lines.append("  uBeats        \(d(f("uBeats")))     uClock        \(d(f("uClock")))   wall-clock seconds")
+        let trackKnown = f("uTrackKnown") > 0
+        if trackKnown {
+            let position = f("uTrackPos")
+            let length = f("uTrackDuration")
+            let progress = length > 0 ? position / length : 0
+            let stamp = String(format: "%d:%02d", Int(position) / 60, Int(position) % 60)
+            lines.append("  uTrackPos     \(d(position))s      uTrackProgress \(d(progress))   \(stamp) into a \(String(format: "%.0f", length))s track")
+        } else {
+            lines.append("  uTrackKnown   0                 no position to know — nothing is playing that says where it is")
+        }
         lines.append("")
         lines.append("uBeats advances at \(d(beatsPerSecond)) beats/sec\(bpm > 0 ? " (\(Int(bpm.rounded())) bpm detected)" : ""), so `uBeats * 0.5` is a quarter-cycle per beat at the current tempo.")
 
@@ -502,6 +516,8 @@ enum MCPTools {
             "uActive": f("uActive"), "uIdle": f("uIdle"),
             "uPresence": f("uPresence"), "uScroll": f("uScroll"),
             "uClock": f("uClock"), "beats_per_second": beatsPerSecond,
+            "uTrackPos": f("uTrackPos"), "uTrackDuration": f("uTrackDuration"),
+            "uTrackProgress": f("uTrackProgress"), "uTrackKnown": f("uTrackKnown"),
             "bpm": bpm, "palette": state["palette"] ?? "",
             "vibescape": state["vibescape"] ?? "",
         ]))
@@ -981,6 +997,17 @@ enum MCPTools {
             ? "\(state["genre"] as? String ?? "?") (suspected, \(Int(confidence * 100))% confident)"
             : "\(state["genre"] as? String ?? "?") (pinned by you)"
         lines.append("Genre: \(genre)")
+
+        // Where in the track we are, when the player says.
+        if (state["uTrackKnown"] as? Double ?? 0) > 0 {
+            let position = state["uTrackPos"] as? Double ?? 0
+            let length = state["uTrackDuration"] as? Double ?? 0
+            let progress = length > 0 ? position / length : 0
+            let stamp = String(format: "%d:%02d", Int(position) / 60, Int(position) % 60)
+            lines.append("Track: \(stamp) into a \(String(format: "%.0f", length))s track (\(Int((progress * 100).rounded()))% through)")
+        } else {
+            lines.append("Track: no position to know — nothing playing is saying where it is")
+        }
 
         // Instruments, the ones it can hear most strongly first.
         if let heard = state["instruments"] as? [[String: Any]], !heard.isEmpty {
