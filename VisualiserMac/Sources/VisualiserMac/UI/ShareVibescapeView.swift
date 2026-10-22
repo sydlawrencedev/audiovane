@@ -39,6 +39,9 @@ struct ShareVibescapeView: View {
     /// The short link, once the site has made it. Nil until then, and nil
     /// for good if the site could not be reached.
     @State private var shortLink: String?
+    /// That the site could not make the link, so the sheet says so rather
+    /// than handing out the long form.
+    @State private var linkFailed: Bool = false
     @State private var makingLink = false
     /// The make that is running, so the Share button can wait for it rather
     /// than starting a second one.
@@ -82,19 +85,50 @@ struct ShareVibescapeView: View {
     /// The URL the recipient gets. Recomputed by SwiftUI on each render,
     /// which is cheap (a couple of `URLComponents` operations) and keeps
     /// the URL box in sync if the active vibescape ever changes.
-    private var shareURL: URL {
-        // The short link once there is one, the long one otherwise. The long
-        // one always works — it carries the payload with it — so a site that
-        // is down or a rate limit that trips costs the prettiness of the
-        // link, not the link itself.
-        if let shortLink, let url = URL(string: shortLink) { return url }
-        return longShareURL
+    /// The link to show, to copy and to share.
+    ///
+    /// A built-in vibescape's link is already short: the site has a page for
+    /// every one of them. A custom vibescape's link is the short one the
+    /// site makes, and nothing else.
+    ///
+    /// The long form — the payload in the query string, about 370 characters
+    /// — still works, and the site still resolves it, but it is never shown,
+    /// never copied and never shared. It is not a link anybody wants to put
+    /// in a message, and the short one is the same vibescape behind it.
+    ///
+    /// So a custom vibescape waits for the short link rather than falling
+    /// back to the long one. If the site cannot be reached, the sheet says
+    /// so and offers another go, rather than quietly handing out a URL that
+    /// looks broken.
+    private var shareURL: URL? {
+        switch vibescape {
+        case .builtin:
+            return getShareURL(for: vibescape)
+        case .custom:
+            guard let shortLink, let url = URL(string: shortLink) else { return nil }
+            return url
+        }
     }
 
-    /// The long form: the payload in the query string. Always works, with
-    /// nothing stored anywhere.
-    private var longShareURL: URL {
-        getShareURL(for: vibescape)
+    /// What goes on the system share sheet: the pitch, and the short link.
+    ///
+    /// The link is there by the time the sheet opens — the Share button
+    /// waits for it — so this is only ever the short one.
+    private var shareItems: [Any] {
+        guard let url = shareURL else { return [pitch] }
+        return [pitch, url]
+    }
+
+    /// What the URL box says.
+    ///
+    /// The link, once there is one. Before that it says what is happening,
+    /// which is better than a long URL that silently changes length a moment
+    /// later.
+    private var urlBoxText: String {
+        if let shareURL { return shareURL.absoluteString }
+        if makingLink { return "Making the link…" }
+        if linkFailed { return "Couldn't reach the site" }
+        return "Preparing the link…"
     }
 
     /// A short, human-readable summary of what the URL contains, used as
@@ -153,9 +187,14 @@ struct ShareVibescapeView: View {
             // vibescape's own author.
             author = currentAuthor
             // Start making the short link as soon as the sheet is up, so it
-            // is usually ready before the person reaches for Share. If it
-            // never arrives, the long link is still there.
-            Task { await makeShortLink() }
+            // is usually ready before the person reaches for Share. The box
+            // shows the link once it is there, and what is happening until
+            // then — never the long form, which is not a link anybody wants
+            // to put in a message.
+            Task { @MainActor in
+                guard vibescape.isCustom else { return }
+                if await shortLinkWhenReady() == nil { linkFailed = true }
+            }
         }
     }
 
@@ -295,7 +334,10 @@ struct ShareVibescapeView: View {
             app.setCustomVibescapeAuthor(id: id, author: wanted)
         }
         shortLink = nil
-        Task { await makeShortLink() }
+        linkFailed = false
+        Task { @MainActor in
+            if await shortLinkWhenReady() == nil { linkFailed = true }
+        }
     }
 
     /// True when this vibescape came from somebody else, so it cannot be
@@ -340,26 +382,40 @@ struct ShareVibescapeView: View {
 
     private var urlBox: some View {
         HStack(spacing: 8) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                Text(shareURL.absoluteString)
-                    .font(.system(size: 13, weight: .medium, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.17, green: 0.95, blue: 1.0))
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .padding(.vertical, 2)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            // Not in a scroll view any more: the long form is gone, and the
+            // short link is thirty-odd characters, so there is nothing to
+            // scroll to. The truncation stays as a safety net.
+            Text(urlBoxText)
+                .font(.system(size: 13, weight: .medium, design: .monospaced))
+                .foregroundStyle(shareURL == nil ? Color(white: 0.45) : Color(red: 0.17, green: 0.95, blue: 1.0))
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .padding(.vertical, 2)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            // Says what is going on rather than showing a long URL that
-            // silently changes length a moment later.
-            if vibescape.isCustom && shortLink == nil {
-                if makingLink {
-                    ProgressView().controlSize(.small).scaleEffect(0.7)
-                } else {
-                    Text("Long link")
-                        .font(.system(size: 10, weight: .medium, design: .monospaced))
-                        .foregroundStyle(Color(white: 0.45))
+            // Another go, when the site could not make the link. The long
+            // form would still work, but it is not the link, so the sheet
+            // asks again rather than handing one out.
+            if linkFailed {
+                Button {
+                    retryLink()
+                } label: {
+                    Text("Retry")
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .frame(minWidth: 64, minHeight: 26)
+                        .padding(.horizontal, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color(white: 0.18))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 6)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                        )
+                        .foregroundStyle(.white)
                 }
+                .buttonStyle(.plain)
+                .help("Try making the link again")
             }
 
             Button {
@@ -416,7 +472,7 @@ struct ShareVibescapeView: View {
         }
         .buttonStyle(.plain)
         .onHover { hoverShare = $0 }
-        .background(VibescapeSharePickerAnchor(isPresented: $isSharing, items: [pitch, shareURL]))
+        .background(VibescapeSharePickerAnchor(isPresented: $isSharing, items: shareItems))
     }
     private var savePreviewButton: some View {
         Button {
@@ -539,22 +595,47 @@ struct ShareVibescapeView: View {
     }
 
     /// The Share button. Waits for the short link if there isn't one yet, so
-    /// the link that goes into the chat is the short one — but shares the
-    /// long one if the site can't be reached, rather than doing nothing.
+    /// the link that goes into the chat is the short one — and if the site
+    /// cannot make one, says so instead of sharing the long form, which is
+    /// not a link anybody wants in a message.
     ///
     /// It waits for the link that is already being made rather than
     /// starting another: two makes at once would race, and the slower one
     /// would win.
     private func shareTapped() {
         Task { @MainActor in
-            if vibescape.isCustom {
-                _ = await shortLinkWhenReady()
+            guard await linkToShare() != nil else {
+                linkFailed = true
+                return
             }
             isSharing = true
         }
         Task { await Analytics.shared.track("share_sheet_opened", [
             "kind": vibescape.isCustom ? "custom" : "builtin"
         ]) }
+    }
+
+    /// The link to hand out: the short one.
+    ///
+    /// A built-in vibescape's link is short already. A custom one waits for
+    /// the site to make it, and there is no fallback: the long form is never
+    /// shown, copied or shared.
+    private func linkToShare() async -> URL? {
+        if vibescape.isCustom {
+            guard let link = await shortLinkWhenReady(),
+                  let url = URL(string: link) else { return nil }
+            return url
+        }
+        return getShareURL(for: vibescape)
+    }
+
+    /// Asks the site for the link again, after it could not be reached.
+    private func retryLink() {
+        linkFailed = false
+        makingLink = false
+        Task { @MainActor in
+            _ = await shortLinkWhenReady()
+        }
     }
 
     /// The short link, waiting for the one being made if there is one.
@@ -568,14 +649,26 @@ struct ShareVibescapeView: View {
         return link
     }
 
+    /// Puts the link on the clipboard.
+    ///
+    /// The short one, always. If it isn't there yet, the link is made first
+    /// — and if it cannot be made, nothing is copied: the long form still
+    /// works, but it is not the link, so the sheet says what went wrong
+    /// rather than quietly handing one out.
     private func copyLink() {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(shareURL.absoluteString, forType: .string)
-        copied = true
-        Task { await Analytics.shared.track("share_link_copied", [
-            "kind": vibescape.isCustom ? "custom" : "builtin"
-        ]) }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+        Task { @MainActor in
+            guard let url = await linkToShare() else {
+                linkFailed = true
+                return
+            }
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(url.absoluteString, forType: .string)
+            copied = true
+            Task { await Analytics.shared.track("share_link_copied", [
+                "kind": vibescape.isCustom ? "custom" : "builtin"
+            ]) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { copied = false }
+        }
     }
 
     private func savePreviewImage() {
