@@ -21,6 +21,12 @@ struct FooterView: View {
 
         HStack(alignment: .bottom, spacing: 16) {
             NowPlayingCell(id: current)
+            // The strip belongs in the corner rather than in the middle of
+            // the window. It used to be nudged left of centre with a pair of
+            // paddings, which is not the same thing: a block that is merely
+            // off-centre reads as misplaced, and one that is in the corner
+            // reads as designed.
+            Spacer(minLength: 0)
         }
     }
 }
@@ -78,16 +84,18 @@ struct NowPlayingCell: View {
                 .foregroundStyle(Color(white: 0.55))
                 .lineLimit(1)
                 .frame(maxWidth: 260, alignment: .leading)
-                // Lifted to sit on the same line as the "🩷 from Minith Labs"
-                // in the bottom-right corner, which is eight points higher:
-                // that label is inside a pill with six points of padding on
-                // it, and the pill's bottom is two points lower than this
-                // strip's, so without this the credit reads as sitting a
-                // little low. An offset rather than padding, so the line
-                // above it stays where it is.
-                .offset(y: -8)
             }
         }
+        // The whole block is lifted to sit on the same line as the "🩷 from
+        // Minith Labs" in the bottom-right corner, which is eight points
+        // higher: that label is inside a pill with six points of padding on
+        // it, and the pill's bottom is two points lower than this strip's,
+        // so without this the credit reads as sitting a little low.
+        //
+        // The name and the share button come up with it. The credit was
+        // lifted on its own, which left the three of them looking like they
+        // had been arranged by accident rather than as one thing.
+        .offset(y: -8)
         // fixedSize so the block hugs its text rather than competing with the
         // audio cells for leftover space. Both caps above still truncate.
         .fixedSize(horizontal: true, vertical: false)

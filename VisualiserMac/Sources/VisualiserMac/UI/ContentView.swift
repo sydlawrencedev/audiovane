@@ -39,8 +39,6 @@ struct ContentView: View {
                 // person watching rather than to the app, so they stay.
                 FooterView()
                     .padding(.leading, 28)
-                    // Leave room for the credits button in the corner.
-                    .padding(.trailing, 215)
                     .padding(.bottom, 14)
             }
             .animation(.easeInOut(duration: 0.35), value: chromeVisible)
