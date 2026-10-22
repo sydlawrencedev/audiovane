@@ -35,4 +35,4 @@ Found a bug or have an idea? [File an issue](https://github.com/sydlawrencedev/v
 Pull requests are very welcome, especially new vibescapes: see the [contributing guide](https://github.com/sydlawrencedev/vibresia/blob/main/CONTRIBUTING.md).
 ```
 
-Vibresia checks for updates every time it opens and can install them itself, so there's nothing else to set up.
+Vibresia checks for updates when it opens and again every hour while it is running, and can install them itself, so there's nothing else to set up. An update it finds is offered in the menu rather than in a window that would cover what you are watching.

@@ -6,6 +6,8 @@ import MetalKit
 struct VisualiserApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var app = AppState()
+    /// The updater, so the menu can say an update is waiting for it.
+    @ObservedObject private var updater = UpdateChecker.shared
 
     var body: some Scene {
         WindowGroup("VIBRESIA") {
@@ -30,7 +32,14 @@ struct VisualiserApp: App {
         .commands {
             CommandGroup(replacing: .newItem) { }
             CommandGroup(after: .appInfo) {
-                Button("Check for Updates…") { UpdateChecker.shared.check(userInitiated: true) }
+                // An update that the hourly check found is offered here rather
+                // than in a modal: the check must not interrupt whatever is
+                // on screen, and the install happens when somebody asks.
+                if let version = updater.availableVersion {
+                    Button("Install Vibresia \(version)…") { updater.installAvailableUpdate() }
+                } else {
+                    Button("Check for Updates…") { updater.check(userInitiated: true) }
+                }
                 Divider()
                 // The pair a crashed user needs without having to know where
                 // macOS keeps its reports: email us the latest, or open the
@@ -169,9 +178,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared?.clearDownloadsCopyIfPending()
         }
 
-        // Look for a newer release on every launch (not in the test vibescapes).
+        // Look for a newer release on every launch, and then every hour
+        // (not in the test vibescapes).
         let testVibescape = ["--snapshot", "--record", "--video", "--share-image"].contains { CommandLine.arguments.contains($0) }
-        if !testVibescape { UpdateChecker.shared.check(userInitiated: false) }
+        if !testVibescape {
+            UpdateChecker.shared.check(userInitiated: false)
+            UpdateChecker.shared.startHourlyChecks()
+        }
 
         // Snapshot vibescape — render a few frames then exit. Used for verification.
         if CommandLine.arguments.contains("--snapshot") {

@@ -10,10 +10,13 @@ import Foundation
 /// certificate and notarized, so the downloaded copy opens on its own; the
 /// quarantine flag is still cleared before relaunching, which costs nothing
 /// and is a fallback for a Mac that cannot validate the ticket.
-final class UpdateChecker {
+final class UpdateChecker: ObservableObject {
     static let shared = UpdateChecker()
     static let repo = "sydlawrencedev/vibresia"
     private static let assetName = "Vibresia.zip"
+
+    /// How often the automatic check runs.
+    private static let hourlyInterval: TimeInterval = 3600
 
     private struct Release: Decodable {
         let tag_name: String
@@ -26,9 +29,66 @@ final class UpdateChecker {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     }
 
+    /// The version waiting to be installed, when one has been found.
+    ///
+    /// Set by the hourly check, which must not interrupt whatever is on
+    /// screen — a visualiser that is full screen with the lights off does
+    /// not want a modal in the middle of it. The menu says so instead, and
+    /// the install happens when somebody asks for it.
+    @Published private(set) var availableVersion: String?
+
+    /// The release behind it, so the install can be started from the menu
+    /// without asking GitHub again.
+    private var availableRelease: Release?
+
+    /// The version somebody said "Later" to. Not offered again on its own.
+    private var declinedVersion: String?
+
+    /// A check that is already running. Two at once is two requests for one
+    /// answer, and the second one to arrive is the one that wins.
+    private var isChecking = false
+
+    /// The timer behind the hourly check.
+    private var hourlyTimer: Timer?
+
+    /// Starts the hourly check, once, for the life of the app.
+    ///
+    /// A timer on the main run loop does not wake a sleeping Mac, and a
+    /// run loop that was asleep for three hours fires it once rather than
+    /// three times — which is what "do not wake a sleeping Mac, and after
+    /// waking perform at most one overdue check" comes down to.
+    func startHourlyChecks() {
+        guard hourlyTimer == nil else { return }
+        let timer = Timer(timeInterval: Self.hourlyInterval, repeats: true) { [weak self] _ in
+            self?.check(userInitiated: false)
+        }
+        // Two minutes of slack: a check that is a few minutes late is still
+        // on time, and the system can move it to a moment when the Mac is
+        // awake and busy with something else.
+        timer.tolerance = 120
+        // Common mode, so the timer keeps running while a menu is open.
+        RunLoop.main.add(timer, forMode: .common)
+        hourlyTimer = timer
+        NSLog("[UPDATE] checking every hour as well as at launch")
+    }
+
+    /// Pretends there is a newer release, for checking the update flow
+    /// without publishing one.
+    ///
+    /// The app is usually up to date, so the state the hourly check leaves
+    /// behind is the part that never gets seen. `--update-spike` puts it
+    /// there on purpose.
+    private var isSpiking: Bool {
+        CommandLine.arguments.contains("--update-spike")
+    }
+
     /// `userInitiated`: from the menu — also report "you're up to date" and errors.
     func check(userInitiated: Bool) {
         if !userInitiated && ProcessInfo.processInfo.environment["VIBRESIA_NO_UPDATE_CHECK"] != nil { return }
+        // One at a time. The manual check and the hourly one can land on
+        // each other, and the answer should not be fetched twice.
+        guard !isChecking else { return }
+        isChecking = true
         if userInitiated {
             Task {
                 await Analytics.shared.track("update_check_requested")
@@ -41,6 +101,9 @@ final class UpdateChecker {
         URLSession.shared.dataTask(with: request) { data, _, error in
             let release = data.flatMap { try? JSONDecoder().decode(Release.self, from: $0) }
             DispatchQueue.main.async {
+                // The check is over, one way or another — so the next one
+                // can start.
+                self.isChecking = false
                 guard let release else {
                     if userInitiated {
                         Task {
@@ -52,7 +115,13 @@ final class UpdateChecker {
                     }
                     return
                 }
-                let latest = release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+                var latest = release.tag_name.trimmingCharacters(in: CharacterSet(charactersIn: "vV"))
+                if self.isSpiking {
+                    // A version that is definitely newer than this build, in
+                    // the same date scheme — an odd one would be read as an
+                    // old-style version and compared the other way round.
+                    latest = "1.0.101"
+                }
                 guard Self.isNewer(latest, than: self.currentVersion) else {
                     if userInitiated {
                         Task {
@@ -70,8 +139,22 @@ final class UpdateChecker {
                             "manual update check completed",
                             attributes: ["update_available": true, "latest_version": latest])
                     }
+                    self.offer(latest, release: release)
+                    return
                 }
-                self.offer(latest, release: release)
+                // The hourly check does not ask. A visualiser that is full
+                // screen in a dark room should not have a modal appear in
+                // the middle of it, so the update is noted and the menu says
+                // so — and the install happens when somebody asks for it.
+                guard latest != self.declinedVersion else { return }
+                self.availableVersion = latest
+                self.availableRelease = release
+                NSLog("[UPDATE] found \(latest) — offering it in the menu")
+                Task {
+                    await Analytics.shared.logToPostHog(
+                        "update found by the hourly check",
+                        attributes: ["latest_version": latest])
+                }
             }
         }.resume()
     }
@@ -91,6 +174,18 @@ final class UpdateChecker {
             if x != y { return x > y }
         }
         return false
+    }
+
+    /// Installs the update that was found, if there is one.
+    ///
+    /// This is the explicit action the hourly check waits for: the menu says
+    /// an update is there, and clicking it is somebody asking for it.
+    func installAvailableUpdate() {
+        guard let version = availableVersion, let release = availableRelease else {
+            check(userInitiated: true)
+            return
+        }
+        offer(version, release: release)
     }
 
     private func offer(_ version: String, release: Release) {
@@ -118,6 +213,11 @@ final class UpdateChecker {
             Task { await Analytics.shared.track("update_release_notes_opened", ["version": version]) }
             if let url = URL(string: release.html_url) { NSWorkspace.shared.open(url) }
         default:
+            // "Later" means later: the same release is not offered again
+            // on its own, so the hourly check stops mentioning it.
+            declinedVersion = version
+            availableVersion = nil
+            availableRelease = nil
             break
         }
     }
