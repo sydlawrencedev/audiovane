@@ -631,10 +631,10 @@ struct VibescapeSwitch: View {
 
 /// Loads the vibescape pictures that ship with the app's website.
 ///
-/// They're in the site folder rather than in the bundle because the app
-/// doesn't ship them today. If they're not there — a build from source, or
-/// a trimmed bundle — the card falls back to a generated cover rather than
-/// showing a broken image.
+/// They are the pictures the website uses, and the app ships them in its
+/// bundle, so a card shows what the vibescape looks like. If they're not
+/// there — a build from source, or a trimmed bundle — the card falls back to
+/// a generated cover rather than showing a broken image.
 enum VibescapePreviewImage {
     private static var cache: [String: NSImage] = [:]
 
@@ -648,16 +648,20 @@ enum VibescapePreviewImage {
     }
 
     private static func load(builtin: Vibescape) -> NSImage? {
-        // The pictures live beside the site, and the app is usually run from
-        // a build in the same checkout. Look in a few places rather than
+        // The pictures are in the bundle's resources in a packaged app, and
+        // beside the site in a checkout. Look in a few places rather than
         // insisting on one layout.
         let file = "modes/\(builtin.rawValue).jpg"
         var roots: [URL] = []
         if let override = ProcessInfo.processInfo.environment["VIBRESIA_PREVIEW_DIR"] {
             roots.append(URL(fileURLWithPath: override, isDirectory: true))
         }
+        // In a packaged app they are in the bundle's resources, which is
+        // where the build puts them.
+        if let resources = Bundle.main.resourceURL {
+            roots.append(resources)
+        }
         let here = URL(fileURLWithPath: Bundle.main.bundlePath)
-        roots.append(here.appendingPathComponent("Resources"))
         roots.append(here.deletingLastPathComponent())
         // Up two levels from the built .app: <checkout>/VisualiserMac/build/Vibresia.app
         roots.append(here.deletingLastPathComponent().deletingLastPathComponent()

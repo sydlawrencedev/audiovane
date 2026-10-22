@@ -40,6 +40,16 @@ print(f"structured data matches VERSION {version}")
 # shareable when both are present — a missing HTML means the link 404s, a
 # missing JPG means crawlers see no preview.
 import os
+
+# Every built-in also needs a picture. The app ships them in its bundle so
+# that View All shows what a vibescape looks like; a missing one leaves the
+# card as a generated cover, and nothing else breaks.
+missing_pictures = [slug for slug in sorted(app)
+                    if not os.path.exists(f"{root}/site/media/modes/{slug}.jpg")]
+if missing_pictures:
+    print("No picture for:", ", ".join(missing_pictures))
+    sys.exit(1)
+print(f"every vibescape has a picture ({len(app)})")
 # Files that live in `site/share/` but aren't per-vibescape: the JS/CSS/JSON
 # share-page machinery and `index.html` (a copy of `site/share.html` that
 # serves `/share/` via Cloudflare's directory-index resolution). Skipping

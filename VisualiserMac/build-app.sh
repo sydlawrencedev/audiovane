@@ -99,6 +99,18 @@ fi
 # Regenerate with: swift scripts/make-icon.swift (from the repo root)
 cp "$SCRIPT_DIR/Resources/AppIcon.icns" "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
 
+# The pictures of the built-in vibescapes, so that View All shows what each
+# one looks like instead of a generated cover. They are the same pictures the
+# website uses, which is the point: the app and the site show the same
+# vibescape the same way. 832KB for the lot.
+PREVIEW_SRC="$SCRIPT_DIR/../site/media/modes"
+if [ -d "$PREVIEW_SRC" ]; then
+  mkdir -p "$APP_BUNDLE/Contents/Resources/modes"
+  cp "$PREVIEW_SRC"/*.jpg "$APP_BUNDLE/Contents/Resources/modes/"
+else
+  echo "WARNING: no pictures in $PREVIEW_SRC — View All will show generated covers." >&2
+fi
+
 cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
