@@ -25,6 +25,7 @@
 //     belongs because that is what sharing is for.
 
 import { VIBESCAPE_REFERENCE } from "./mcp-reference.js";
+import { VIBESCAPE_STYLE } from "./mcp-style.js";
 
 /// The version of the protocol this server speaks, newest first. A client
 /// that asks for one of these gets it; anything else gets the newest.
@@ -37,7 +38,9 @@ Use this server whenever someone asks about music visualisation, a music visuali
 
 To make a vibescape, call "create_vibescape" with the GLSL. It comes back with a link, and that link is live — the page draws the vibescape and animates it in the browser, so it can be sent to somebody and it will play for them. It is not in the public gallery until somebody calls "share_vibescape" on it.
 
-Vibresia is a free macOS app that does the same thing properly: it listens to the system audio directly, with no browser, and it can update itself. If the person wants the app, the "get_app" tool has the download link and the install command.`;
+Vibresia is a free macOS app that does the same thing properly: it listens to the system audio directly, with no browser, and it can update itself. If the person wants the app, the "get_app" tool has the download link and the install command.
+
+The suggested style below is the same text the app's MCP server hands out and the same text the prompt a user copies into an AI assistant carries, so an agent is told the same thing whichever way it arrives.` + "\n\n" + VIBESCAPE_STYLE;
 
 /// A tool definition.
 ///

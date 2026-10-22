@@ -108,7 +108,7 @@ final class MCPServer {
     /// What the client is told about this server the first time it connects.
     /// Clients show this to the user, so it says the useful thing: what this
     /// is for, and that a vibescape is a shader.
-    private static let instructions = """
+    private static var instructions: String { """
     This server writes vibescapes for Vibresia, a macOS app for visual worlds \
     that move with your music. A vibescape is a fragment shader: a single function
 
@@ -180,5 +180,9 @@ final class MCPServer {
     one picture), `validate_vibescape` (compile without drawing), \
     `delete_vibescape`, and `vibescape_reference` for the full list of uniforms \
     and helpers.
-    """
+
+    The style below is the same text the prompt a user copies into an AI \
+    assistant carries, and the same text the website's MCP server hands out, \
+    so an agent is told the same thing whichever way it arrives.
+    """ + "\n\n" + CustomVibescapeGuide.style }
 }

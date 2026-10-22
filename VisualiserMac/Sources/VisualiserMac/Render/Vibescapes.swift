@@ -540,8 +540,91 @@ enum CustomVibescapeGuide {
     you wrote it, pass `grade: false` in the preview options.
     """
 
+    /// The suggested style, shared by every route an AI can take.
+    ///
+    /// One text. The prompt somebody copies into an AI assistant, the app's
+    /// MCP server's instructions and its reference, and the website's public
+    /// MCP server all say this, so an agent is told the same thing whichever
+    /// way it arrives — and `scripts/check-mcp-reference.py` fails the release
+    /// if the copies stop matching.
+    ///
+    /// It is guidance, not a catalogue of themes: the person's own idea of
+    /// what it should look like is the thing to keep. How it moves is where
+    /// the advice is.
+    static let style = """
+    ## Suggested style
+
+    The subject and the look are the person's, and they are what to keep. \
+    How it moves is where the advice is.
+
+    ### Spec
+
+    - Output only: `vec3 render(vec2 p, float t){...}`
+    - Uniforms: uBass uMid uTreble uLevel uLevelSmooth uBassSmooth uBeat \
+    uBeatStrength uBands[96] uActive uBeats uClock (+ uTrackPos uTrackDuration \
+    uTrackKnown if useful)
+    - Helpers: screenP hash21 vnoise fbm bandAt rot sdCircle sdBox sdRoundBox \
+    sdSeg fill aaw PI
+    - Bounded loops. End with: `return clamp(col,0.,1.) * uActive;`
+    - Full screen height at any aspect ratio, no letterbox. In portrait, pull \
+    the lens back yourself: `screenP()` keeps the height at 1 and scales the \
+    width, so a scene that is too tall has to be scaled down to stay in frame.
+
+    ### Motion (silky)
+
+    - Big motion only from uLevelSmooth, uBassSmooth and uBeats, the eased \
+    beat clock.
+    - uBeat and uBeatStrength only for flashes and glints.
+    - No jolts. Anything that flows uses accumulated phase \
+    (`t*k + uBeats*k2`), never `speed*time` that can jump. `uBeats` climbs \
+    smoothly but is reduced modulo 1024, so a recipe that accumulates it over \
+    a long time has to cope with the wrap.
+    - Keep transitions eased. Smoothness is about the transition, not the \
+    amplitude — strong reactivity does not mean camera jolts, discontinuities \
+    or constant flashing.
+
+    ### Reactivity (must be obvious)
+
+    - By default, make the vibescape clearly and strongly animated to the \
+    music. The connection between what the listener hears and what they see \
+    must be immediately obvious, not a faint pulse or barely visible \
+    movement. Drive prominent changes in shape, scale, flow, motion size or \
+    colour heat from the music; a time-only animation with a small \
+    brightness tweak is not enough. Use subtle or minimal animation only \
+    when the user explicitly asks for it.
+    - Map the music to 0..1 using the app's REAL ranges, not 0..1. These are \
+    starting points, not measurements:
+
+          eL = smoothstep(0.05, 0.10, uLevelSmooth)
+          eB = smoothstep(0.04, 0.22, uBassSmooth)
+          E  = clamp(0.35*eL + 0.65*eB, 0., 1.);  E = 1.-(1.-E)*(1.-E);
+          highs: smoothstep(0.004, 0.020, mean of upper bandAt)
+          mids/bands: smoothstep(0.015, 0.07, bandAt(x))
+          kick: uBeatStrength*1.6 (it peaks around 0.6)
+
+      `bandAt(x)` takes x from 0 to 1 across the 96 bands, low to high.
+    - Measure the actual track and set the thresholds so the quiet intro \
+    sits near 0.2 and the full section near 1.0, and still about 0.7 if the \
+    levels run 30% low. If you cannot measure a track, say so, and tune \
+    against the preview tools instead of pretending to have done it.
+    - Quiet must look calm; loud must look like a different scene (glow, \
+    scale, motion size, colour heat).
+    """
+
+    /// The reference as it is handed out: the uniforms, and the style.
+    ///
+    /// The style is the same text the copy-paste prompt carries, so an
+    /// agent is told the same thing whichever route it arrives by.
+    static var fullReference: String { withStyle(reference) }
+
+    /// A piece of text with the style under it.
+    private static func withStyle(_ text: String) -> String { text + "\n\n" + style }
+
     /// Ready-to-paste prompt for someone using an AI coding assistant.
-    static let agentPrompt = """
+    static var agentPrompt: String { withStyle(promptBody) }
+
+    /// The prompt itself, without the style.
+    private static let promptBody = """
     Write a vibescape for Vibresia, a macOS app for visual worlds that move \
     with music. The output is one GLSL function, pasted into the app and \
     compiled as a fragment shader.
@@ -560,7 +643,8 @@ enum CustomVibescapeGuide {
     - Return a colour: vec3 with three numbers from 0 to 1.
     - `p` is centred on the screen and runs about -0.5 to 0.5 vertically.
     - `t` is seconds since launch.
-    - React to the music so it visibly moves with the track.
+    - React to the music so it visibly moves with the track — clearly, not \
+      subtly. The suggested style below says what that means.
 
     Already available, do not redefine:
       uniforms: uBass uMid uTreble uLevel uLevelSmooth uBassSmooth
@@ -587,8 +671,9 @@ enum CustomVibescapeGuide {
 
     Fade gently in silence by scaling the final colour by uActive.
 
-    Briefly describe the visual in one sentence AFTER the code block, so the \
-    user knows what they are about to add.
+    The answer is the code block and nothing else. If the user asked for a \
+    description of what they are about to add, put it in the app's name \
+    field, not in the answer.
     """
 
     /// The blank starting point for someone writing it by hand.

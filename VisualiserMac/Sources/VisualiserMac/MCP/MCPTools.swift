@@ -201,7 +201,7 @@ enum MCPTools {
         case "diff_vibescape": return diffVibescape(arguments)
         case "list_vibescapes": return listVibescapes()
         case "get_vibescape": return getVibescape(arguments)
-        case "vibescape_reference": return textResult(CustomVibescapeGuide.reference)
+        case "vibescape_reference": return textResult(CustomVibescapeGuide.fullReference)
         case "what_i_hear": return whatIHear()
         case "test_vibescape": return previewVibescape(arguments, animation: false)
         case "create_vibescape": return createVibescape(arguments)
