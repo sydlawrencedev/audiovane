@@ -93,6 +93,12 @@ struct VibescapesView: View {
     /// The gallery, and the order it is in.
     @StateObject private var gallery = GalleryModel()
 
+    /// The gallery items being added right now, so that a card shows it is
+    /// working and cannot be pressed twice.
+    @State private var installing: Set<String> = []
+    /// What went wrong, if something did.
+    @State private var installError: String?
+
     var body: some View {
         VStack(spacing: 0) {
             header
@@ -133,7 +139,7 @@ struct VibescapesView: View {
                         .foregroundStyle(.white)
                     Text(tab == .installed
                          ? "Switch off the ones you don't want in the list or in Auto Scan. Drag them to change the order."
-                         : "The vibescapes people have shared. Open one to see it, and to add it to your own list.")
+                         : "The vibescapes people have shared. Open one to see it, or press + to add it to your own list.")
                         .font(.system(size: 11))
                         .foregroundStyle(Color(white: 0.55))
                         .fixedSize(horizontal: false, vertical: true)
@@ -246,6 +252,75 @@ struct VibescapesView: View {
         .padding(18)
     }
 
+    /// Whether a gallery item is on this Mac already.
+    ///
+    /// A built-in is here whatever else is true — it ships with the app —
+    /// but it can be switched off, and a switched-off built-in is offered
+    /// as a plus, which switches it on and runs it.
+    private func isInstalled(_ item: GalleryModel.Item) -> Bool {
+        if item.isBuiltIn {
+            guard let mode = Vibescape(rawValue: item.id) else { return true }
+            return app.enabledVibescapes.contains { $0.id == .builtin(mode) }
+        }
+        for entry in app.allVibescapes {
+            guard case .custom(let id) = entry.id,
+                  let mode = app.customVibescape(id: id) else { continue }
+            // A shared vibescape is matched by the share it came from.
+            if let shareID = mode.shareID, shareID == item.id { return true }
+            // A copy that arrived on the long link has no share id of its
+            // own, so the name and the author are matched as well.
+            if mode.name == item.name, mode.author == item.author { return true }
+        }
+        return false
+    }
+
+    /// Adds a gallery vibescape to Installed and runs it.
+    ///
+    /// The same path as opening the share link: the contents come from the
+    /// site, the vibescape is made and compiled before it is kept, and then
+    /// it is selected — which also turns Auto Scan off, because the app is
+    /// now in one vibescape rather than scanning.
+    private func install(_ item: GalleryModel.Item) {
+        guard !installing.contains(item.id) else { return }
+        installing.insert(item.id)
+        installError = nil
+        Task { @MainActor in
+            defer { installing.remove(item.id) }
+            await installNow(item)
+        }
+    }
+
+    private func installNow(_ item: GalleryModel.Item) async {
+        // A built-in is already here: it needs switching on and running.
+        if item.isBuiltIn {
+            guard let mode = Vibescape(rawValue: item.id) else { return }
+            app.setVibescapeEnabled(.builtin(mode), enabled: true)
+            app.setVibescape(.builtin(mode))
+            return
+        }
+
+        guard let details = await ShareLinkStore().details(shareID: item.id) else {
+            installError = "Couldn't reach the site."
+            return
+        }
+        guard case .custom(let mode) = ShareImporter.decodePayload(details.payload,
+                                                                    shareID: item.id) else {
+            installError = "That share couldn't be read."
+            return
+        }
+        let author = ShareIdentity.shownAuthor(mode.author)
+        let key = ShareIdentity.key(name: mode.name, author: author,
+                                     url: mode.url, shader: mode.shader)
+        // Adding it selects it, which is what "runs it" means here.
+        switch app.addCustomVibescape(name: mode.name, author: author, url: mode.url,
+                                       shader: mode.shader, shareID: item.id, shareKey: key) {
+        case .success:
+            break
+        case .failure(let problem):
+            installError = problem.message
+        }
+    }
+
     /// The shared vibescapes, dealt into rows.
     private var galleryRows: [[GalleryModel.Item]] {
         stride(from: 0, to: gallery.items.count, by: columnsPerRow).map {
@@ -269,10 +344,20 @@ struct VibescapesView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
                     .padding(.vertical, 40)
             }
+            if let installError {
+                Text(installError)
+                    .font(.system(size: 11))
+                    .foregroundStyle(Color(red: 1, green: 0.55, blue: 0.6))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.bottom, 4)
+            }
             ForEach(Array(galleryRows.enumerated()), id: \.offset) { _, row in
                 HStack(alignment: .top, spacing: 14) {
                     ForEach(row) { item in
-                        GalleryCard(item: item)
+                        GalleryCard(item: item,
+                                    isInstalled: isInstalled(item),
+                                    isBusy: installing.contains(item.id),
+                                    onAdd: { install(item) })
                     }
                     if row.count < columnsPerRow {
                         ForEach(0..<(columnsPerRow - row.count), id: \.self) { _ in
@@ -301,7 +386,7 @@ struct VibescapesView: View {
                 .foregroundStyle(Color(white: 0.4))
             Text(tab == .installed
                  ? "Your own vibescapes are marked ★, and ones somebody sent you are marked ↘. Add another with the card at the end."
-                 : "The same list the website has. Open one to see it, and to add it to your own list.")
+                 : "The same list the website has. Press + to add one to your own list and run it.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.45))
             Spacer()
@@ -318,46 +403,92 @@ struct VibescapesView: View {
 
 /// A card for a vibescape in the gallery.
 ///
-/// It is a link rather than a switch: the gallery is a list of things
-/// other people made, and opening one is what you want to do with it.
-/// The page it opens is the one the site has, with the button that adds
-/// it to your own list.
+/// The card is a link to the share's page, which is where the vibescape
+/// can be seen and shared on. The tick and the plus sit on top of it, so
+/// that pressing the plus adds the vibescape rather than opening the page
+/// as well.
+///
+/// A tick means it is on this Mac already. A plus means it is not, and
+/// pressing it adds it to Installed and runs it.
 private struct GalleryCard: View {
     let item: GalleryModel.Item
+    /// Whether it is on this Mac already.
+    let isInstalled: Bool
+    /// Whether it is being added right now.
+    let isBusy: Bool
+    /// Adds it to Installed and runs it.
+    let onAdd: () -> Void
 
     var body: some View {
-        Link(destination: item.url) {
-            VStack(alignment: .leading, spacing: 0) {
-                AsyncImage(url: item.imageURL) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().aspectRatio(contentMode: .fill)
-                    default:
-                        Rectangle().fill(Color.white.opacity(0.06))
+        ZStack(alignment: .bottomTrailing) {
+            Link(destination: item.url) {
+                VStack(alignment: .leading, spacing: 0) {
+                    AsyncImage(url: item.imageURL) { phase in
+                        switch phase {
+                        case .success(let image):
+                            image.resizable().aspectRatio(contentMode: .fill)
+                        default:
+                            Rectangle().fill(Color.white.opacity(0.06))
+                        }
                     }
-                }
-                .frame(height: 108)
-                .clipped()
-                Text(item.name)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.white)
-                    .lineLimit(1)
+                    .frame(height: 108)
+                    .clipped()
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(item.name)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                        // Who made it, in the same small grey as the app's
+                        // own credit line. Nothing when nobody said.
+                        if !item.author.isEmpty {
+                            Text(item.author)
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color(white: 0.55))
+                                .lineLimit(1)
+                        }
+                    }
                     .padding(.horizontal, 12)
                     .padding(.vertical, 9)
+                    .padding(.trailing, 30)
+                }
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color.white.opacity(0.05))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                        )
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 12))
             }
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .buttonStyle(.plain)
+            .pointingHand()
+            .help("Open \(item.name)'s page")
+
+            if isInstalled {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color(white: 0.55))
+                    .padding(6)
+                    .help("Already installed")
+            } else {
+                Button(action: onAdd) {
+                    Image(systemName: isBusy ? "ellipsis" : "plus")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Color(red: 0.17, green: 0.95, blue: 1.0))
+                        .frame(width: 22, height: 22)
+                        .background(
+                            RoundedRectangle(cornerRadius: 7)
+                                .fill(Color.white.opacity(0.10))
+                        )
+                }
+                .buttonStyle(.plain)
+                .pointingHand()
+                .disabled(isBusy)
+                .padding(8)
+                .help(isBusy ? "Adding it…" : "Add it to Installed and run it")
+            }
         }
-        .buttonStyle(.plain)
-        .pointingHand()
-        .help("Open \(item.name)")
     }
 }
 

@@ -1452,14 +1452,16 @@ async function handleGalleryPage(request, url, env) {
   }
   const html = await asset.text();
 
-  // The name and the picture. The author is not on the card: the gallery
-  // is a list of things to open, and who made each one is a detail that
-  // belongs to the thing rather than to the list.
+  // The name, the picture, and who made it. The author is on the card
+  // because it is on the app's gallery too: the two are the same list, and
+  // they should look the same.
   const cards = items.map((item) => {
     const name = escapeHtml(item.name || "A vibescape");
+    const author = escapeHtml(item.author || "");
     return `      <a class="card" href="${escapeHtml(item.url)}">
         <img src="${escapeHtml(item.image)}" alt="${name}" loading="lazy" width="1200" height="630">
         <span class="card-name">${name}</span>
+        <span class="card-by">${author ? `by ${author}` : ""}</span>
       </a>`;
   }).join("\n");
 

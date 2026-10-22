@@ -13,6 +13,8 @@ final class GalleryModel: ObservableObject {
     struct Item: Identifiable {
         let id: String
         let name: String
+        /// Who made it. Free text, and empty when nobody said.
+        let author: String
         /// The page it can be opened at.
         let url: URL
         /// Its picture.
@@ -55,23 +57,23 @@ final class GalleryModel: ObservableObject {
     /// A sample list, for the headless UI shots, which have no gallery to
     /// fetch and no time to wait for one.
     static let sample: [Item] = [
-        Item(id: "sample-one", name: "Neon Current",
+        Item(id: "sample-one", name: "Neon Current", author: "Minith Labs",
              url: URL(string: "https://vibresia.com/share/band")!,
              imageURL: URL(string: "https://vibresia.com/media/modes/band.jpg")!,
              isBuiltIn: false),
-        Item(id: "sample-two", name: "Glass Garden",
+        Item(id: "sample-two", name: "Glass Garden", author: "A Person",
              url: URL(string: "https://vibresia.com/share/flux")!,
              imageURL: URL(string: "https://vibresia.com/media/modes/flux.jpg")!,
              isBuiltIn: false),
-        Item(id: "sample-three", name: "Long Exposure",
+        Item(id: "sample-three", name: "Long Exposure", author: "Somebody Else",
              url: URL(string: "https://vibresia.com/share/silk")!,
              imageURL: URL(string: "https://vibresia.com/media/modes/silk.jpg")!,
              isBuiltIn: false),
-        Item(id: "sample-four", name: "Deep Field",
+        Item(id: "sample-four", name: "Deep Field", author: "Minith Labs",
              url: URL(string: "https://vibresia.com/share/vortex")!,
              imageURL: URL(string: "https://vibresia.com/media/modes/vortex.jpg")!,
              isBuiltIn: false),
-        Item(id: "sample-five", name: "Undertow",
+        Item(id: "sample-five", name: "Undertow", author: "A Person",
              url: URL(string: "https://vibresia.com/share/liquid")!,
              imageURL: URL(string: "https://vibresia.com/media/modes/liquid.jpg")!,
              isBuiltIn: false),
@@ -122,6 +124,7 @@ final class GalleryModel: ObservableObject {
                   let imageURL = URL(string: imageString) else { return nil }
             return Item(id: id,
                         name: entry["name"] as? String ?? id,
+                        author: entry["author"] as? String ?? "",
                         url: url,
                         imageURL: imageURL,
                         isBuiltIn: entry["builtin"] as? Bool ?? false)
