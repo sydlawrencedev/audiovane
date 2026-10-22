@@ -194,6 +194,9 @@ button.danger:hover { border-color: var(--red); }
 
 /* The form for correcting the words on a share. */
 .share-edit {
+  /* The row is a grid of picture, words and buttons. The form goes under
+     all of them rather than in the next column. */
+  grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;

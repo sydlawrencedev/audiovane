@@ -145,19 +145,19 @@
         var actions = document.createElement("div");
         actions.className = "share-actions";
         if (share.inGallery) {
-          actions.appendChild(button("Hide", "hide", share, "Out of the gallery. The link still works."));
+          actions.appendChild(button("Hide", "hide", share, "Out of the gallery. The link still works.", row));
         } else {
-          actions.appendChild(button("Show", "show", share, "Back in the gallery."));
+          actions.appendChild(button("Show", "show", share, "Back in the gallery.", row));
         }
-        actions.appendChild(button("Edit", "edit", share, "Correct the title or the author."));
-        actions.appendChild(button("Delete", "delete", share, "Gone for good. The link stops working."));
+        actions.appendChild(button("Edit", "edit", share, "Correct the title or the author.", row));
+        actions.appendChild(button("Delete", "delete", share, "Gone for good. The link stops working.", row));
         row.appendChild(actions);
 
         list.appendChild(row);
       });
     }
 
-    function button(label, action, share, hint) {
+    function button(label, action, share, hint, row) {
       var b = document.createElement("button");
       b.textContent = label;
       b.className = action === "delete" ? "danger" : "";

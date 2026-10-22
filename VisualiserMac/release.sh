@@ -25,6 +25,7 @@ VERSION="$(./version.sh --write)"
 TAG="v$VERSION"
 
 ../scripts/check-vibescapes.sh
+node ../scripts/check-admin-page.mjs
 ../scripts/check-posthog.sh
 ../scripts/check-no-webhook-leak.sh
 # The share page embeds a copy of the app's shaders, because a browser can't
