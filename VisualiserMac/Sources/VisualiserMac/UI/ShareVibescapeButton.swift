@@ -12,7 +12,7 @@ import UniformTypeIdentifiers
 /// shortcut nobody knows about. So it lives with the name now, and stays.
 ///
 /// Two visuals to keep parity with the rest of the chrome:
-///   - same rounded-rectangle fill/stroke as `SourcePicker` / `BPM`
+///   - same rounded-rectangle fill/stroke as `SourcePicker`
 ///   - uses `app.layout.showsPillText` so the label drops at the narrow tier
 ///
 /// The button itself is never hidden, at any width — it's the affordance the

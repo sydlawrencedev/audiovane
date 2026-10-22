@@ -61,30 +61,13 @@ struct HUDView: View {
                 SourcePicker()
             }
 
-            // BPM — the last thing to survive, and only when there's a beat to
-            // show.
-            if app.bpm > 30 && app.layout.showsPills {
-                HStack(spacing: 6) {
-                    Text("\(Int(app.bpm.rounded()))")
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundStyle(Color(red: 0.17, green: 0.95, blue: 1.0))
-                        .shadow(color: Color(red: 0.17, green: 0.95, blue: 1.0).opacity(0.5), radius: 8)
-                    Text("BPM")
-                        .font(.system(size: 10, weight: .regular, design: .monospaced))
-                        .tracking(2)
-                        .foregroundStyle(Color(white: 0.45))
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 7)
-                .background(
-                    RoundedRectangle(cornerRadius: 100)
-                        .fill(Color.black.opacity(0.45))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 100)
-                                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                        )
-                )
-            }
+            // The tempo is not shown. It used to be the last thing to
+            // survive in the header, in a pill of its own, and it was
+            // saying something the picture was already saying better: the
+            // beat clock, the sprite rate, the flashes. It is still measured
+            // — the beat clock needs it, and so do the genre, the exports
+            // and the readings an agent asks for — but a number on the
+            // screen is not what anybody was looking for.
         }
     }
 }
