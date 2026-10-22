@@ -30,13 +30,17 @@
         if (pathOf(item.url) === here) continue;
         recent.push(item);
       }
-      recent = recent.slice(0, 4);
+      recent = recent.slice(0, 3);
       if (!recent.length) return;
 
       grid.innerHTML = recent.map(function (item) {
+        // The name, and who made it. A share with nobody's name on it has
+        // no author line rather than an empty one.
         return '<a class="recent-card" href="' + item.url + '">' +
           '<img src="' + item.imageUrl + '" alt="" loading="lazy">' +
-          "<span>" + escapeText(item.name) + "</span></a>";
+          '<span class="recent-name">' + escapeText(item.name) + "</span>" +
+          (item.author ? '<span class="recent-by">by ' + escapeText(item.author) + "</span>" : "") +
+          "</a>";
       }).join("");
       section.hidden = false;
     })

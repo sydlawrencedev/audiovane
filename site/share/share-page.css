@@ -298,13 +298,22 @@ code, .mono {
   background: #000;
 }
 
-.recent-card span {
+.recent-card .recent-name {
   display: block;
-  padding: 10px 12px 12px;
+  padding: 10px 12px 0;
   font-family: "JetBrains Mono", ui-monospace, monospace;
   font-size: 13px;
   font-weight: 600;
   letter-spacing: 0.04em;
   text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+/* Who made it, under the name. */
+.recent-card .recent-by {
+  display: block;
+  padding: 3px 12px 12px;
+  font-size: 12px;
+  color: var(--muted);
   overflow-wrap: anywhere;
 }
