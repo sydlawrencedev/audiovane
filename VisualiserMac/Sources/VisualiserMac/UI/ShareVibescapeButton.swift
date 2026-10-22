@@ -42,7 +42,7 @@ struct ShareVibescapeButton: View {
             .foregroundStyle(hovering
                              ? Color.white
                              : Color(red: 0.65, green: 0.95, blue: 1.0))
-            .padding(.horizontal, app.layout.showsPillText ? 12 : 9)
+            .padding(.horizontal, padding)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 100)
@@ -60,6 +60,12 @@ struct ShareVibescapeButton: View {
         }
         .buttonStyle(.plain)
         .fixedSize()
+        // The words in the pill sit a padding's width in from its edge, which
+        // is a padding's width right of the name underneath — so the two
+        // read as two things that do not quite line up. The pill moves left
+        // by that much, which puts its words in the same column as the name
+        // and the credit, and up a touch, which opens the gap under it.
+        .offset(x: -padding, y: -2)
         .onHover { hovering = $0 }
         .help("Share this vibescape with someone")
         .sheet(isPresented: $showingSheet) {
@@ -67,6 +73,10 @@ struct ShareVibescapeButton: View {
                 .environmentObject(app)
         }
     }
+
+    /// How much the pill pads itself, which is also how far its contents sit
+    /// from its edge.
+    private var padding: CGFloat { app.layout.showsPillText ? 12 : 9 }
 
     private func kindFor(_ id: VibescapeID) -> String {
         id.isCustom ? "custom" : (id.builtin.flatMap { $0 == .autoScan ? nil : $0.rawValue } ?? "auto_scan")

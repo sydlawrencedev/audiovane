@@ -82,9 +82,6 @@ struct ShareVibescapeView: View {
         return author
     }
 
-    /// The URL the recipient gets. Recomputed by SwiftUI on each render,
-    /// which is cheap (a couple of `URLComponents` operations) and keeps
-    /// the URL box in sync if the active vibescape ever changes.
     /// The link to show, to copy and to share.
     ///
     /// A built-in vibescape's link is already short: the site has a page for
@@ -100,6 +97,10 @@ struct ShareVibescapeView: View {
     /// back to the long one. If the site cannot be reached, the sheet says
     /// so and offers another go, rather than quietly handing out a URL that
     /// looks broken.
+    ///
+    /// Recomputed by SwiftUI on each render, which is cheap (a couple of
+    /// `URLComponents` operations) and keeps the URL box in sync if the
+    /// active vibescape ever changes.
     private var shareURL: URL? {
         switch vibescape {
         case .builtin:
