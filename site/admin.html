@@ -149,6 +149,7 @@
         } else {
           actions.appendChild(button("Show", "show", share, "Back in the gallery."));
         }
+        actions.appendChild(button("Edit", "edit", share, "Correct the title or the author."));
         actions.appendChild(button("Delete", "delete", share, "Gone for good. The link stops working."));
         row.appendChild(actions);
 
@@ -167,17 +168,75 @@
             + "The link stops working, and the picture goes with it. This cannot be undone.")) {
           return;
         }
+        if (action === "edit") {
+          editForm(row, share);
+          return;
+        }
         act(action, share);
       });
       return b;
     }
 
-    function act(action, share) {
+    /// The form for correcting the words on a share.
+    ///
+    /// The name and the author live in two places — the columns the site
+    /// reads and the payload the page and the app draw from — and both are
+    /// changed together, so the words on the page, in the gallery and on
+    /// somebody's Mac are the same words.
+    ///
+    /// The picture is not redrawn: the server cannot draw a vibescape, so
+    /// the picture keeps the old name until the maker of the share sends a
+    /// new one.
+    function editForm(row, share) {
+      var form = document.createElement("div");
+      form.className = "share-edit";
+
+      var title = document.createElement("input");
+      title.type = "text";
+      title.value = share.name || "";
+      title.placeholder = "Title";
+      title.setAttribute("aria-label", "Title");
+
+      var author = document.createElement("input");
+      author.type = "text";
+      author.value = share.author || "";
+      author.placeholder = "Author";
+      author.setAttribute("aria-label", "Author");
+
+      var save = document.createElement("button");
+      save.textContent = "Save";
+      save.addEventListener("click", function () {
+        act("edit", share, { name: title.value.trim(), author: author.value.trim() });
+      });
+
+      var cancel = document.createElement("button");
+      cancel.textContent = "Cancel";
+      cancel.className = "plain";
+      cancel.addEventListener("click", function () { load(); });
+
+      var note = document.createElement("p");
+      note.className = "note";
+      note.textContent = "The picture keeps the old name until the maker shares it again.";
+
+      form.appendChild(title);
+      form.appendChild(author);
+      form.appendChild(save);
+      form.appendChild(cancel);
+      form.appendChild(note);
+      row.appendChild(form);
+      title.focus();
+    }
+
+    function act(action, share, extra) {
       say("Working…");
+      var body = { action: action };
+      if (extra) {
+        Object.keys(extra).forEach(function (key) { body[key] = extra[key]; });
+      }
       fetch("/api/admin/shares/" + share.id, {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-av-admin-token": token() },
-        body: JSON.stringify({ action: action })
+        body: JSON.stringify(body)
       }).then(function (response) {
         return response.json().then(function (body) { return { ok: response.ok, body: body }; });
       }).then(function (result) {
@@ -187,7 +246,9 @@
         }
         say(action === "delete"
           ? "Deleted. The link is gone."
-          : (action === "hide" ? "Out of the gallery." : "Back in the gallery."));
+          : (action === "hide" ? "Out of the gallery."
+            : (action === "edit" ? "Saved. The words on it have changed."
+              : "Back in the gallery.")));
         load();
       }).catch(function (error) {
         say("That did not work: " + error);

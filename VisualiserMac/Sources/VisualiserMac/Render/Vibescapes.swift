@@ -118,6 +118,24 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
     /// has been edited since. Edited means it is a different vibescape and
     /// deserves a different link; unedited means the same one.
     var shareKey: String?
+    /// Which version of the share this Mac has, as the site counts them.
+    ///
+    /// The site says which version a share is at, and this remembers which
+    /// one was installed, so the difference between the two is whether an
+    /// update is waiting. A share made before revisions existed has none,
+    /// and counts as the first version.
+    var shareRevision: Int?
+    /// The capability that lets this Mac publish a new version of the share.
+    ///
+    /// It is made when the share is made, kept here, and never sent anywhere
+    /// except to the site, which keeps only its hash. It is what says this
+    /// Mac is the one that made the share: the share id, the content hash,
+    /// the author's name and the token in the app's bundle are all things
+    /// anybody can have, and none of them count.
+    ///
+    /// A copy that arrived from somebody else has no capability, and cannot
+    /// change the share it arrived on. It gets a link of its own instead.
+    var shareEditKey: String?
 
     var modeID: VibescapeID { .custom(id) }
 
@@ -173,10 +191,14 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
         // written by an older build has neither.
         shareID = try c.decodeIfPresent(String.self, forKey: .shareID)
         shareKey = try c.decodeIfPresent(String.self, forKey: .shareKey)
+        // Both of these arrived later still.
+        shareRevision = try c.decodeIfPresent(Int.self, forKey: .shareRevision)
+        shareEditKey = try c.decodeIfPresent(String.self, forKey: .shareEditKey)
     }
 
     init(id: String, name: String, author: String, url: String?, shader: String,
-         enabled: Bool, modified: Date, shareID: String? = nil, shareKey: String? = nil) {
+         enabled: Bool, modified: Date, shareID: String? = nil, shareKey: String? = nil,
+         shareRevision: Int? = nil, shareEditKey: String? = nil) {
         self.id = id
         self.name = name
         self.author = author
@@ -186,6 +208,8 @@ struct CustomVibescape: Identifiable, Codable, Equatable {
         self.modified = modified
         self.shareID = shareID
         self.shareKey = shareKey
+        self.shareRevision = shareRevision
+        self.shareEditKey = shareEditKey
     }
 }
 

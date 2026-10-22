@@ -1015,12 +1015,109 @@ final class AppState: ObservableObject {
     /// Without this a vibescape of your own has no way of knowing the link
     /// it was given, so changing your name left the old share behind in the
     /// gallery with nothing pointing at it.
-    func setCustomVibescapeShare(id: String, shareID: String, key: String) {
+    func setCustomVibescapeShare(id: String, shareID: String, key: String,
+                                 revision: Int? = nil, editKey: String? = nil) {
         guard let i = customVibescapes.firstIndex(where: { $0.id == id }) else { return }
-        guard customVibescapes[i].shareID != shareID || customVibescapes[i].shareKey != key else { return }
+        let changed = customVibescapes[i].shareID != shareID
+            || customVibescapes[i].shareKey != key
+            || customVibescapes[i].shareRevision != revision
+            || customVibescapes[i].shareEditKey != editKey
+        guard changed else { return }
         customVibescapes[i].shareID = shareID
         customVibescapes[i].shareKey = key
+        if let revision { customVibescapes[i].shareRevision = revision }
+        if let editKey { customVibescapes[i].shareEditKey = editKey }
         try? CustomVibescapeStore.save(customVibescapes[i])
+        lastCustomVibescapesStamp = Self.customVibescapesStamp
+    }
+
+    /// Brings the installed copies of shared vibescapes up to date.
+    ///
+    /// A share is a living thing: the person who made it can publish a new
+    /// version of it, and a copy on this Mac is behind until it is brought
+    /// forward. The site says which version a share is at, and this asks.
+    ///
+    /// A copy that has been changed since it was installed is left alone.
+    /// That is a fork, and the work in it belongs to whoever made it.
+    func checkForShareUpdates() async {
+        for mode in customVibescapes {
+            guard let shareID = mode.shareID else { continue }
+            await applyShareUpdateIfBehind(mode: mode, shareID: shareID)
+        }
+    }
+
+    /// Brings one copy up to date, if it is behind and if it can be.
+    private func applyShareUpdateIfBehind(mode: CustomVibescape, shareID: String) async {
+        guard let details = await ShareLinkStore().details(shareID: shareID) else { return }
+        let installed = mode.shareRevision ?? 1
+        guard details.revision > installed else { return }
+        guard !details.payload.isEmpty,
+              case .custom(let incoming) = ShareImporter.decodePayload(details.payload,
+                                                                       shareID: shareID) else {
+            NSLog("[SYNC] the new version of %@ could not be read", mode.id)
+            return
+        }
+
+        // A copy that has been changed since it was installed is a fork. The
+        // new version would throw away somebody's work, so it is not put in.
+        let incomingKey = ShareIdentity.key(name: incoming.name,
+                                             author: ShareIdentity.shownAuthor(incoming.author),
+                                             url: incoming.url,
+                                             shader: incoming.shader)
+        if let key = mode.shareKey, key != incomingKey {
+            NSLog("[SYNC] %@ has been changed here, so the new version was left alone", mode.id)
+            return
+        }
+
+        // The new code has to work before it replaces the old one. A broken
+        // update must not turn a working vibescape into a blank screen.
+        if case .failure(let problem) = renderer.installCustomShader(id: mode.id,
+                                                                      body: incoming.shader) {
+            NSLog("[SYNC] the new version of %@ did not compile: %@", mode.id, problem.message)
+            return
+        }
+
+        // The words come from the site's columns rather than from the
+        // payload, because a correction made on the website is in the
+        // columns and the payload may be older than it.
+        applyShareUpdate(id: mode.id, name: details.name, author: details.author,
+                         url: incoming.url, shader: incoming.shader,
+                         revision: details.revision)
+    }
+
+    /// Puts a newer version of a shared vibescape in place.
+    ///
+    /// The id, the enabled state and the place in the list are the
+    /// person's own and are not touched. The name, the author and the code
+    /// are the share's, and those are what the update is for — which is how
+    /// a correction made on the website reaches the Macs that have the
+    /// vibescape installed.
+    @discardableResult
+    func applyShareUpdate(id: String, name: String, author: String, url: String?,
+                          shader: String, revision: Int) -> Bool {
+        guard let i = customVibescapes.firstIndex(where: { $0.id == id }) else { return false }
+        var mode = customVibescapes[i]
+        mode.name = name
+        mode.author = author
+        mode.url = url
+        mode.shader = shader
+        mode.modified = Date()
+        mode.shareRevision = revision
+        mode.shareKey = ShareIdentity.key(name: name, author: ShareIdentity.shownAuthor(author),
+                                          url: url, shader: shader)
+        do {
+            try CustomVibescapeStore.save(mode)
+        } catch {
+            NSLog("[SYNC] could not save the update to %@: %@", id, error.localizedDescription)
+            return false
+        }
+        customVibescapes[i] = mode
+        // The folder watcher is told what the folder now looks like, so that
+        // the update does not arrive as a change somebody else made: it
+        // would take the vibescape on screen and leave Auto Scan.
+        lastCustomVibescapesStamp = Self.customVibescapesStamp
+        NSLog("[SYNC] %@ is now at version %d", id, revision)
+        return true
     }
 
     /// A copy of a vibescape, as a vibescape of your own.

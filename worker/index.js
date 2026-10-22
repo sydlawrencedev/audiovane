@@ -576,18 +576,123 @@ async function hashPayload(payload) {
 
 /// The share a vibescape is looked up by, and whether it is in the public
 /// gallery.
-async function insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic }) {
+async function insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic,
+                                    editKeyHash }) {
   const created = Date.now();
   try {
     await env.SHARES.prepare(
-      "INSERT INTO shares (id, payload, name, author, image, key, payload_hash, is_public, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
-    ).bind(id, payload, name, author, image, key || null, payloadHash || null, isPublic, created).run();
+      "INSERT INTO shares (id, payload, name, author, image, key, payload_hash, is_public, created_at, edit_key, revision) " +
+      "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)"
+    ).bind(id, payload, name, author, image, key || null, payloadHash || null, isPublic, created,
+           editKeyHash || null).run();
   } catch (error) {
     if (!String(error).includes("no such column")) throw error;
     await env.SHARES.prepare(
       "INSERT INTO shares (id, payload, name, author, image, created_at) VALUES (?, ?, ?, ?, ?, ?)"
     ).bind(id, payload, name, author, image, created).run();
   }
+}
+
+/// A payload, with the name and the author put inside it.
+///
+/// The payload is base64url of deflated JSON, and it carries the name and
+/// the author as well as the code. Correcting the columns without
+/// correcting the payload would leave the words stale in the shared page
+/// and in every Mac that takes the share, so both are changed together.
+///
+/// The code in the payload is left exactly as it is: only the two words
+/// are rewritten.
+async function rewritePayloadNames(payload, name, author) {
+  if (!payload) return payload;
+  try {
+    const bytes = base64URLToBytes(payload);
+    let json = null;
+    try {
+      json = new TextDecoder().decode(await inflateRaw(bytes));
+    } catch (error) {
+      // A payload that was not compressed is still a payload. So is one the
+      // runtime cannot decompress, though that should not happen: the
+      // payload is raw DEFLATE, which is what the app writes and what the
+      // browser reads.
+      console.log(`[share] could not decompress the payload: ${error}`);
+      json = new TextDecoder().decode(bytes);
+    }
+    const parsed = JSON.parse(json);
+    if (!parsed || typeof parsed !== "object") return payload;
+    parsed.name = name;
+    parsed.author = author;
+    // The keys are sorted so that the payload is the same one the app
+    // would have made.
+    const ordered = {};
+    for (const key of Object.keys(parsed).sort()) ordered[key] = parsed[key];
+    const text = JSON.stringify(ordered);
+    const compressed = await deflateRaw(new TextEncoder().encode(text));
+    return bytesToBase64URL(compressed);
+  } catch (error) {
+    // If the payload cannot be read, it is left alone rather than
+    // replaced with something broken.
+    console.log(`[share] could not rewrite the payload: ${error}`);
+    return payload;
+  }
+}
+
+/// The payload's bytes.
+function base64URLToBytes(text) {
+  const padded = text.replace(/-/g, "+").replace(/_/g, "/")
+    + "=".repeat((4 - (text.length % 4)) % 4);
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return bytes;
+}
+
+/// The payload's bytes, the other way round.
+function bytesToBase64URL(bytes) {
+  let binary = "";
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+/// Raw DEFLATE, which is what the payload is made of.
+async function inflateRaw(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/// Raw DEFLATE, the other way round.
+async function deflateRaw(bytes) {
+  const stream = new Blob([bytes]).stream().pipeThrough(new CompressionStream("deflate-raw"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/// The hash of a capability, which is what the server keeps.
+///
+/// The capability itself is a random string the maker of a share keeps on
+/// their own Mac. Only its hash is stored, so the table cannot be used to
+/// change anything.
+async function hashEditKey(editKey) {
+  if (!editKey) return null;
+  return hashPayload(editKey);
+}
+
+/// Whether a capability is the one this share's maker has.
+async function editKeyMatches(env, id, editKey) {
+  if (!editKey) return false;
+  const row = await env.SHARES.prepare("SELECT edit_key FROM shares WHERE id = ?")
+    .bind(id).first();
+  if (!row || !row.edit_key) return false;
+  return row.edit_key === await hashEditKey(editKey);
+}
+
+/// The revision of a share, or zero when it has none.
+async function shareRevision(env, id) {
+  const row = await env.SHARES.prepare("SELECT revision FROM shares WHERE id = ?")
+    .bind(id).first();
+  return row?.revision ?? 0;
 }
 
 /// Whether a share is in the public gallery.
@@ -632,7 +737,8 @@ async function handleShareGet(request, url, env) {
   const id = url.pathname.slice("/api/share/".length);
   if (!isValidShareId(id)) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
   const row = await env.SHARES.prepare(
-    "SELECT id, name, author, is_public, created_at FROM shares WHERE id = ?"
+    "SELECT id, name, author, is_public, created_at, payload, COALESCE(revision, 1) AS revision " +
+    "FROM shares WHERE id = ?"
   ).bind(id).first();
   if (!row) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
   return Response.json({
@@ -642,6 +748,12 @@ async function handleShareGet(request, url, env) {
     author: row.author || "",
     public: row.is_public === 1,
     sharedAt: row.created_at,
+    // The revision says whether an installed copy is behind. The payload is
+    // what it would be brought up to date with. The payload has always been
+    // public for anybody with the link — it is in the long link, and the
+    // shared page draws from it — so this is not a new disclosure.
+    revision: row.revision ?? 1,
+    payload: row.payload || "",
   });
 }
 
@@ -707,6 +819,9 @@ async function handleShareCreate(request, env) {
   // Whether it goes in the public gallery. The app asks in the share sheet,
   // and says there that the name and the author are public.
   const isPublic = body?.public === true;
+  // The capability that lets the maker of this share publish a new version
+  // of it later. The server keeps only its hash.
+  const editKey = typeof body?.editKey === "string" ? body.editKey : "";
   if (!payload || payload.length > MAX_PAYLOAD_CHARS || !PAYLOAD_PATTERN.test(payload)) {
     return Response.json({ ok: false, error: "bad payload" }, { status: 400 });
   }
@@ -743,6 +858,23 @@ async function handleShareCreate(request, env) {
   // a third. The key is a hash of the vibescape's content, so a share that
   // already exists is found rather than made again.
   const payloadHash = await hashPayload(payload);
+  const editKeyHash = await hashEditKey(editKey);
+
+  // Replacing a share deletes the old one, so it takes proof that the
+  // person asking is the one who made it: the capability of the share
+  // being replaced. The app's own token is in the bundle, so anybody can
+  // read it, and it cannot be what stands between a share and being
+  // deleted. Without a matching capability the old share is left alone:
+  // it keeps working, it just stays in the gallery too.
+  let replaced = false;
+  if (replaces) {
+    if (await editKeyMatches(env, replaces, editKey)) {
+      replaced = true;
+    } else {
+      console.log(`[share] not replacing ${replaces}: the capability did not match`);
+    }
+  }
+
   const existing = await findExistingShare(env, { key, payloadHash, payload });
   if (existing) {
     // A share made while the picture was missing gets one now, if this
@@ -767,11 +899,12 @@ async function handleShareCreate(request, env) {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const id = randomShareId();
     try {
-      await insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic });
+      await insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic,
+                               editKeyHash });
       // The share this one replaces goes now that the new one is in place —
-      // and only now, and only if it is a different share. Replacing a share
-      // with itself would delete the row that was just written.
-      if (replaces && replaces !== id) {
+      // and only now, and only if it is a different share, and only if the
+      // capability said it was the maker's own.
+      if (replaced && replaces !== id) {
         await deleteShare(env, replaces);
       }
       return Response.json({
@@ -781,6 +914,8 @@ async function handleShareCreate(request, env) {
         imageUrl: image ? `${CANONICAL_SITE}og/${id}.jpg` : null,
         public: isPublic,
         existing: false,
+        replaced,
+        revision: 1,
       });
     } catch (error) {
       // Two devices sharing the same vibescape at the same moment: one of
@@ -808,6 +943,105 @@ async function handleShareCreate(request, env) {
     }
   }
   return Response.json({ ok: false, error: "could not save" }, { status: 500 });
+}
+
+/// `POST /api/share/<id>` — the maker of a share publishes a new version of it.
+///
+/// The link stays the same, which is the point: everybody who already has
+/// the vibescape installed gets the new version, and everybody who has the
+/// old link gets the new version too.
+///
+/// Two things have to be true. The request has to carry the app's token,
+/// which is a speed bump and nothing more. And it has to carry the
+/// capability that was made with this share: that is what says this is the
+/// same person, and it is the only thing here that does. A share id, a
+/// content hash, an author's name and the token in the bundle are all
+/// things anybody can have, so none of them count.
+async function handleShareUpdate(request, url, env) {
+  const token = request.headers.get("x-av-token") || "";
+  if (!env.SHARE_TOKEN || token !== env.SHARE_TOKEN) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+  const id = url.pathname.slice("/api/share/".length);
+  if (!isValidShareId(id)) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: "bad json" }, { status: 400 });
+  }
+
+  const editKey = typeof body?.editKey === "string" ? body.editKey : "";
+  if (!(await editKeyMatches(env, id, editKey))) {
+    return Response.json({ ok: false, error: "not yours to change" }, { status: 403 });
+  }
+
+  const payload = typeof body?.payload === "string" ? body.payload : "";
+  const name = typeof body?.name === "string" ? body.name : "";
+  const author = typeof body?.author === "string" ? body.author : "";
+  if (!payload || payload.length > MAX_PAYLOAD_CHARS || !PAYLOAD_PATTERN.test(payload)) {
+    return Response.json({ ok: false, error: "bad payload" }, { status: 400 });
+  }
+  if (name.length > MAX_NAME_CHARS || author.length > MAX_AUTHOR_CHARS) {
+    return Response.json({ ok: false, error: "name too long" }, { status: 400 });
+  }
+
+  const row = await env.SHARES.prepare(
+    "SELECT payload, name, author, COALESCE(admin_edited, 0) AS admin_edited FROM shares WHERE id = ?"
+  ).bind(id).first();
+  if (!row) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+
+  // A correction made here is canonical: the words on the share are the
+  // ones that were corrected, and a later upload from the maker's Mac
+  // keeps them rather than putting the old ones back.
+  const adminEdited = row.admin_edited === 1;
+  const finalName = adminEdited ? (row.name || "") : name;
+  const finalAuthor = adminEdited ? (row.author || "") : author;
+  // The payload carries the name and the author too, and a correction made
+  // here has to be in there as well — or the page and every Mac that takes
+  // the share would still say the old words.
+  const finalPayload = adminEdited
+    ? await rewritePayloadNames(payload, finalName, finalAuthor)
+    : payload;
+
+  let image = null;
+  if (typeof body?.image === "string" && body.image.length > 0) {
+    try {
+      image = Uint8Array.from(atob(body.image), (c) => c.charCodeAt(0));
+    } catch {
+      return Response.json({ ok: false, error: "bad image" }, { status: 400 });
+    }
+    if (image.length > MAX_IMAGE_BYTES) {
+      return Response.json({ ok: false, error: "image too large" }, { status: 400 });
+    }
+  }
+
+  const payloadHash = await hashPayload(finalPayload);
+  // The same content again is not a new version: nothing has changed, so
+  // the revision stays where it is and nobody is told to update.
+  const changed = row.payload !== finalPayload
+    || (row.name || "") !== finalName
+    || (row.author || "") !== finalAuthor
+    || (image !== null);
+
+  if (changed) {
+    const revision = await shareRevision(env, id) + 1;
+    try {
+      await env.SHARES.prepare(
+        "UPDATE shares SET payload = ?, name = ?, author = ?, payload_hash = ?, revision = ?, " +
+        "image = COALESCE(?, image) WHERE id = ?"
+      ).bind(finalPayload, finalName, finalAuthor, payloadHash, revision, image, id).run();
+    } catch (error) {
+      console.log(`[share] could not update ${id}: ${error}`);
+      return Response.json({ ok: false, error: "could not save" }, { status: 500 });
+    }
+    return Response.json({ ok: true, id, revision, changed: true,
+                           name: finalName, author: finalAuthor });
+  }
+
+  return Response.json({ ok: true, id, revision: await shareRevision(env, id), changed: false,
+                         name: finalName, author: finalAuthor });
 }
 
 /// `GET /s/<id>` — the share itself.
@@ -982,6 +1216,7 @@ async function galleryRows(env, { all = false } = {}) {
     const result = await env.SHARES.prepare(
       `SELECT id, name, author, created_at, is_public,
               COALESCE(view_count, 0) AS view_count,
+              COALESCE(revision, 1) AS revision,
               CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image
        FROM shares ${where} ORDER BY created_at DESC LIMIT 200`
     ).all();
@@ -1131,6 +1366,43 @@ async function handleAdminAction(request, url, env) {
     const gone = await deleteShare(env, id);
     if (!gone) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
     return Response.json({ ok: true, id, deleted: true });
+  }
+  if (action === "edit") {
+    // Correcting the words on a share. The picture is not touched: the
+    // server cannot draw a vibescape, so the picture keeps the old name
+    // until the maker of the share sends a new one.
+    const name = typeof body?.name === "string" ? body.name : null;
+    const author = typeof body?.author === "string" ? body.author : null;
+    if (name === null && author === null) {
+      return Response.json({ ok: false, error: "nothing to change" }, { status: 400 });
+    }
+    if ((name !== null && name.length > MAX_NAME_CHARS)
+        || (author !== null && author.length > MAX_AUTHOR_CHARS)) {
+      return Response.json({ ok: false, error: "name too long" }, { status: 400 });
+    }
+    const row = await env.SHARES.prepare(
+      "SELECT name, author, payload FROM shares WHERE id = ?"
+    ).bind(id).first();
+    if (!row) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+
+    const finalName = name === null ? (row.name || "") : name;
+    const finalAuthor = author === null ? (row.author || "") : author;
+    // The payload carries the old name and the old author, and the Mac
+    // that receives this share reads them from there. Changing only the
+    // columns would leave the words on the page and in the installed copy
+    // stale, so the payload is rewritten to match — the code in it is
+    // left exactly as it is.
+    const payload = await rewritePayloadNames(row.payload, finalName, finalAuthor);
+    const revision = await shareRevision(env, id) + 1;
+    try {
+      await env.SHARES.prepare(
+        "UPDATE shares SET name = ?, author = ?, payload = ?, revision = ?, admin_edited = 1 WHERE id = ?"
+      ).bind(finalName, finalAuthor, payload, revision, id).run();
+    } catch (error) {
+      console.log(`[share] could not edit ${id}: ${error}`);
+      return Response.json({ ok: false, error: "could not save" }, { status: 500 });
+    }
+    return Response.json({ ok: true, id, name: finalName, author: finalAuthor, revision });
   }
   return Response.json({ ok: false, error: "unknown action" }, { status: 400 });
 }
@@ -1302,6 +1574,7 @@ export default {
     }
     if (url.pathname.startsWith("/api/share/")) {
       if (request.method === "PATCH") return handleSharePatch(request, url, env);
+      if (request.method === "POST") return handleShareUpdate(request, url, env);
       return handleShareGet(request, url, env);
     }
     if (url.pathname === "/api/gallery") return handleGalleryAPI(request, env, url);

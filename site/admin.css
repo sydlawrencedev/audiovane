@@ -191,3 +191,38 @@ button.danger:hover { border-color: var(--red); }
   .share img { width: 80px; }
   .share-actions { grid-column: 1 / -1; justify-content: flex-start; }
 }
+
+/* The form for correcting the words on a share. */
+.share-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-top: 10px;
+  width: 100%;
+}
+
+.share-edit input {
+  flex: 1 1 160px;
+  min-width: 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.share-edit .note {
+  flex: 1 1 100%;
+  margin: 2px 0 0;
+}
+
+button.plain {
+  background: none;
+  border: none;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+}

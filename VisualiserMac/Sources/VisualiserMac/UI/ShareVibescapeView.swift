@@ -578,16 +578,50 @@ struct ShareVibescapeView: View {
             title: ShareImageBuilder.title(name: app.displayName(for: target),
                                           author: author))
 
+        // A new version of a share this Mac made.
+        //
+        // The link stays the same, which is the point: everybody who has
+        // the vibescape installed gets the new version, and everybody who
+        // has the old link gets it too. A new share would have left the
+        // old one behind in the gallery and given everybody a second copy
+        // to install.
+        //
+        // The capability is what says this Mac is the one that made the
+        // share. Without it the site refuses, and a new share is made
+        // below instead — which is what happened to every share before
+        // there were versions.
+        if let shareID = mode.shareID, let editKey = mode.shareEditKey {
+            let updated = await ShareLinkStore().updateShare(
+                shareID: shareID, editKey: editKey, payload: payload,
+                name: name, author: author, image: image)
+            switch updated {
+            case .success(let revision):
+                shortLink = "\(ShareLinkStore.site)/s/\(shareID)"
+                app.setCustomVibescapeShare(id: id, shareID: shareID, key: key,
+                                            revision: revision)
+                return shortLink
+            case .failure(let why):
+                NSLog("[SHARE] could not publish the new version: %@", why.detail)
+            }
+        }
+
+        // The capability for publishing a new version of this share later.
+        // It is made here, kept on this Mac, and the site keeps only its
+        // hash — so neither the site nor anybody who has the link can
+        // change the share with it.
+        let editKey = mode.shareEditKey ?? ShareLinkStore.newEditKey()
+
         let made = await ShareLinkStore().makeLink(
             payload: payload, name: name, author: author, image: image,
-            key: key, inGallery: inGallery, replaces: replaces)
+            key: key, inGallery: inGallery, replaces: replaces, editKey: editKey)
         switch made {
         case .success(let link):
             shortLink = link.url
             ShareLinkCache.remember(shareID: link.id, for: key, isPublic: link.inGallery)
             // The vibescape remembers its own link, so that changing your
-            // name later knows which share to replace.
-            app.setCustomVibescapeShare(id: id, shareID: link.id, key: key)
+            // name later knows which share to publish a new version to.
+            app.setCustomVibescapeShare(id: id, shareID: link.id, key: key,
+                                        revision: link.revision, editKey: editKey)
         case .failure(let why):
             linkFailure = why
             NSLog("[SHARE] could not make the link: %@", why.detail)

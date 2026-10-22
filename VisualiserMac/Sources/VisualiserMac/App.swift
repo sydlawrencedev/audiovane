@@ -178,6 +178,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared?.clearDownloadsCopyIfPending()
         }
 
+        // Bring the installed copies of shared vibescapes up to date. The
+        // person who made a share can publish a new version of it, and this
+        // Mac may be behind.
+        Task { @MainActor in
+            await AppState.shared?.checkForShareUpdates()
+        }
+
         // Look for a newer release on every launch, and then every hour
         // (not in the test vibescapes).
         let testVibescape = ["--snapshot", "--record", "--video", "--share-image"].contains { CommandLine.arguments.contains($0) }
@@ -753,9 +760,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 title: ShareImageBuilder.title(name: app.displayName(for: .custom(mode.id)),
                                               author: author))
             NSLog("[SHARE] payload %d chars, picture %d bytes", payload.count, image?.count ?? 0)
+            let editKey = mode.shareEditKey ?? ShareLinkStore.newEditKey()
             let made = await ShareLinkStore().makeLink(
                 payload: payload, name: mode.name, author: author,
-                image: image, key: key, inGallery: false)
+                image: image, key: key, inGallery: false, editKey: editKey)
             switch made {
             case .success(let link):
                 NSLog("[SHARE] link %@", link.url)

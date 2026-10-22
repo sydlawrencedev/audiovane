@@ -102,9 +102,11 @@ actor ShareLinkStore {
     /// somebody changed their name, which makes a different vibescape, which
     /// gets a different link. The old share goes with it, so the gallery does
     /// not fill up with every version of the same vibescape.
+    /// `editKey` is the capability that lets this Mac publish a new version
+    /// of the share later. The site keeps only its hash.
     func makeLink(payload: String, name: String, author: String,
                   image: Data?, key: String, inGallery: Bool,
-                  replaces: String? = nil) async -> Result<ShareLink, Failure> {
+                  replaces: String? = nil, editKey: String? = nil) async -> Result<ShareLink, Failure> {
         guard !payload.isEmpty, !ShareLinkStore.token.isEmpty else {
             return .failure(.refused("the link was empty"))
         }
@@ -125,6 +127,9 @@ actor ShareLinkStore {
         body["public"] = inGallery
         if let replaces, !replaces.isEmpty {
             body["replaces"] = replaces
+        }
+        if let editKey, !editKey.isEmpty {
+            body["editKey"] = editKey
         }
         if let image, !image.isEmpty {
             body["image"] = image.base64EncodedString()
@@ -148,7 +153,9 @@ actor ShareLinkStore {
             guard let url = json["url"] as? String, let id = json["id"] as? String else {
                 return .failure(.refused("the site sent no link"))
             }
-            return .success(ShareLink(id: id, url: url, inGallery: json["public"] as? Bool ?? inGallery))
+            return .success(ShareLink(id: id, url: url,
+                                      inGallery: json["public"] as? Bool ?? inGallery,
+                                      revision: json["revision"] as? Int ?? 1))
         } catch {
             NSLog("[SHARE] could not reach the site: %@", error.localizedDescription)
             return .failure(.unreachable)
@@ -199,6 +206,76 @@ actor ShareLinkStore {
         }
     }
 
+    /// Publishes a new version of a share this Mac made.
+    ///
+    /// The link stays the same, which is the point: everybody who already
+    /// has the vibescape installed gets the new version, and everybody who
+    /// has the old link gets it too.
+    ///
+    /// The capability is what says this Mac is the one that made the share.
+    /// Without it the site refuses, because a share id, a content hash and
+    /// the token in the app's bundle are all things anybody can have.
+    func updateShare(shareID: String, editKey: String, payload: String,
+                     name: String, author: String,
+                     image: Data?) async -> Result<Int, Failure> {
+        guard !shareID.isEmpty, !editKey.isEmpty, !ShareLinkStore.token.isEmpty else {
+            return .failure(.refused("there was nothing to publish"))
+        }
+        guard let url = URL(string: "\(ShareLinkStore.site)/api/share/\(shareID)") else {
+            return .failure(.refused("the address was wrong"))
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue(ShareLinkStore.token, forHTTPHeaderField: "x-av-token")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        var body: [String: Any] = [
+            "payload": payload,
+            "name": String(name.prefix(120)),
+            "author": String(author.prefix(120)),
+            "editKey": editKey,
+        ]
+        if let image, !image.isEmpty {
+            body["image"] = image.base64EncodedString()
+        }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: body)
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200 else {
+                let said = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["error"] as? String
+                NSLog("[SHARE] the site said %d %@", status, said ?? "(no reason)")
+                return .failure(.refused(said ?? "the site said \(status)"))
+            }
+            guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+                return .failure(.refused("the site sent something unreadable"))
+            }
+            return .success(json["revision"] as? Int ?? 1)
+        } catch {
+            NSLog("[SHARE] could not reach the site: %@", error.localizedDescription)
+            return .failure(.unreachable)
+        }
+    }
+
+    /// A capability for changing a share later.
+    ///
+    /// Thirty-two bytes of randomness, made once and kept on this Mac. The
+    /// site keeps only its hash, and the hash is useless to anybody: it
+    /// proves a capability, it is not one.
+    static func newEditKey() -> String {
+        var bytes = [UInt8](repeating: 0, count: 32)
+        let status = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        if status != errSecSuccess {
+            // Not much else to do than make something that is at least not
+            // guessable in a hurry.
+            NSLog("[SHARE] the system would not make a random capability")
+            return UUID().uuidString.replacingOccurrences(of: "-", with: "")
+        }
+        return ShareImporter.base64URLEncode(Data(bytes))
+    }
+
     /// What the site knows about a share — in particular whether it is in
     /// the public gallery, so the tickbox can show what is true.
     func details(shareID: String) async -> ShareDetails? {
@@ -212,7 +289,9 @@ actor ShareLinkStore {
             }
             return ShareDetails(name: json["name"] as? String ?? "",
                                 author: json["author"] as? String ?? "",
-                                inGallery: json["public"] as? Bool ?? false)
+                                inGallery: json["public"] as? Bool ?? false,
+                                revision: json["revision"] as? Int ?? 1,
+                                payload: json["payload"] as? String ?? "")
         } catch {
             return nil
         }
@@ -224,6 +303,11 @@ struct ShareDetails: Equatable {
     let name: String
     let author: String
     let inGallery: Bool
+    /// Which version of the share the site is at.
+    let revision: Int
+    /// The share's contents, which is what a copy behind would be brought
+    /// forward to. Empty when the site did not send it.
+    let payload: String
 }
 
 /// A short link the site made, and the share it belongs to.
@@ -235,4 +319,6 @@ struct ShareLink: Equatable {
     let url: String
     /// Whether the share is in the public gallery, as the site has it.
     let inGallery: Bool
+    /// Which version of the share the site is at.
+    let revision: Int
 }

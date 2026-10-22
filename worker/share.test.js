@@ -40,7 +40,8 @@ function makeShares() {
             all,
             async run() {
               if (sql.includes("INSERT INTO shares")) {
-                const [id, payload, name, author, image, key, payloadHash, isPublic] = args;
+                const [id, payload, name, author, image, key, payloadHash, isPublic,
+                       , editKeyHash] = args;
                 if (rows.has(id)) throw new Error("UNIQUE constraint failed: shares.id");
                 if (key && byKey.has(key)) {
                   throw new Error("UNIQUE constraint failed: shares.key");
@@ -51,6 +52,9 @@ function makeShares() {
                   payload_hash: payloadHash || null,
                   is_public: isPublic ? 1 : 0,
                   created_at: 1_700_000_000_000,
+                  revision: 1,
+                  edit_key: editKeyHash || null,
+                  admin_edited: 0,
                 });
                 if (key) byKey.set(key, id);
                 if (payloadHash) byPayloadHash.set(payloadHash, id);
@@ -66,6 +70,31 @@ function makeShares() {
                 const [isPublic, id] = args;
                 const row = rows.get(id);
                 if (row) row.is_public = isPublic;
+                return { success: true };
+              }
+              if (sql.includes("UPDATE shares SET payload = ?")) {
+                const [payload, name, author, payloadHash, revision, image, id] = args;
+                const row = rows.get(id);
+                if (row) {
+                  row.payload = payload;
+                  row.name = name;
+                  row.author = author;
+                  row.payload_hash = payloadHash;
+                  row.revision = revision;
+                  if (image) row.image = image;
+                }
+                return { success: true };
+              }
+              if (sql.includes("UPDATE shares SET name = ?")) {
+                const [name, author, payload, revision, id] = args;
+                const row = rows.get(id);
+                if (row) {
+                  row.name = name;
+                  row.author = author;
+                  row.payload = payload;
+                  row.revision = revision;
+                  row.admin_edited = 1;
+                }
                 return { success: true };
               }
               if (sql.includes("DELETE FROM shares")) {
@@ -101,6 +130,7 @@ function makeShares() {
               if (sql.includes("FROM shares WHERE id = ?")) {
                 const row = rows.get(args[0]);
                 if (!row) return null;
+                // The revision and the capability come out of the SELECT.
                 // D1 hands BLOBs back as a plain array of bytes, which is what
                 // the code has to cope with.
                 // The picture flag comes out of the SELECT, so the fake
@@ -797,7 +827,8 @@ test("changing your name replaces the share rather than leaving it behind", asyn
   resetRateLimiter();
   const first = await run("https://vibresia.com/api/share", {
     env,
-    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Stephen", key: "before1", public: true }),
+    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Stephen", key: "before1",
+                      public: true, editKey: "the-capability" }),
   });
   const { id: oldId } = await first.json();
 
@@ -808,7 +839,7 @@ test("changing your name replaces the share rather than leaving it behind", asyn
     env,
     ...shareRequest({
       payload: "QU5PVEhFUi1wYXlsb2Fk", name: "After", author: "Stephen",
-      key: "after1", public: true, replaces: oldId,
+      key: "after1", public: true, replaces: oldId, editKey: "the-capability",
     }),
   });
   const { id: newId } = await second.json();
@@ -820,6 +851,106 @@ test("changing your name replaces the share rather than leaving it behind", asyn
   assert.equal(sharedIn(gallery).length, 1);
   assert.equal(sharedIn(gallery)[0].name, "After");
   assert.equal((await run(`https://vibresia.com/api/share/${oldId}`, { env })).status, 404);
+});
+
+test("a share nobody owns cannot be replaced", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Stephen", key: "before1",
+                      public: true, editKey: "the-capability" }),
+  });
+  const { id: oldId } = await first.json();
+
+  // Somebody else, with the app's token, names the share to be replaced.
+  // The token is in the bundle, so it is not proof of anything.
+  resetRateLimiter();
+  const second = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({
+      payload: "QU5PVEhFUi1wYXlsb2Fk", name: "After", author: "Stephen",
+      key: "after1", public: true, replaces: oldId, editKey: "not-the-capability",
+    }),
+  });
+  assert.equal(second.status, 200);
+
+  // The old share is still there: it was not theirs to delete.
+  assert.equal((await run(`https://vibresia.com/api/share/${oldId}`, { env })).status, 200);
+});
+
+test("the maker of a share can publish a new version of it", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Stephen", key: "before1",
+                      public: true, editKey: "the-capability" }),
+  });
+  const { id } = await first.json();
+
+  // A new version of the same share: the same link, a later revision.
+  const updated = await run(`https://vibresia.com/api/share/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-token": SHARE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      payload: "QU5PVEhFUi1wYXlsb2Fk", name: "After", author: "Stephen",
+      editKey: "the-capability",
+    }),
+  });
+  assert.equal(updated.status, 200);
+  const body = await updated.json();
+  assert.equal(body.revision, 2);
+  assert.equal(body.changed, true);
+
+  // Somebody else's capability is refused.
+  const refused = await run(`https://vibresia.com/api/share/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-token": SHARE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      payload: "QU5PVEhFUi1wYXlsb2Fk", name: "Hijacked", author: "Somebody",
+      editKey: "not-the-capability",
+    }),
+  });
+  assert.equal(refused.status, 403);
+});
+
+test("a correction made in the admin stands when the maker publishes again", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const first = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Before", author: "Old Name", key: "before1",
+                      public: true, editKey: "the-capability" }),
+  });
+  const { id } = await first.json();
+
+  const edited = await run(`https://vibresia.com/api/admin/shares/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-admin-token": "admin-token-for-tests", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "edit", name: "After", author: "New Name" }),
+  });
+  assert.equal(edited.status, 200);
+
+  // The maker publishes a new version with the old words in it. The
+  // correction stands: a stale copy must not put the old words back.
+  const updated = await run(`https://vibresia.com/api/share/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-token": SHARE_TOKEN, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      payload: "QU5PVEhFUi1wYXlsb2Fk", name: "Before", author: "Old Name",
+      editKey: "the-capability",
+    }),
+  });
+  assert.equal(updated.status, 200);
+
+  const details = await (await run(`https://vibresia.com/api/share/${id}`, { env })).json();
+  assert.equal(details.name, "After");
+  assert.equal(details.author, "New Name");
 });
 
 test("a share that replaces itself is not deleted", async () => {
