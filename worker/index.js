@@ -115,6 +115,9 @@ export function resetRateLimiter() {
   lastShareAt = 0;
   sharesThisHour = 0;
   shareHourStartedAt = 0;
+  lastGalleryAt = 0;
+  galleryThisHour = 0;
+  galleryHourStartedAt = 0;
 }
 
 // Same idea, separate budget: a download in a loop shouldn't silence the one
@@ -129,6 +132,30 @@ function errorRateLimited() {
   if (errorsThisHour >= ERROR_MAX_PER_HOUR) return true;
   lastErrorAt = now;
   errorsThisHour += 1;
+  return false;
+}
+
+// The gallery's announcement has its own budget again, and a tighter one.
+// Sharing is allowed a hundred an hour because the cost of a share is a row
+// write; the cost of announcing one is a message in a channel somebody reads.
+// Sharing ten vibescapes in a row is odd, but sharing one every half hour is
+// a person who makes things, and they should all be seen.
+const GALLERY_MIN_SECONDS_BETWEEN = 10;
+const GALLERY_MAX_PER_HOUR = 30;
+let lastGalleryAt = 0;
+let galleryThisHour = 0;
+let galleryHourStartedAt = 0;
+
+function galleryRateLimited() {
+  const now = Date.now();
+  if (now - galleryHourStartedAt > 3_600_000) {
+    galleryHourStartedAt = now;
+    galleryThisHour = 0;
+  }
+  if (now - lastGalleryAt < GALLERY_MIN_SECONDS_BETWEEN * 1000) return true;
+  if (galleryThisHour >= GALLERY_MAX_PER_HOUR) return true;
+  lastGalleryAt = now;
+  galleryThisHour += 1;
   return false;
 }
 
@@ -201,12 +228,44 @@ export function buildDownloadEmbed({ source, referer, country, city, agent, firs
   };
 }
 
-async function postDiscord(env, payload) {
+/// The message for a vibescape joining the public gallery.
+///
+/// Kept pure and exported so the payload can be asserted on without a network.
+export function buildGalleryEmbed({ name, author, url, imageUrl }) {
+  const title = name && name.trim() ? name.trim() : "A new vibescape";
+  const who = author && author.trim() ? `, by ${author.trim()}` : "";
+  const embed = {
+    author: { name: "Vibresia" },
+    title: truncate(`🎨 ${title}`, DISCORD_TITLE_LIMIT),
+    description: truncate(
+      `A new vibescape in the gallery${who}.\n[Open it on vibresia.com](${url})`,
+      DISCORD_DESC_LIMIT,
+    ),
+    url,
+    color: STYLES.good.color,
+    footer: { text: "vibresia.com" },
+    timestamp: new Date().toISOString(),
+  };
+  // Only when there is one: a share made without a picture has no picture to
+  // show, and an embed pointing at a 404 looks like a broken link.
+  if (imageUrl) embed.image = { url: imageUrl };
+  return {
+    username: undefined, // filled in from env at send time
+    // Nobody's name is allowed to ping a channel here. Discord reads a
+    // mention out of a webhook's text by default, and a vibescape called
+    // "@everyone" would then ring the bell for the whole server.
+    allowed_mentions: { parse: [] },
+    embeds: [embed],
+  };
+}
+
+async function postDiscord(env, payload, webhookUrl) {
   const body = JSON.stringify(payload);
   // Discord usually answers in well under a second; five is a hung connection,
   // and the caller is a download we shouldn't keep waiting on.
+  const url = webhookUrl || env.DISCORD_WEBHOOK_URL;
   const send = () =>
-    fetch(env.DISCORD_WEBHOOK_URL, {
+    fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
@@ -791,7 +850,7 @@ async function handleSharePatch(request, url, env) {
 /// anyone who wants it can read it out of the bundle. What it stops is a
 /// script creating shares on this domain to burn the daily write quota,
 /// which would break sharing for everyone.
-async function handleShareCreate(request, env) {
+async function handleShareCreate(request, env, ctx) {
   const token = request.headers.get("x-av-token") || "";
   if (!env.SHARE_TOKEN || token !== env.SHARE_TOKEN) {
     return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
@@ -881,8 +940,19 @@ async function handleShareCreate(request, env) {
     // request has it. The link stays the same either way.
     await ensureImage(env, existing, image);
     // And the gallery follows the tickbox, so a share that was kept out of
-    // it can be put in by sharing it again.
+    // it can be put in by sharing it again. Whether it is *new* to the
+    // gallery is asked before the flag is set: a share that was already in
+    // it and is shared again is not news.
+    const wasInGallery = await isInGallery(env, existing.id);
     await setPublic(env, existing.id, isPublic);
+    if (isPublic && !wasInGallery) {
+      await announceGalleryShare(env, ctx, {
+        id: existing.id,
+        name,
+        author,
+        hasImage: !!image || !!existing.image,
+      });
+    }
     return Response.json({
       ok: true,
       id: existing.id,
@@ -901,6 +971,14 @@ async function handleShareCreate(request, env) {
     try {
       await insertShare(env, { id, payload, payloadHash, name, author, image, key, isPublic,
                                editKeyHash });
+      if (isPublic) {
+        await announceGalleryShare(env, ctx, {
+          id,
+          name,
+          author,
+          hasImage: !!image,
+        });
+      }
       // The share this one replaces goes now that the new one is in place —
       // and only now, and only if it is a different share, and only if the
       // capability said it was the maker's own.
@@ -927,7 +1005,16 @@ async function handleShareCreate(request, env) {
           // app, or by a render that came back empty. This one has a
           // picture, so it goes in.
           await ensureImage(env, raced, image);
+          const racedWasInGallery = await isInGallery(env, raced.id);
           await setPublic(env, raced.id, isPublic);
+          if (isPublic && !racedWasInGallery) {
+            await announceGalleryShare(env, ctx, {
+              id: raced.id,
+              name,
+              author,
+              hasImage: !!image || !!raced.image,
+            });
+          }
           return Response.json({
             ok: true,
             id: raced.id,
@@ -1042,6 +1129,55 @@ async function handleShareUpdate(request, url, env) {
 
   return Response.json({ ok: true, id, revision: await shareRevision(env, id), changed: false,
                          name: finalName, author: finalAuthor });
+}
+
+/// Whether a share is in the public gallery.
+///
+/// Asked on its own rather than as part of the row, because the gallery
+/// column arrived after the table did: a database without it has no gallery,
+/// so nothing is in one and the answer is simply no.
+async function isInGallery(env, id) {
+  try {
+    const row = await env.SHARES.prepare("SELECT is_public FROM shares WHERE id = ?")
+      .bind(id).first();
+    return !!row && row.is_public === 1;
+  } catch {
+    return false;
+  }
+}
+
+/// Tells Discord that a vibescape has joined the public gallery.
+///
+/// Fire and forget: the share is made whether or not this lands, and the
+/// person sharing it is waiting on the answer.
+///
+/// The gallery gets its own budget, and a tighter one than sharing itself
+/// gets. A person makes a vibescape now and then; a script can make a
+/// hundred an hour, and the point of the channel is to see the first kind.
+async function announceGalleryShare(env, ctx, { id, name, author, hasImage }) {
+  if (env.DISCORD_GALLERY_ENABLED === "false") return;
+  // A channel of its own if one has been set up, and the general one
+  // otherwise, so the thing works without any extra configuration.
+  const webhook = env.DISCORD_GALLERY_WEBHOOK_URL || env.DISCORD_WEBHOOK_URL;
+  if (!webhook) return;
+  if (galleryRateLimited()) {
+    console.log(`[gallery] suppressed the announcement for ${id} (cooldown)`);
+    return;
+  }
+
+  const url = `${CANONICAL_SITE}s/${id}`;
+  const payload = buildGalleryEmbed({
+    name,
+    author,
+    url,
+    imageUrl: hasImage ? `${CANONICAL_SITE}og/${id}.jpg` : "",
+  });
+  payload.username = env.DISCORD_BOT_USERNAME || "Vibresia";
+  ctx.waitUntil(
+    postDiscord(env, payload, webhook).then((result) => {
+      console.log(`[gallery] ${result.ok ? "posted" : "FAILED"}: ${id}${result.ok ? "" : ` (${result.error || result.status})`}`);
+    })
+  );
 }
 
 /// `GET /s/<id>` — the share itself.
@@ -1544,7 +1680,7 @@ export default {
     if (url.pathname === "/download") return handleDownload(request, url, env, ctx);
     if (url.pathname === "/api/notify") return handleNotify(request, env, ctx);
     if (url.pathname === "/api/health") return handleHealth(env);
-    if (url.pathname === "/api/share") return handleShareCreate(request, env);
+    if (url.pathname === "/api/share") return handleShareCreate(request, env, ctx);
     if (url.pathname === "/mcp") return handleMcp(request, env);
     // The MCP registry's discovery file. It is also how the domain is proved
     // to own the server it claims to.

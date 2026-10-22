@@ -23,6 +23,14 @@ run_worker_first = true
 DISCORD_NOTIFICATIONS_ENABLED = "true"
 DISCORD_BOT_USERNAME = "Vibresia"
 
+# A vibescape joining the public gallery is announced on Discord, with its
+# picture and its link. It goes to the same channel as everything else
+# unless a channel of its own is set up:
+#   npx wrangler secret put DISCORD_GALLERY_WEBHOOK_URL
+# Set this to "false" to keep the gallery quiet without touching the other
+# messages.
+DISCORD_GALLERY_ENABLED = "true"
+
 # The project's public ingest key, so the Worker can count a download on the
 # server — which is the count that doesn't depend on anybody's ad blocker or
 # on a link preview running the page's JavaScript. It is in the page's HTML

@@ -974,3 +974,123 @@ test("a share that replaces itself is not deleted", async () => {
   });
   assert.equal((await run(`https://vibresia.com/api/share/${id}`, { env })).status, 200);
 });
+
+
+// --- telling Discord about the gallery --------------------------------------
+
+/**
+ * Runs a request with the Discord POST captured, the way the Worker's own
+ * tests do it: nothing here touches the network.
+ */
+async function runCatchingDiscord(url, { env, ...rest } = {}) {
+  const posts = [];
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (target, init) => {
+    posts.push({ url: String(target), body: JSON.parse(init.body) });
+    return new Response(null, { status: 204 });
+  };
+  const waits = [];
+  const request = new Request(url, { method: rest.method || "GET", headers: rest.headers, body: rest.body });
+  try {
+    const response = await worker.fetch(request, env, { waitUntil: (p) => waits.push(p) });
+    await Promise.all(waits);
+    return { response, posts };
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
+test("a new vibescape in the gallery is announced on Discord with its picture and its link", async () => {
+  const { env } = makeEnv({ DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token" });
+  resetRateLimiter();
+  const { response, posts } = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({
+      payload: PAYLOAD, name: "Galaxy", author: "Stephen", key: "galaxy1", public: true,
+      image: Buffer.from("pretend-jpeg").toString("base64"),
+    }),
+  });
+  assert.equal(response.status, 200);
+  assert.equal(posts.length, 1, "one message about the new vibescape");
+  assert.equal(posts[0].url, "https://discord.com/api/webhooks/1/token");
+
+  const { id } = await response.json();
+  const embed = posts[0].body.embeds[0];
+  assert.match(embed.title, /Galaxy/, "the message names the vibescape");
+  assert.match(embed.description, /Stephen/, "the message says who made it");
+  assert.match(embed.description, /vibresia\.com/, "the message links to the site");
+  assert.equal(embed.url, `https://vibresia.com/s/${id}`);
+  assert.equal(embed.image.url, `https://vibresia.com/og/${id}.jpg`);
+  assert.deepEqual(posts[0].body.allowed_mentions, { parse: [] },
+    "a vibescape called @everyone must not ping the channel");
+});
+
+test("a vibescape kept out of the gallery is not announced", async () => {
+  const { env } = makeEnv({ DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token" });
+  resetRateLimiter();
+  const { posts } = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Private", author: "Stephen", key: "priv1", public: false }),
+  });
+  assert.equal(posts.length, 0, "a private share is not news");
+});
+
+test("the same vibescape shared again is not announced twice", async () => {
+  const { env } = makeEnv({ DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token" });
+  resetRateLimiter();
+  const first = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Twice", author: "Stephen", key: "twice1", public: true }),
+  });
+  assert.equal(first.posts.length, 1, "the first share is announced");
+
+  resetRateLimiter();
+  const second = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Twice", author: "Stephen", key: "twice1", public: true }),
+  });
+  assert.equal(second.posts.length, 0, "sharing the same vibescape again is not news");
+});
+
+test("a share that was kept private and is then shared publicly is announced", async () => {
+  const { env } = makeEnv({ DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token" });
+  resetRateLimiter();
+  await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1", public: false }),
+  });
+
+  resetRateLimiter();
+  const { posts } = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1", public: true }),
+  });
+  assert.equal(posts.length, 1, "joining the gallery is the news");
+});
+
+test("gallery announcements can be switched off without taking the other messages with them", async () => {
+  const { env } = makeEnv({
+    DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token",
+    DISCORD_GALLERY_ENABLED: "false",
+  });
+  resetRateLimiter();
+  const { posts } = await runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Quiet", author: "Stephen", key: "quiet1", public: true }),
+  });
+  assert.equal(posts.length, 0, "the gallery is silent");
+});
+
+test("the gallery has its own budget, so a burst of shares cannot flood the channel", async () => {
+  const { env } = makeEnv({ DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token" });
+  resetRateLimiter();
+  const send = (n) => runCatchingDiscord("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: `${PAYLOAD}${n}`, name: `Many ${n}`, author: "Stephen", key: `many${n}`, public: true }),
+  });
+  const first = await send(1);
+  assert.equal(first.posts.length, 1, "the first share is announced");
+  for (let i = 2; i < 5; i += 1) await send(i);
+  const last = await send(5);
+  assert.equal(last.posts.length, 0, "the rest wait for the cooldown");
+});
