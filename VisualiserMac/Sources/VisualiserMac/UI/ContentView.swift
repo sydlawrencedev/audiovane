@@ -35,10 +35,9 @@ struct ContentView: View {
                     .offset(y: chromeVisible ? 0 : -110)
                     .opacity(chromeVisible ? 1 : 0)
                 Spacer()
-                // Only the audio numbers slide away with the chrome, not the
-                // name and credit beside them — those belong to the person
-                // watching rather than to the app.
-                FooterView(chromeVisible: chromeVisible)
+                // The footer's name, credit and share button belong to the
+                // person watching rather than to the app, so they stay.
+                FooterView()
                     .padding(.leading, 28)
                     // Leave room for the credits button in the corner.
                     .padding(.trailing, 215)

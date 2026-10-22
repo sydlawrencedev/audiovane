@@ -75,11 +75,6 @@ struct VisualiserApp: App {
                 Button("Use Microphone")     { app.selectSource(.microphone, via: "menu") }
                 Button("Use Demo Tone")      { app.selectSource(.demo, via: "menu") }
                 Divider()
-                Button("Open Hamster Folder…") {
-                    SpriteAtlas.ensureFolder()
-                    NSWorkspace.shared.open(SpriteAtlas.folder)
-                }
-                Divider()
                 Toggle("Float Above All Windows", isOn: Binding(
                     get: { app.alwaysOnTop },
                     set: { app.setAlwaysOnTop($0) }))
@@ -314,7 +309,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 // toggle actually did, then report the same numbers again.
                 // --green-button presses the real traffic-light button instead
                 // of the menu item, which is what a person actually clicks.
+                // --toggle-float turns the float on and off again first,
+                // which is the sequence that used to leave the green button
+                // dead: the proxy took it over for the float and never gave
+                // AppKit's own behaviour back.
                 let pressGreen = CommandLine.arguments.contains("--green-button")
+                let toggleFloat = CommandLine.arguments.contains("--toggle-float")
+                if toggleFloat {
+                    let state = AppState.shared
+                    print("[window] float was: \(state?.alwaysOnTop == true)")
+                    state?.setAlwaysOnTop(true)
+                    print("[window] float now: \(state?.alwaysOnTop == true)")
+                    state?.setAlwaysOnTop(false)
+                    print("[window] float now: \(state?.alwaysOnTop == true)")
+                    let button = w.standardWindowButton(.zoomButton)
+                    print("[window] green button target: \(button?.target.map { String(describing: type(of: $0)) } ?? "AppKit (default)")")
+                }
                 guard CommandLine.arguments.contains("--full-screen") || pressGreen else { exit(0) }
                 if pressGreen {
                     let button = w.standardWindowButton(.zoomButton)

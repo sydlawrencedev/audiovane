@@ -1515,32 +1515,55 @@ enum SingerVoice: String, CaseIterable, Identifiable {
     }
 }
 
-/// How much of the header and footer there is room for.
-///
-/// The order matters and is the reverse of what people actually use: the footer
-/// numbers go first (they're diagnostics for us, not for the person watching),
-/// then the pill labels, then the pills themselves. What's left at the narrowest
-/// size is the brand and the thing on screen.
 /// Sits behind the window's green button while that window is floating.
 ///
 /// `NSWindow.standardWindowButton(.zoomButton)` is public API, so handing it a
-/// different target is a supported thing to do; clearing the target again puts
-/// AppKit's own behaviour back.
+/// different target is a supported thing to do; putting the original target
+/// back puts AppKit's own behaviour back.
+///
+/// The original has to be *kept*, not cleared. AppKit's default green button
+/// is a target/action pair as much as anything else, so clearing it leaves a
+/// button that does nothing at all — which is what happened to people who
+/// turned "Float above other apps" on and then off again: the button was dead
+/// for the rest of the session, and full screen looked like it needed the
+/// float.
 final class GreenButtonProxy: NSObject {
     weak var window: NSWindow?
+
+    /// What the button was before it was taken over.
+    private var originalTarget: AnyObject?
+    private var originalAction: Selector?
+    /// Whether anything was captured. The default target is usually the
+    /// window, but it does not have to be, and "nothing captured" has to be
+    /// distinguishable from "captured something that was nil".
+    private var captured = false
 
     func takeOverGreenButton(in window: NSWindow) {
         let button = window.standardWindowButton(.zoomButton)
         guard let button else { return }
+        // Only the first capture counts: after a release the button is back to
+        // AppKit's own, and capturing that would be capturing the default
+        // again, which is right, but capturing a proxy's leftovers would not
+        // be.
+        if !captured {
+            originalTarget = button.target
+            originalAction = button.action
+            captured = true
+        }
         button.target = self
         button.action = #selector(greenButtonClicked)
         self.window = window
     }
 
     func releaseGreenButton(in window: NSWindow) {
-        guard let button = window.standardWindowButton(.zoomButton) else { return }
-        button.target = nil
-        button.action = nil
+        guard captured else { return }
+        if let button = window.standardWindowButton(.zoomButton) {
+            button.target = originalTarget
+            button.action = originalAction
+        }
+        originalTarget = nil
+        originalAction = nil
+        captured = false
     }
 
     @objc private func greenButtonClicked() {
@@ -1551,6 +1574,11 @@ final class GreenButtonProxy: NSObject {
     }
 }
 
+/// How much of the header and footer there is room for.
+///
+/// The order matters and is the reverse of what people actually use: the pill
+/// labels go first, then the pills themselves. What's left at the narrowest
+/// size is the brand and the thing on screen.
 enum LayoutTier: Int, Comparable {
     case wide, compact, narrow, tiny
 
@@ -1566,7 +1594,6 @@ enum LayoutTier: Int, Comparable {
     static func < (lhs: LayoutTier, rhs: LayoutTier) -> Bool { lhs.rawValue < rhs.rawValue }
 
     // The raw values run wide → tiny, so "at least this much room" is `<=`.
-    var showsFooterNumbers: Bool { self == .wide }
     var showsPillText: Bool { self <= .compact }
     var showsPills: Bool { self <= .narrow }
 }
