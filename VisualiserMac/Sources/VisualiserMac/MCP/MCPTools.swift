@@ -679,7 +679,7 @@ enum MCPTools {
         let extras = [description, paletteName.map { "palette: \($0)" }, targets.map { "reacts to: \($0)" }]
             .compactMap { $0 }.filter { !$0.isEmpty }
         if !extras.isEmpty { note += "\n\n\(extras.joined(separator: "\n"))" }
-        note += "\n\nIt's in the vibescape list now and takes part in Auto Scan. \(CustomVibescapeStore.folder.path)/\(mode.id).json"
+        note += "\n\nIt's in the vibescape list now, and the app shows it — a vibescape that appears or changes on disk is the one on screen, the same as saving one in the app. \(CustomVibescapeStore.folder.path)/\(mode.id).json"
 
         if content.isEmpty { return textResult(note) }
         content.append(["type": "text", "text": note])

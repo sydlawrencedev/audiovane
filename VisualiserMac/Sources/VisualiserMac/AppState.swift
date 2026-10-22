@@ -777,7 +777,37 @@ final class AppState: ObservableObject {
         guard stamp != lastCustomVibescapesStamp else { return }
         lastCustomVibescapesStamp = stamp
         NSLog("[CUSTOM] the folder changed — reloading")
+        let before = customVibescapes
         reloadCustomVibescapes()
+        // An agent writing a vibescape, or somebody editing the JSON by
+        // hand, means the same thing as saving it in the app: show it.
+        //
+        // Only for changes the watcher sees while the app is running. A file
+        // written while the app was closed is not a change anybody is
+        // watching, and hijacking the selection on the next launch would
+        // take over the vibescape the app was last in.
+        if let changed = changedCustomVibescape(before: before) {
+            NSLog("[CUSTOM] \(changed) changed on disk — showing it")
+            selectCustomVibescape(changed)
+        }
+    }
+
+    /// The vibescape that changed, if one did.
+    ///
+    /// A new one, or one whose code, name or author is different from what
+    /// was on the list a moment ago. One that no longer compiles does not
+    /// count: showing it would be showing a blank screen.
+    private func changedCustomVibescape(before: [CustomVibescape]) -> String? {
+        for mode in customVibescapes {
+            guard customVibescapeProblems[mode.id] == nil else { continue }
+            guard let old = before.first(where: { $0.id == mode.id }) else {
+                return mode.id
+            }
+            if old.shader != mode.shader || old.name != mode.name || old.author != mode.author {
+                return mode.id
+            }
+        }
+        return nil
     }
 
     /// When the vibescapes folder last changed. Cheap to ask for; the folder is
@@ -903,6 +933,11 @@ final class AppState: ObservableObject {
             customVibescapes.append(mode)
             pushScanCycle()
             refreshCustomVibescapePreviews()
+            // The thing you just made is the thing you want to see. This
+            // also turns Auto Scan off, because the app is now in one
+            // vibescape rather than scanning — and one keystroke puts the
+            // scanning back.
+            selectCustomVibescape(mode.id)
             return .success(mode)
         }
     }
@@ -940,8 +975,21 @@ final class AppState: ObservableObject {
             }
             pushScanCycle()
             refreshCustomVibescapePreviews()
+            // Same again: you changed it, so you want to see the change.
+            selectCustomVibescape(id)
             return .success(customVibescapes[i])
         }
+    }
+
+    /// Shows one of the user's own vibescapes.
+    ///
+    /// Used after a save, and after the folder watcher notices a change, so
+    /// that the vibescape you just made or changed is the one on screen. An
+    /// imported one already did this by hand, and the app's sheet did not —
+    /// so the thing you had just made sat there unseen until you went and
+    /// found it.
+    private func selectCustomVibescape(_ id: String) {
+        setVibescape(.custom(id))
     }
 
     /// Changes who a vibescape says made it.
