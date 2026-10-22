@@ -640,8 +640,9 @@ struct CustomVibescapeView: View {
                         Text("""
                         1. Copy the text below.
                         2. Paste it into ChatGPT, Claude, Gemini — any AI assistant — along with a \
-                        description of the visual you want. Something like "slow-moving blue smoke that \
-                        swirls to the bass" is plenty.
+                        description of the visual you want. Something like "a blue smokey orb that \
+                        swells with the bass and throws light on every beat" is plenty — and the \
+                        more obvious the movement, the better it comes out.
                         3. Copy the code it gives you back.
                         4. Press "Paste the code" below, then Test.
                         """)
