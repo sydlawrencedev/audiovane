@@ -23,8 +23,13 @@ func render(_ px: Int) -> Data {
     // Apple's icon grid: an 824pt rounded square centred on a 1024 canvas.
     let tile = CGRect(x: 100 * s, y: 100 * s, width: 824 * s, height: 824 * s)
     let shape = CGPath(roundedRect: tile, cornerWidth: 185 * s, cornerHeight: 185 * s, transform: nil)
+
+    // No shadow of our own. macOS draws one around every app icon, and a
+    // shadow baked into the artwork is a second one: the tile ends up with
+    // a grey halo around it that reads as a pale rim, and the artwork's
+    // bounds grow past the tile, so macOS shrinks the whole thing to fit
+    // them. Apple's own icons leave it to the system.
     ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -10 * s), blur: 24 * s, color: NSColor.black.withAlphaComponent(0.45).cgColor)
     ctx.addPath(shape); ctx.setFillColor(NSColor.black.cgColor); ctx.fillPath()
     ctx.restoreGState()
 
