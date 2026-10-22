@@ -1651,12 +1651,12 @@ final class OpenGLRenderer: NSObject {
     /// What the picture was at one moment.
     ///
     /// A recording re-draws the last stretch of the vibescape rather than
-    /// keeping a hundred and twenty million pixels around, and a re-draw
-    /// needs to know what the music was doing at each moment. Without this
-    /// it re-draws with whatever the analyser says at the time, which is a
-    /// fresh simulation of the vibescape rather than a recording of one: the
-    /// flashes land on a fixed 120bpm grid rather than on the beats, and
-    /// they do not move with the bass.
+    /// keeping a hundred and twenty million pixels around, and a re-draw needs
+    /// to know what the music was doing at each moment. Without this it
+    /// re-draws with whatever the analyser says at the time, which is a fresh
+    /// simulation of the vibescape rather than a recording of one: the
+    /// flashes land on a fixed 120bpm grid rather than on the beats, and they
+    /// do not move with the bass.
     struct RecordedFrame {
         /// When it was drawn, on the clock the audio is read on.
         var at: CFTimeInterval
@@ -1677,9 +1677,6 @@ final class OpenGLRenderer: NSObject {
     }
 
     /// The last half-minute of the picture, as notes of what it was doing.
-    ///
-    /// A recording is at most sixteen seconds long, so half a minute is
-    /// plenty; the rest is trimmed away as it goes.
     private var recordedFrames: [RecordedFrame] = []
     /// The live picture writes this and the export reads it, and the export
     /// runs off the main thread, so it needs a lock.
@@ -1698,9 +1695,11 @@ final class OpenGLRenderer: NSObject {
         recordedFrames.append(frame)
         // Trim by time rather than by count: the frame rate is not fixed,
         // and what matters is how much of the picture is still worth having.
-        let cutoff = frame.at - Self.recordedSeconds
-        if let first = recordedFrames.firstIndex(where: { $0.at >= cutoff }), first > 0 {
-            recordedFrames.removeFirst(first)
+        if recordedFrames.count > 1_800 {
+            let cutoff = frame.at - Self.recordedSeconds
+            if let first = recordedFrames.firstIndex(where: { $0.at >= cutoff }), first > 0 {
+                recordedFrames.removeFirst(first)
+            }
         }
         recordedLock.unlock()
     }
@@ -1719,8 +1718,8 @@ final class OpenGLRenderer: NSObject {
     /// The recorded picture, ready to be played back.
     ///
     /// The export has a stretch of audio and wants a frame for each of its
-    /// moments. This holds the notes of what the picture was doing then,
-    /// and knows which note belongs to which moment.
+    /// moments. This holds the notes of what the picture was doing then, and
+    /// knows which note belongs to which moment.
     struct Replay {
         private let frames: [RecordedFrame]
         /// The moment the clip starts, on the same clock.
@@ -1740,7 +1739,8 @@ final class OpenGLRenderer: NSObject {
         ///
         /// The nearest one, which is within half a frame: the picture was
         /// drawn at the screen's rate and the clip is at thirty.
-        func frame(at index: Int) -> RecordedFrame? {            guard !frames.isEmpty else { return nil }
+        func frame(at index: Int) -> RecordedFrame? {
+            guard !frames.isEmpty else { return nil }
             let wanted = start + Double(index) / fps
             var best = frames[0]
             var bestDistance = abs(best.at - wanted)
