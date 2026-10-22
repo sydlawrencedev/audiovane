@@ -913,10 +913,16 @@ final class OpenGLRenderer: NSObject {
     /// The same draw the window is doing, over a stretch of its clock: the
     /// point of a recording is that it is the real thing and not a picture of
     /// it.
+    ///
+    /// `replay` is the recorded picture, when there is one: the export hands
+    /// over the notes of what the window was doing and gets that back, so
+    /// the movie is a recording of the vibescape rather than a fresh
+    /// simulation of it.
     func renderImages(width: Int, height: Int, mode: VibescapeID, frames: Int,
-                      fps: Double, startTime: Double, eachFrame: (Int, CGImage) -> Void) {
+                      fps: Double, startTime: Double, replay: Replay? = nil,
+                      eachFrame: (Int, CGImage) -> Void) {
         renderFrames(width: width, height: height, mode: mode, frames: frames,
-                     fps: fps, startTime: startTime) { index, pixels in
+                     fps: fps, startTime: startTime, replay: replay) { index, pixels in
             if let image = makeImage(pixels, width: width, height: height) {
                 eachFrame(index, image)
             }
@@ -965,6 +971,7 @@ final class OpenGLRenderer: NSObject {
     private func renderFrames(width: Int, height: Int, mode: VibescapeID, frames: Int,
                               syntheticAudio: Bool = false, fps: Double = 60,
                               startTime: Double = 0,
+                              replay: Replay? = nil,
                               eachFrame: (Int, [UInt8]) -> Void) {
         guard let ctx = ensureOffscreenContext() else {
             NSLog("[VIZ] renderToPNG: failed to create offscreen context")
@@ -1033,18 +1040,46 @@ final class OpenGLRenderer: NSObject {
         let rowBytes = width * 4
         for k in 0..<frames {
             let seconds = startTime + Double(k) / fps
-            if syntheticAudio {
-                audio.syntheticState(at: seconds)
+            // The music, and the clock it ran on.
+            //
+            // With a recording to play back, they are the ones the window
+            // was using at that moment: the bass that was playing, the
+            // beat that landed, the clock that had stopped in the silence.
+            // Without one — a still, a share picture — the analyser says
+            // whatever it says now, and the beat clock runs on a fixed
+            // 120bpm grid.
+            let snap: AudioSnapshot
+            let t: Float
+            if let replay, let recorded = replay.frame(at: k) {
+                snap = recorded.snap
+                t = Float(recorded.danceClock.truncatingRemainder(dividingBy: 3600))
+                beatClock = recorded.beatClock
+                danceClock = recorded.danceClock
+                scrollClock = recorded.scrollClock
+                wallClock = recorded.wallClock
+                levelSmooth = recorded.levelSmooth
+                bassSmooth = recorded.bassSmooth
+                presence = recorded.presence
+                danceActivity = recorded.activity
+            } else {
+                if syntheticAudio {
+                    audio.syntheticState(at: seconds)
+                }
+                audio.refreshSnapshot()
+                beatClock = seconds * 2.0
+                snap = audio.snapshot
+                t = Float(seconds)
             }
-            audio.refreshSnapshot()
-            beatClock = seconds * 2.0
             glClearColor(0.02, 0.004, 0.03, 1.0)
             glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
             glEnable(GLbitfield(GL_BLEND))
-            let snap = audio.snapshot
-            if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass); presence = 1; presenceVelocity = 0 }
-            easeLevels(snap, dt: 1.0 / fps)
-            let t = Float(seconds)
+            if replay == nil {
+                // The slow values start from the music rather than from
+                // wherever the last frame left them. With a recording there
+                // is nothing to start: the recorded values are the ones.
+                if k == 0 { levelSmooth = Double(snap.level); bassSmooth = Double(snap.bass); presence = 1; presenceVelocity = 0 }
+                easeLevels(snap, dt: 1.0 / fps)
+            }
             switch currentVibescape {
             case .builtin(let v):
                 switch v {
@@ -1193,6 +1228,11 @@ final class OpenGLRenderer: NSObject {
         case .custom(let id):
             drawCustomVibescape(id, time: time, snap: snap)
         }
+
+        // A note of what this frame was, so a recording can be put back
+        // together later. The picture is the thing being recorded, so what
+        // it was drawn to is part of it.
+        record(snap: snap)
 
         // Grade the finished frame through the active palette and present it.
         glBindFramebuffer(GLenum(GL_FRAMEBUFFER), 0)
@@ -1605,6 +1645,116 @@ final class OpenGLRenderer: NSObject {
     /// that should never stop completely (Ribbons keeps a slow, dim drift);
     /// everything else should stay on the sound-gated clocks above.
     private var wallClock: Double = 0
+
+    // MARK: - What the picture was doing
+
+    /// What the picture was at one moment.
+    ///
+    /// A recording re-draws the last stretch of the vibescape rather than
+    /// keeping a hundred and twenty million pixels around, and a re-draw
+    /// needs to know what the music was doing at each moment. Without this
+    /// it re-draws with whatever the analyser says at the time, which is a
+    /// fresh simulation of the vibescape rather than a recording of one: the
+    /// flashes land on a fixed 120bpm grid rather than on the beats, and
+    /// they do not move with the bass.
+    struct RecordedFrame {
+        /// When it was drawn, on the clock the audio is read on.
+        var at: CFTimeInterval
+        /// The music, as it was.
+        var snap: AudioSnapshot
+        /// The clocks the picture ran on.
+        var beatClock: Double
+        var danceClock: Double
+        var scrollClock: Double
+        var wallClock: Double
+        /// The slow values, so a re-draw does not smooth them a second time
+        /// and arrive somewhere else.
+        var levelSmooth: Double
+        var bassSmooth: Double
+        var presence: Double
+        /// How much of the clock was running: zero in silence.
+        var activity: Double
+    }
+
+    /// The last half-minute of the picture, as notes of what it was doing.
+    ///
+    /// A recording is at most sixteen seconds long, so half a minute is
+    /// plenty; the rest is trimmed away as it goes.
+    private var recordedFrames: [RecordedFrame] = []
+    /// The live picture writes this and the export reads it, and the export
+    /// runs off the main thread, so it needs a lock.
+    private let recordedLock = NSLock()
+    private static let recordedSeconds: Double = 30
+
+    /// Notes what the picture is doing, so a recording can be put back
+    /// together later.
+    private func record(snap: AudioSnapshot) {
+        let frame = RecordedFrame(at: CACurrentMediaTime(), snap: snap,
+                                  beatClock: beatClock, danceClock: danceClock,
+                                  scrollClock: scrollClock, wallClock: wallClock,
+                                  levelSmooth: levelSmooth, bassSmooth: bassSmooth,
+                                  presence: presence, activity: danceActivity)
+        recordedLock.lock()
+        recordedFrames.append(frame)
+        // Trim by time rather than by count: the frame rate is not fixed,
+        // and what matters is how much of the picture is still worth having.
+        let cutoff = frame.at - Self.recordedSeconds
+        if let first = recordedFrames.firstIndex(where: { $0.at >= cutoff }), first > 0 {
+            recordedFrames.removeFirst(first)
+        }
+        recordedLock.unlock()
+    }
+
+    /// The frames drawn between two moments.
+    ///
+    /// The export asks for the stretch that matches the audio it is about to
+    /// mux, and gets the picture as it was then — the music, the beat clock,
+    /// the sound-gated clock — rather than a fresh guess.
+    func recordedFrames(from start: CFTimeInterval, to end: CFTimeInterval) -> [RecordedFrame] {
+        recordedLock.lock()
+        defer { recordedLock.unlock() }
+        return recordedFrames.filter { $0.at >= start && $0.at <= end }
+    }
+
+    /// The recorded picture, ready to be played back.
+    ///
+    /// The export has a stretch of audio and wants a frame for each of its
+    /// moments. This holds the notes of what the picture was doing then,
+    /// and knows which note belongs to which moment.
+    struct Replay {
+        private let frames: [RecordedFrame]
+        /// The moment the clip starts, on the same clock.
+        private let start: CFTimeInterval
+        private let fps: Double
+
+        init(frames: [RecordedFrame], start: CFTimeInterval, fps: Double) {
+            self.frames = frames
+            self.start = start
+            self.fps = fps
+        }
+
+        /// How many notes there are to play back.
+        var frameCount: Int { frames.count }
+
+        /// The note for the moment `index` frames into the clip.
+        ///
+        /// The nearest one, which is within half a frame: the picture was
+        /// drawn at the screen's rate and the clip is at thirty.
+        func frame(at index: Int) -> RecordedFrame? {            guard !frames.isEmpty else { return nil }
+            let wanted = start + Double(index) / fps
+            var best = frames[0]
+            var bestDistance = abs(best.at - wanted)
+            for frame in frames.dropFirst() {
+                let distance = abs(frame.at - wanted)
+                if distance < bestDistance {
+                    best = frame
+                    bestDistance = distance
+                    if distance < 0.001 { break }
+                }
+            }
+            return best
+        }
+    }
 
     private func advanceDanceClock(_ snap: AudioSnapshot) {
         let now = CACurrentMediaTime()

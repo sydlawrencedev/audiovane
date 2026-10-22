@@ -694,6 +694,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 NSLog("[VIDEO] no vibescape called \(slug)")
                 exit(1)
             }
+            NSLog("[VIDEO] recording \(mode.rawValue)")
 
             // Something to record. The demo tone if nothing is playing, so
             // the export has audio to put in it.

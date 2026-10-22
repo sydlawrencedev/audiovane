@@ -85,15 +85,31 @@ enum VideoExporter {
         }
         // The picture is as long as the sound, so the two line up.
         let length = Double(sound.frameLength) / sound.format.sampleRate
+        // The moment the sound ends is the moment the recording ends, and
+        // everything else is lined up against it.
+        let audioEnd = CACurrentMediaTime()
 
         // The picture: the same stretch of the vibescape, re-drawn. The
         // render is a GPU job, so it happens off the main thread.
+        //
+        // The re-draw is played back from what the window was doing, rather
+        // than from what the analyser says at the time. That is the whole
+        // difference between a recording and a fresh simulation of the
+        // vibescape: without it the flashes land on a fixed 120bpm grid
+        // instead of on the beats, and the bass in the movie is the bass
+        // now rather than the bass then.
+        let replay = OpenGLRenderer.Replay(
+            frames: renderer.recordedFrames(from: audioEnd - length, to: audioEnd),
+            start: audioEnd - length,
+            fps: fps)
+        NSLog("[VIDEO] the clip is \(String(format: "%.2f", length))s of sound and \(replay.frameCount) recorded frames")
         let frames = await withCheckedContinuation { continuation in
             var images: [CGImage] = []
             let count = max(1, Int(length * fps))
             let start = renderer.animationTime - length
             renderer.renderImages(width: width, height: height, mode: mode,
-                                  frames: count, fps: fps, startTime: start) { _, image in
+                                  frames: count, fps: fps, startTime: start,
+                                  replay: replay) { _, image in
                 images.append(image)
             }
             continuation.resume(returning: images)
