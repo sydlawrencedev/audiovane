@@ -487,6 +487,14 @@ enum CustomVibescapeGuide {
     room. Draw the same shader at uBass 0.1 and uBass 0.9 and look at both
     before you decide how much it should react.
 
+    The track uniforms can be pointed anywhere too, which is how you see what
+    a shader that follows the song does:
+
+      preview_vibescape({
+        code: myShader,
+        options: { uniforms: { uTrackPos: 30, uTrackDuration: 120 } }
+      })
+
     Code that doesn't compile comes back as the driver's own error, in words,
     with the line number — not a blank picture. If a vibescape compiles but looks
     wrong, the problem is usually one of the lints: not reading the music at all,
