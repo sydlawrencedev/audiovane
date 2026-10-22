@@ -128,7 +128,7 @@ func render(slug: String, title: String) -> Data? {
     // vibescape is, so the wash here is nearly always unnecessary, and the
     // app's own share image measures the same way.
     let wash = ctx.makeImage().map { ShareImageBrand.scrimStrengths(in: $0) }
-        ?? (brand: 0.58, credit: 0.72)
+        ?? (brand: 0.58, title: 0.72, credit: 0.72)
 
     // 3. Subtitle — small uppercase "A vibescape by…" between the title
     //    and the image, in flipped coords that's just above `imgBase + imgH`.

@@ -574,7 +574,9 @@ struct ShareVibescapeView: View {
         // vibescape makes a picture twice the size the site will store.
         let image = await ShareImageBuilder.jpeg(
             renderer: app.renderer, mode: target,
-            width: 1200, height: 630, time: 6.0, author: author)
+            width: 1200, height: 630, time: 6.0,
+            title: ShareImageBuilder.title(name: app.displayName(for: target),
+                                          author: author))
 
         let made = await ShareLinkStore().makeLink(
             payload: payload, name: name, author: author, image: image,
@@ -696,7 +698,9 @@ struct ShareVibescapeView: View {
         Task { @MainActor in
             let data = await ShareImageBuilder.png(
                 renderer: app.renderer, mode: vibescape,
-                width: 1280, height: 720, frames: 60, author: author)
+                width: 1280, height: 720, frames: 60,
+                title: ShareImageBuilder.title(name: app.displayName(for: vibescape),
+                                              author: author))
             savingPreview = false
             guard let data else {
                 Task { await Analytics.shared.track("share_preview_failed", [
@@ -780,9 +784,11 @@ struct ShareVibescapeView: View {
 
         Task { @MainActor in
             do {
-                try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              author: author, audio: app.audio,
-                                              clip: clip, to: url)
+                try await VideoExporter.export(
+                    renderer: app.renderer, mode: mode,
+                    title: ShareImageBuilder.title(name: app.displayName(for: mode),
+                                                  author: author),
+                    audio: app.audio, clip: clip, to: url)
                 savedVideoPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 Task { await Analytics.shared.track("share_video_exported", [

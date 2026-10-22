@@ -71,10 +71,11 @@ enum VideoExporter {
 
     /// Records the clip and writes it to `url`.
     ///
-    /// `author` is whose vibescape it is, and it goes on the picture the same
-    /// way it goes on the share image: a video shared on its own should look
-    /// like it came from here.
-    static func export(renderer: OpenGLRenderer, mode: VibescapeID, author: String,
+    /// `title` is what the vibescape is called and who made it, and it goes
+    /// on the picture the same way it goes on the share image: a video shared
+    /// on its own should look like it came from here.
+    static func export(renderer: OpenGLRenderer, mode: VibescapeID,
+                       title: ShareImageBrand.Title,
                        audio: AudioEngine, clip: Clip, to url: URL) async throws {
         // The sound: the last of it, straight out of the ring buffer the app
         // has been filling — as much of it as there is. A clip is as long as
@@ -126,7 +127,7 @@ enum VideoExporter {
         // corner of one frame and not the next.
         let overlay = await MainActor.run {
             ShareImageBrand.overlay(size: CGSize(width: width, height: height),
-                                    author: author)
+                                    title: title)
         }
         let branded = frames.map { frame -> CGImage in
             guard let overlay else { return frame }

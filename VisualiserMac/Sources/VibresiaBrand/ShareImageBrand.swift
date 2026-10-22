@@ -98,6 +98,70 @@ public enum ShareImageBrand {
                                   y: originY + (markSize - textSize.height) / 2))
     }
 
+    /// The name of the vibescape, and who to credit for it.
+    ///
+    /// The app shows the same two things in the corner of its window, so a
+    /// shared picture says about the vibescape what the screen says.
+    public struct Title {
+        /// The name, as the app writes it.
+        public var name: String
+        /// Who to credit, or nil when there is nobody worth naming.
+        ///
+        /// That is the app's own rule, and the same one: a vibescape by
+        /// Minith Labs is not credited to anybody, and neither is one whose
+        /// author field was left blank.
+        public var author: String?
+
+        public init(name: String, author: String? = nil) {
+            self.name = name
+            self.author = author
+        }
+    }
+
+    /// The name and the credit, in the bottom-left corner.
+    ///
+    /// The same two lines the app shows while a vibescape is playing: the
+    /// name, and under it who made it. The name is the big one — it is what
+    /// somebody wants to know when they see the picture — and the credit is
+    /// the small one under it.
+    public static func drawTitle(in ctx: CGContext, size: CGSize, title: Title) {
+        let x = margin + 4
+        // How wide the block may be before the name is cut off. A name is
+        // one line here, the way it is in the app.
+        let maxWidth = size.width * 0.55
+
+        var baseline = margin + 4
+        if let author = title.author {
+            let creditAttrs: [NSAttributedString.Key: Any] = [
+                .font: NSFont.monospacedSystemFont(ofSize: 16, weight: .regular),
+                .foregroundColor: gold,
+                .shadow: textShadow(),
+                .paragraphStyle: truncating(),
+            ]
+            let credit = NSAttributedString(
+                string: "Made with 💜 by \(author)", attributes: creditAttrs)
+            credit.draw(in: CGRect(x: x, y: baseline, width: maxWidth, height: 40))
+            baseline += credit.size().height + 6
+        }
+
+        let nameAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 22, weight: .bold),
+            .foregroundColor: NSColor.white,
+            .shadow: textShadow(),
+            .paragraphStyle: truncating(),
+        ]
+        let name = NSAttributedString(
+            string: title.name.uppercased(), attributes: nameAttrs)
+        name.draw(in: CGRect(x: x, y: baseline, width: maxWidth, height: 40))
+    }
+
+    /// A paragraph that cuts a line off rather than wrapping it.
+    private static func truncating() -> NSParagraphStyle {
+        let style = NSMutableParagraphStyle()
+        style.lineBreakMode = .byTruncatingTail
+        return style
+    }
+
     /// The credit, in the bottom-right.
     public static func drawCredit(in ctx: CGContext, size: CGSize, author: String) {
         let attrs: [NSAttributedString.Key: Any] = [
@@ -196,11 +260,17 @@ public enum ShareImageBrand {
     /// The width the picture is sampled at. Small, because it is only a
     /// measure — and drawing it small is what averages it.
     private static let sampleWidth = 64
-    /// The radius of the wash in the top-left corner, and the bottom-right.
+    /// The radius of the wash in the top-left corner.
     private static let brandRadius: CGFloat = 190
+    /// The radius of the wash in the bottom-left corner, where the name and
+    /// the credit are.
+    private static let titleRadius: CGFloat = 320
+    /// The radius of the wash in the bottom-right corner, where the
+    /// website's own picture puts its credit.
     private static let creditRadius: CGFloat = 320
     /// The most either wash can be, when the corner is as bright as it gets.
     public static let brandStrength: CGFloat = 0.58
+    public static let titleStrength: CGFloat = 0.72
     public static let creditStrength: CGFloat = 0.72
 
     /// How much wash each corner of a picture needs.
@@ -214,10 +284,15 @@ public enum ShareImageBrand {
     /// The measure is a high percentile of the corner's brightness rather
     /// than its average: one white flash in the corner is enough to swallow
     /// the credit, and an average would average it away.
-    public static func scrimStrengths(in image: CGImage) -> (brand: CGFloat, credit: CGFloat) {
+    public static func scrimStrengths(in image: CGImage) -> (brand: CGFloat,
+                                                            title: CGFloat,
+                                                            credit: CGFloat) {
         let brand = cornerBrightness(in: image, top: true, left: true, radius: brandRadius)
+        let title = cornerBrightness(in: image, top: false, left: true, radius: titleRadius)
         let credit = cornerBrightness(in: image, top: false, left: false, radius: creditRadius)
-        return (scale(brand) * brandStrength, scale(credit) * creditStrength)
+        return (scale(brand) * brandStrength,
+                scale(title) * titleStrength,
+                scale(credit) * creditStrength)
     }
 
     /// A corner's brightness, as a number between nothing and everything.
@@ -271,22 +346,23 @@ public enum ShareImageBrand {
         return luminances[index]
     }
 
-    /// A copy of an image with the brand and the credit on it.
+    /// A copy of an image with the brand, the name and the credit on it.
     ///
-    /// The scrims go on first, then the brand, so the mark sits on top of the
-    /// wash rather than under it.
+    /// The scrims go on first, then the lettering, so the mark sits on top
+    /// of the wash rather than under it.
     ///
     /// The drawing goes through an `NSGraphicsContext` rather than the bare
     /// CoreGraphics one: AppKit draws text through the current graphics
     /// context, and with only a CGContext there isn't one, so the wordmark
     /// and the credit silently don't appear.
-    public static func branded(_ image: CGImage, author: String) -> CGImage? {
+    public static func branded(_ image: CGImage, title: Title) -> CGImage? {
         let size = CGSize(width: image.width, height: image.height)
-        guard let overlay = overlay(size: size, author: author) else { return nil }
+        guard let overlay = overlay(size: size, title: title) else { return nil }
         return branded(image, overlay: overlay)
     }
 
-    /// The brand and the credit on their own, as a transparent picture.
+    /// The brand, the name and the credit on their own, as a transparent
+    /// picture.
     ///
     /// The lettering is the expensive part: AppKit lays the text out every
     /// time it draws it, and a movie wants the brand on three hundred
@@ -300,7 +376,7 @@ public enum ShareImageBrand {
     ///
     /// The lettering is drawn with AppKit, which is main-thread-only, so
     /// call this on the main thread.
-    public static func overlay(size: CGSize, author: String) -> CGImage? {
+    public static func overlay(size: CGSize, title: Title) -> CGImage? {
         let width = Int(size.width), height = Int(size.height)
         guard width > 0, height > 0,
               let ctx = CGContext(data: nil, width: width, height: height,
@@ -310,17 +386,17 @@ public enum ShareImageBrand {
             return nil
         }
         // Not flipped: CoreGraphics counts y from the bottom, which is where
-        // the credit and the mark are measured from.
+        // the corner block is measured from.
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         drawBrand(in: ctx, size: size)
-        drawCredit(in: ctx, size: size, author: author)
+        drawTitle(in: ctx, size: size, title: title)
         NSGraphicsContext.restoreGraphicsState()
         return ctx.makeImage()
     }
 
-    /// A copy of a picture with the brand and the credit on it, using
-    /// lettering that has already been drawn.
+    /// A copy of a picture with the brand, the name and the credit on it,
+    /// using lettering that has already been drawn.
     ///
     /// Pure CoreGraphics, so it can run on any thread — which is what a
     /// movie needs, where there are three hundred frames and the main thread
@@ -338,10 +414,20 @@ public enum ShareImageBrand {
         // The wash is measured from the picture, so it is only as strong as
         // the corner it is over needs it to be.
         let wash = scrimStrengths(in: image)
-        drawWashes(in: ctx, size: CGSize(width: width, height: height),
-                   brand: wash.brand, credit: wash.credit)
+        drawTitleWashes(in: ctx, size: CGSize(width: width, height: height),
+                        brand: wash.brand, title: wash.title)
         ctx.draw(overlay, in: CGRect(x: 0, y: 0, width: width, height: height))
         return ctx.makeImage()
+    }
+
+    /// The washes for the corners the app's own picture uses: the mark in
+    /// the top-left and the name in the bottom-left.
+    private static func drawTitleWashes(in ctx: CGContext, size: CGSize,
+                                        brand: CGFloat, title: CGFloat) {
+        drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4),
+                  radius: brandRadius, strength: brand)
+        drawScrim(in: ctx, corner: CGPoint(x: 4, y: 4),
+                  radius: titleRadius, strength: title)
     }
 
     /// The two washes, in their corners.

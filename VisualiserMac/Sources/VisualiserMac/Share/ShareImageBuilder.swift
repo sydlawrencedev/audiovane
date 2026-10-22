@@ -17,15 +17,31 @@ import VibresiaBrand
 /// drawing text from a background queue is not supported and can go wrong
 /// in ways that only show up on somebody else's Mac.
 enum ShareImageBuilder {
+    /// The name and the author for a shared picture.
+    ///
+    /// The app's own rule about who is worth naming: a vibescape by Minith
+    /// Labs is not credited to anybody, and neither is one whose author field
+    /// was left blank. The corner of the app's own window follows the same
+    /// rule, so the picture and the window agree.
+    static func title(name: String, author: String?) -> ShareImageBrand.Title {
+        let trimmed = (author ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return ShareImageBrand.Title(name: name) }
+        guard trimmed.caseInsensitiveCompare(VibescapeMetadata.author) != .orderedSame else {
+            return ShareImageBrand.Title(name: name)
+        }
+        return ShareImageBrand.Title(name: name, author: trimmed)
+    }
+
     /// The share picture, as JPEG data.
     static func jpeg(renderer: OpenGLRenderer, mode: VibescapeID,
-                      width: Int, height: Int, time: Double, author: String,
+                      width: Int, height: Int, time: Double,
+                      title: ShareImageBrand.Title,
                       maxBytes: Int = ShareLinkStore.maxImageBytes) async -> Data? {
         guard let image = await stillImage(renderer: renderer, mode: mode,
                                            width: width, height: height, time: time) else {
             return nil
         }
-        guard let branded = await brand(image, author: author) else { return nil }
+        guard let branded = await brand(image, title: title) else { return nil }
         return encodeJPEG(branded, quality: 0.82, maxBytes: maxBytes)
     }
 
@@ -35,12 +51,13 @@ enum ShareImageBuilder {
     /// reached its stride by the last frame — the same reason the preview
     /// runs rather than drawing one instant.
     static func png(renderer: OpenGLRenderer, mode: VibescapeID,
-                    width: Int, height: Int, frames: Int, author: String) async -> Data? {
+                    width: Int, height: Int, frames: Int,
+                    title: ShareImageBrand.Title) async -> Data? {
         guard let image = await lastFrameImage(renderer: renderer, mode: mode,
                                                width: width, height: height, frames: frames) else {
             return nil
         }
-        guard let branded = await brand(image, author: author) else { return nil }
+        guard let branded = await brand(image, title: title) else { return nil }
         let out = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(out, "public.png" as CFString, 1, nil) else {
             return nil
@@ -74,8 +91,8 @@ enum ShareImageBuilder {
 
     /// The brand, on the main thread.
     @MainActor
-    private static func brand(_ image: CGImage, author: String) -> CGImage? {
-        ShareImageBrand.branded(image, author: author)
+    private static func brand(_ image: CGImage, title: ShareImageBrand.Title) -> CGImage? {
+        ShareImageBrand.branded(image, title: title)
     }
 
     /// Encodes an image as JPEG data.

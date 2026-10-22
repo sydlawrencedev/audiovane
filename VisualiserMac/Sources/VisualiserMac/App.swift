@@ -651,7 +651,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 guard let data = await ShareImageBuilder.jpeg(
                     renderer: app.renderer, mode: mode,
                     width: 1200, height: 630, time: 6.0,
-                    author: author.isEmpty ? VibescapeMetadata.author : author,
+                    title: ShareImageBuilder.title(name: app.displayName(for: mode),
+                                                  author: author),
                     // This one is written to a file rather than sent to the
                     // site, so it is not squeezed to the site's limit.
                     maxBytes: Int.max) else {
@@ -747,7 +748,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             let image = await ShareImageBuilder.jpeg(
                 renderer: app.renderer, mode: .custom(mode.id),
-                width: 1200, height: 630, time: 6.0, author: author)
+                width: 1200, height: 630, time: 6.0,
+                title: ShareImageBuilder.title(name: app.displayName(for: .custom(mode.id)),
+                                              author: author))
             NSLog("[SHARE] payload %d chars, picture %d bytes", payload.count, image?.count ?? 0)
             let made = await ShareLinkStore().makeLink(
                 payload: payload, name: mode.name, author: author,
@@ -777,9 +780,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         Task { @MainActor in
             do {
-                try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              author: author, audio: app.audio, clip: clip,
-                                              to: URL(fileURLWithPath: out))
+                try await VideoExporter.export(
+                    renderer: app.renderer, mode: mode,
+                    title: ShareImageBuilder.title(name: app.displayName(for: mode),
+                                                  author: author),
+                    audio: app.audio, clip: clip,
+                    to: URL(fileURLWithPath: out))
                 NSLog("[VIDEO] saved=\(out) bars=\(clip.bars) seconds=\(Int(clip.seconds))")
                 exit(0)
             } catch {
