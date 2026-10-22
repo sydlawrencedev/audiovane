@@ -788,6 +788,7 @@ struct ShareVibescapeView: View {
                     renderer: app.renderer, mode: mode,
                     title: ShareImageBuilder.title(name: app.displayName(for: mode),
                                                   author: author),
+                    track: app.trackInfo,
                     audio: app.audio, clip: clip, to: url)
                 savedVideoPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])

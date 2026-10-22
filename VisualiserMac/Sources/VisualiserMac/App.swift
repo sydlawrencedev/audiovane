@@ -784,6 +784,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     renderer: app.renderer, mode: mode,
                     title: ShareImageBuilder.title(name: app.displayName(for: mode),
                                                   author: author),
+                    track: app.trackInfo,
                     audio: app.audio, clip: clip,
                     to: URL(fileURLWithPath: out))
                 NSLog("[VIDEO] saved=\(out) bars=\(clip.bars) seconds=\(Int(clip.seconds))")

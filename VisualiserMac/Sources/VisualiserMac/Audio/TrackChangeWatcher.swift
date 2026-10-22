@@ -132,6 +132,14 @@ final class TrackChangeWatcher: NSObject {
         return nil
     }
 
+    /// Whether the player says it is playing right now.
+    ///
+    /// The title and the artist are kept when playback stops, so that the
+    /// chrome can still say what was playing. That is right for the chrome
+    /// and wrong for anything that claims a piece of audio is that track, so
+    /// this is here for the rest of the app to ask.
+    var playing: Bool { isPlaying }
+
     /// The playhead, in seconds from the start of the track.
     ///
     /// Zero when nothing is known: there is no position for a browser tab or

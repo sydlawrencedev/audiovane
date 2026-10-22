@@ -13,6 +13,21 @@ import VibresiaBrand
 /// the picture goes into a movie, the sound into an audio file, and the two
 /// are put together at the end.
 enum VideoExporter {
+    /// What the app knows about the music at the moment of the export.
+    ///
+    /// The export decides whether it is safe to put on the video — see
+    /// `export` — so this is the facts and not the decision.
+    struct TrackInfo {
+        /// What the track is called.
+        var title: String
+        /// Who is playing it, when the player said.
+        var artist: String?
+        /// When this track started, on the clock the audio is read on.
+        var startedAt: CFTimeInterval
+        /// Whether the player says it is playing.
+        var isPlaying: Bool
+    }
+
     /// The frames a second.
     static let fps: Double = 30
     /// The size of the movie.
@@ -76,6 +91,7 @@ enum VideoExporter {
     /// on its own should look like it came from here.
     static func export(renderer: OpenGLRenderer, mode: VibescapeID,
                        title: ShareImageBrand.Title,
+                       track: TrackInfo? = nil,
                        audio: AudioEngine, clip: Clip, to url: URL) async throws {
         // The sound: the last of it, straight out of the ring buffer the app
         // has been filling — as much of it as there is. A clip is as long as
@@ -89,6 +105,20 @@ enum VideoExporter {
         // The moment the sound ends is the moment the recording ends, and
         // everything else is lined up against it.
         let audioEnd = CACurrentMediaTime()
+
+        // The track, if the whole clip is that one track.
+        //
+        // A clip is the last few bars of whatever the app heard, so it can
+        // straddle a track change: a skip just before the export leaves a
+        // clip of two songs, and labelling that with whichever is playing
+        // now would be a lie about the audio in it. So the track is only
+        // shown when it started before the clip did — and the decision is
+        // made here, against the clip, rather than read off the screen when
+        // the rendering finishes.
+        var shownTrack: ShareImageBrand.Track? = nil
+        if let track, track.isPlaying, track.startedAt <= audioEnd - length {
+            shownTrack = ShareImageBrand.Track(title: track.title, artist: track.artist)
+        }
 
         // The picture: the same stretch of the vibescape, re-drawn. The
         // render is a GPU job, so it happens off the main thread.
@@ -127,7 +157,7 @@ enum VideoExporter {
         // corner of one frame and not the next.
         let overlay = await MainActor.run {
             ShareImageBrand.overlay(size: CGSize(width: width, height: height),
-                                    title: title)
+                                    title: title, track: shownTrack)
         }
         let branded = frames.map { frame -> CGImage in
             guard let overlay else { return frame }

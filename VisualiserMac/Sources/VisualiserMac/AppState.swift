@@ -1432,6 +1432,25 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// What the app knows about the music right now, for a share video.
+    ///
+    /// The title and the artist are what the player said; "?" is what it
+    /// says when it didn't say anything, and that is not a track.
+    var trackInfo: VideoExporter.TrackInfo? {
+        let tracks = audio.tracks
+        let title = (tracks.nowPlayingTitle ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !title.isEmpty, title != "?" else { return nil }
+        let artist = (tracks.nowPlayingArtist ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let startedAt = tracks.startedAt else { return nil }
+        return VideoExporter.TrackInfo(
+            title: title,
+            artist: (artist.isEmpty || artist == "?") ? nil : artist,
+            startedAt: startedAt,
+            isPlaying: tracks.playing)
+    }
+
     /// Puts a made-up song in the chrome, for looking at the UI without a
     /// music app playing something.
     func setFakeSong(title: String, artist: String) {

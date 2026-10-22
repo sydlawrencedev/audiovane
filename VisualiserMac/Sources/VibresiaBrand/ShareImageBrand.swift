@@ -155,6 +155,52 @@ public enum ShareImageBrand {
         name.draw(in: CGRect(x: x, y: baseline, width: maxWidth, height: 40))
     }
 
+    /// The track the music was, for the corner of a share video.
+    public struct Track {
+        /// What it is called.
+        public var title: String
+        /// Who is playing it, when the player said.
+        public var artist: String?
+
+        public init(title: String, artist: String? = nil) {
+            self.title = title
+            self.artist = artist
+        }
+    }
+
+    /// The track, in the bottom-right corner.
+    ///
+    /// Only on a video. A still picture of a vibescape is a picture of the
+    /// vibescape; the music it happened to be playing is a different thing,
+    /// and the picture is what people look at.
+    public static func drawTrack(in ctx: CGContext, size: CGSize, track: Track) {
+        let maxWidth = size.width * 0.55
+        let right = size.width - margin - 4
+
+        let titleAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 20, weight: .bold),
+            .foregroundColor: NSColor.white,
+            .shadow: textShadow(),
+            .paragraphStyle: truncating(),
+        ]
+        let title = NSAttributedString(string: track.title, attributes: titleAttrs)
+        let titleWidth = min(title.size().width, maxWidth)
+        title.draw(in: CGRect(x: right - titleWidth, y: margin + 26,
+                              width: titleWidth, height: 30))
+
+        guard let artist = track.artist, !artist.isEmpty else { return }
+        let artistAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedSystemFont(ofSize: 15, weight: .regular),
+            .foregroundColor: gold,
+            .shadow: textShadow(),
+            .paragraphStyle: truncating(),
+        ]
+        let credit = NSAttributedString(string: artist, attributes: artistAttrs)
+        let artistWidth = min(credit.size().width, maxWidth)
+        credit.draw(in: CGRect(x: right - artistWidth, y: margin + 4,
+                               width: artistWidth, height: 24))
+    }
+
     /// A paragraph that cuts a line off rather than wrapping it.
     private static func truncating() -> NSParagraphStyle {
         let style = NSMutableParagraphStyle()
@@ -376,7 +422,7 @@ public enum ShareImageBrand {
     ///
     /// The lettering is drawn with AppKit, which is main-thread-only, so
     /// call this on the main thread.
-    public static func overlay(size: CGSize, title: Title) -> CGImage? {
+    public static func overlay(size: CGSize, title: Title, track: Track? = nil) -> CGImage? {
         let width = Int(size.width), height = Int(size.height)
         guard width > 0, height > 0,
               let ctx = CGContext(data: nil, width: width, height: height,
@@ -391,6 +437,7 @@ public enum ShareImageBrand {
         NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         drawBrand(in: ctx, size: size)
         drawTitle(in: ctx, size: size, title: title)
+        if let track { drawTrack(in: ctx, size: size, track: track) }
         NSGraphicsContext.restoreGraphicsState()
         return ctx.makeImage()
     }
