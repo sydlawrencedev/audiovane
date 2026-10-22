@@ -814,7 +814,7 @@ async function handleShareCreate(request, env) {
 ///
 /// Served directly rather than redirected to the long form, because a
 /// redirect is what WhatsApp's crawler was not following.
-async function handleSharePage(request, url, env) {
+async function handleSharePage(request, url, env, ctx) {
   const id = url.pathname.slice("/s/".length);
   if (!isValidShareId(id)) return new Response("Not found", { status: 404 });
 
@@ -822,6 +822,23 @@ async function handleSharePage(request, url, env) {
     "SELECT payload, name, author, CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image FROM shares WHERE id = ?"
   ).bind(id).first();
   if (!row) return new Response("Not found", { status: 404 });
+
+  // Count the view, if a person is the one doing it.
+  //
+  // The same gate the download counter uses. A crawler is not a reader, a
+  // HEAD is not a reader, and a link preview is not a reader either: an
+  // iMessage paste fetches the page to draw a card, and every link that
+  // anybody has ever pasted in a chat would count as an opening.
+  //
+  // The picture is not counted either: the app's gallery fetches those to
+  // draw its cards, and a page view is a page.
+  const agent = request.headers.get("user-agent") || "";
+  const isPreview = LINK_PREVIEW.test(agent);
+  if (!looksAutomated(request) && !isPreview && request.method !== "HEAD") {
+    ctx.waitUntil(env.SHARES.prepare(
+      "UPDATE shares SET view_count = COALESCE(view_count, 0) + 1 WHERE id = ?"
+    ).bind(id).run());
+  }
 
   // The page itself is a static asset; the Worker pulls it and rewrites the
   // parts that are specific to this share.
@@ -964,6 +981,7 @@ async function galleryRows(env, { all = false } = {}) {
     const where = all ? "" : "WHERE is_public = 1";
     const result = await env.SHARES.prepare(
       `SELECT id, name, author, created_at, is_public,
+              COALESCE(view_count, 0) AS view_count,
               CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image
        FROM shares ${where} ORDER BY created_at DESC LIMIT 200`
     ).all();
@@ -1001,12 +1019,22 @@ async function builtinRows(env, url) {
   }
 }
 
-/// The whole gallery: the built-ins and the shares people made, in one list,
-/// newest first.
+/// How the gallery is ordered.
+///
+/// The sort lives here rather than in the clients, so that the app and the
+/// site cannot drift apart: both ask for a list and get the same one.
+const GALLERY_SORTS = {
+  /// Newest first. The order the gallery has always been in.
+  recent: (a, b) => b.at - a.at,
+  /// Most looked at first.
+  viewed: (a, b) => (b.views || 0) - (a.views || 0) || b.at - a.at,
+};
+
+/// The whole gallery: the built-ins and the shares people made, in one list.
 ///
 /// The built-ins are dated by the day they first appeared and the shares by
 /// the day they were made, so the two can be sorted against each other.
-async function galleryItems(env, url) {
+async function galleryItems(env, url, sort = "recent") {
   const rows = await galleryRows(env);
   const builtins = await builtinRows(env, url);
 
@@ -1036,10 +1064,14 @@ async function galleryItems(env, url) {
       // a broken image on a page about pictures.
       image: row.has_image ? `/og/${row.id}.jpg` : "/media/share.jpg",
       builtin: false,
+      // How many times it has been opened. Only the shares have one: the
+      // built-ins' pages are static files, so there is nothing to count.
+      views: row.view_count || 0,
     });
   }
 
-  items.sort((a, b) => b.at - a.at);
+  const order = GALLERY_SORTS[sort] || GALLERY_SORTS.recent;
+  items.sort(order);
   return items;
 }
 
@@ -1111,9 +1143,11 @@ function isAdmin(request, env) {
 
 /// `GET /api/gallery` — the gallery, as JSON.
 async function handleGalleryAPI(request, env, url) {
-  const items = await galleryItems(env, url);
+  const sort = url.searchParams.get("sort") || "recent";
+  const items = await galleryItems(env, url, sort);
   return Response.json({
     ok: true,
+    sort: GALLERY_SORTS[sort] ? sort : "recent",
     vibescapes: items.map((item) => ({
       id: item.id,
       name: item.name,
@@ -1122,6 +1156,7 @@ async function handleGalleryAPI(request, env, url) {
       imageUrl: absolute(item.image),
       builtin: item.builtin,
       sharedAt: item.at,
+      views: item.views || 0,
     })),
   });
 }
@@ -1132,7 +1167,8 @@ async function handleGalleryAPI(request, env, url) {
 /// things, and a list that only exists once the JavaScript has run is a list
 /// a crawler never sees.
 async function handleGalleryPage(request, url, env) {
-  const items = await galleryItems(env, url);
+  const sort = url.searchParams.get("sort") || "recent";
+  const items = await galleryItems(env, url, sort);
 
   // "/vibescapes" rather than "/vibescapes.html": the asset service answers
   // a file with a ".html" on the end with a redirect, and a redirect is not
@@ -1159,7 +1195,18 @@ async function handleGalleryPage(request, url, env) {
     ? `      <p class="gallery-empty">Nothing here yet. Share a vibescape from the app and tick it into the gallery.</p>`
     : "";
 
-  const page = html.replace("<!-- gallery:cards -->", cards + "\n" + empty);
+  // The two orders, as links. The sort is the server's business, so it is
+  // the server that does it: the app asks the same API for the same list.
+  const sortLinks = [
+    ["recent", "Most recent"],
+    ["viewed", "Most viewed"],
+  ].map(([key, label]) =>
+    `      <a href="/vibescapes?sort=${key}"${key === sort ? ' class="on" aria-current="true"' : ""}>${label}</a>`
+  ).join("\n");
+
+  const page = html
+    .replace("<!-- gallery:cards -->", cards + "\n" + empty)
+    .replace("<!-- gallery:sort -->", sortLinks);
 
   return new Response(page, {
     headers: {
@@ -1263,7 +1310,7 @@ export default {
       return handleAdminAction(request, url, env);
     }
     if (url.pathname === "/vibescapes") return handleGalleryPage(request, url, env);
-    if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env);
+    if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env, ctx);
     if (url.pathname.startsWith("/og/")) return handleShareImage(request, url, env);
     // Note: Cloudflare serves a request that matches an existing asset straight
     // from the edge, without invoking this Worker at all (only misses reach it,

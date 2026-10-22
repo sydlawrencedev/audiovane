@@ -520,6 +520,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for (name, view, width, height) in [
             ("all-modes", AnyView(VibescapesView(scrollable: false, height: 1400)), CGFloat(720), CGFloat(1400)),
             ("all-modes-drop", AnyView(VibescapesView(scrollable: false, height: 1400, dropTargetIndex: 4)), CGFloat(720), CGFloat(1400)),
+            ("gallery", AnyView(VibescapesView(scrollable: false, height: 1400, initialTab: .gallery)), CGFloat(720), CGFloat(1400)),
             ("custom-mode", AnyView(CustomVibescapeView()), CGFloat(720), CGFloat(560)),
             ("custom-mode-write", AnyView(CustomVibescapeView(initialStep: .write)), CGFloat(720), CGFloat(560)),
             ("custom-mode-ai", AnyView(CustomVibescapeView(initialStep: .ai, scrollable: false)), CGFloat(720), CGFloat(560)),

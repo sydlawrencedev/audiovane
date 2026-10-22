@@ -1,0 +1,13 @@
+-- How many times a share has been opened.
+--
+-- The gallery can be sorted by it, so "the ones people have actually
+-- looked at" is a list the site can show.
+--
+-- It counts page views rather than people: the same reader opening the
+-- same link twice counts twice. What it does not count is a crawler or a
+-- link preview — the Worker decides which requests are people, the same
+-- way it does for downloads.
+--
+-- The built-in vibescapes have no row here at all: their pages are static
+-- files rather than Worker-rendered, so there is nothing to count.
+ALTER TABLE shares ADD COLUMN view_count INTEGER NOT NULL DEFAULT 0;

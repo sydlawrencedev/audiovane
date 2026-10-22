@@ -114,3 +114,33 @@ a { color: inherit; }
   .wrap { padding: 0 16px 32px; }
   .gallery { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; }
 }
+
+/* The two orders the gallery can be in. */
+.gallery-sort {
+  display: flex;
+  gap: 8px;
+  margin: 0 0 18px;
+}
+
+.gallery-sort a {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.gallery-sort a:hover {
+  color: var(--text);
+  border-color: var(--muted);
+}
+
+.gallery-sort a.on {
+  color: #06010d;
+  background: var(--magenta);
+  border-color: var(--magenta);
+}

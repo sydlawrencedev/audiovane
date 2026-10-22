@@ -55,10 +55,43 @@ struct VibescapesView: View {
     /// How many cards fit across.
     private let columnsPerRow = 3
 
+    init(scrollable: Bool = true, height: CGFloat = 560,
+         dropTargetIndex: Int? = nil, initialTab: Tab = .installed) {
+        self.scrollable = scrollable
+        self.height = height
+        self.dropTargetIndex = dropTargetIndex
+        self.initialTab = initialTab
+        _tab = State(initialValue: initialTab)
+    }
+
     /// The editor, if it's open. The panel is itself a sheet, so it
     /// presents its own rather than asking the window to — two sheets on
     /// the same view can't both be up.
     @State private var editor: AppState.CustomVibescapeSheet?
+
+    /// Which of the two lists is showing.
+    enum Tab: String, CaseIterable, Identifiable {
+        case installed
+        case gallery
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .installed: return "Installed"
+            case .gallery: return "Gallery"
+            }
+        }
+    }
+
+    @State private var tab: Tab
+
+    /// Which list to open on. The panel opens on the ones on this Mac;
+    /// the headless shots can ask for the other one.
+    var initialTab: Tab = .installed
+
+    /// The gallery, and the order it is in.
+    @StateObject private var gallery = GalleryModel()
 
     var body: some View {
         VStack(spacing: 0) {
@@ -83,40 +116,115 @@ struct VibescapesView: View {
             // shows what they look like.
             app.refreshCustomVibescapePreviews()
         }
+        .onChange(of: tab) { _, tab in
+            if tab == .gallery { loadGallery() }
+        }
+        .onAppear {
+            if tab == .gallery { loadGallery() }
+        }
     }
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Vibescapes")
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundStyle(.white)
-                Text("Switch off the ones you don't want in the list or in Auto Scan. Drag them to change the order.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(Color(white: 0.55))
-                    .fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(tab == .installed ? "Vibescapes" : "Gallery")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(.white)
+                    Text(tab == .installed
+                         ? "Switch off the ones you don't want in the list or in Auto Scan. Drag them to change the order."
+                         : "The vibescapes people have shared. Open one to see it, and to add it to your own list.")
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(white: 0.55))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer()
+                // Put the list back the way it shipped. Only worth offering
+                // when it's actually been rearranged.
+                if app.hasCustomOrder && tab == .installed {
+                    Button("Reset Order") { app.resetVibescapeOrder() }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(white: 0.75))
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 5)
+                        .background(
+                            RoundedRectangle(cornerRadius: 6)
+                                .fill(Color.white.opacity(0.08))
+                        )
+                        .pointingHand()
+                        .help("Put the vibescapes back in their original order")
+                }
+                SheetCloseButton()
             }
-            Spacer()
-            // Put the list back the way it shipped. Only worth offering
-            // when it's actually been rearranged.
-            if app.hasCustomOrder {
-                Button("Reset Order") { app.resetVibescapeOrder() }
+            HStack(spacing: 12) {
+                tabPicker
+                Spacer()
+                if tab == .gallery { sortPicker }
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 14)
+    }
+
+    /// Fetches the gallery, or fills in a sample of one for the headless
+    /// shots, which have no network worth waiting on.
+    private func loadGallery() {
+        if CommandLine.arguments.contains("--ui-shot") {
+            gallery.loadSample()
+        } else {
+            Task { await gallery.load() }
+        }
+    }
+
+    /// The two lists: the ones on this Mac, and the ones people have shared.
+    private var tabPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(Tab.allCases) { tab in
+                Button(tab.title) { self.tab = tab }
                     .buttonStyle(.plain)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(white: 0.75))
+                    .foregroundStyle(self.tab == tab ? Color.black : Color(white: 0.7))
                     .padding(.horizontal, 12)
                     .padding(.vertical, 5)
                     .background(
                         RoundedRectangle(cornerRadius: 6)
-                            .fill(Color.white.opacity(0.08))
+                            .fill(self.tab == tab ? Color(white: 0.9) : Color.clear)
                     )
                     .pointingHand()
-                    .help("Put the vibescapes back in their original order")
             }
-            SheetCloseButton()
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 14)
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.06))
+        )
+    }
+
+    /// The order the gallery is in. The site decides what that means —
+    /// the app asks for a list rather than sorting one of its own, so the
+    /// two cannot disagree.
+    private var sortPicker: some View {
+        HStack(spacing: 4) {
+            ForEach(GalleryModel.Sort.allCases) { sort in
+                Button(sort.title) { gallery.sort = sort }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(gallery.sort == sort ? Color.black : Color(white: 0.6))
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(gallery.sort == sort ? Color(white: 0.85) : Color.clear)
+                    )
+                    .pointingHand()
+            }
+        }
+        .padding(3)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.06))
+        )
     }
 
     /// The cards, dealt into rows.
@@ -126,12 +234,54 @@ struct VibescapesView: View {
     /// panel blank in the headless UI shots.
     private var grid: some View {
         VStack(spacing: 14) {
-            ForEach(rows, id: \.self) { row in
-                VibescapeRow(entries: row, columns: columnsPerRow,
-                        editor: $editor, dropTargetIndex: dropTargetIndex)
+            if tab == .installed {
+                ForEach(rows, id: \.self) { row in
+                    VibescapeRow(entries: row, columns: columnsPerRow,
+                            editor: $editor, dropTargetIndex: dropTargetIndex)
+                }
+            } else {
+                galleryGrid
             }
         }
         .padding(18)
+    }
+
+    /// The shared vibescapes, dealt into rows.
+    private var galleryRows: [[GalleryModel.Item]] {
+        stride(from: 0, to: gallery.items.count, by: columnsPerRow).map {
+            Array(gallery.items[$0..<min($0 + columnsPerRow, gallery.items.count)])
+        }
+    }
+
+    /// The shared vibescapes, dealt into rows.
+    private var galleryGrid: some View {
+        VStack(spacing: 14) {
+            if gallery.failed && gallery.items.isEmpty {
+                Text("The gallery could not be reached. Check the connection and try again.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(white: 0.55))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 40)
+            } else if gallery.items.isEmpty && !gallery.isLoading {
+                Text("Nothing has been shared yet.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(Color(white: 0.55))
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 40)
+            }
+            ForEach(Array(galleryRows.enumerated()), id: \.offset) { _, row in
+                HStack(alignment: .top, spacing: 14) {
+                    ForEach(row) { item in
+                        GalleryCard(item: item)
+                    }
+                    if row.count < columnsPerRow {
+                        ForEach(0..<(columnsPerRow - row.count), id: \.self) { _ in
+                            Color.clear.frame(maxWidth: .infinity)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// The vibescapes, dealt into rows, with a card for making a new one at the
@@ -149,16 +299,65 @@ struct VibescapesView: View {
             Image(systemName: "info.circle")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.4))
-            Text("Your own vibescapes are marked ★, and ones somebody sent you are marked ↘. Add another with the card at the end.")
+            Text(tab == .installed
+                 ? "Your own vibescapes are marked ★, and ones somebody sent you are marked ↘. Add another with the card at the end."
+                 : "The same list the website has. Open one to see it, and to add it to your own list.")
                 .font(.system(size: 10))
                 .foregroundStyle(Color(white: 0.45))
             Spacer()
-            Text("\(app.enabledVibescapes.count) of \(app.allVibescapes.count) switched on")
+            Text(tab == .installed
+                 ? "\(app.enabledVibescapes.count) of \(app.allVibescapes.count) switched on"
+                 : "\(gallery.items.count) shared")
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(Color(white: 0.5))
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 10)
+    }
+}
+
+/// A card for a vibescape in the gallery.
+///
+/// It is a link rather than a switch: the gallery is a list of things
+/// other people made, and opening one is what you want to do with it.
+/// The page it opens is the one the site has, with the button that adds
+/// it to your own list.
+private struct GalleryCard: View {
+    let item: GalleryModel.Item
+
+    var body: some View {
+        Link(destination: item.url) {
+            VStack(alignment: .leading, spacing: 0) {
+                AsyncImage(url: item.imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().aspectRatio(contentMode: .fill)
+                    default:
+                        Rectangle().fill(Color.white.opacity(0.06))
+                    }
+                }
+                .frame(height: 108)
+                .clipped()
+                Text(item.name)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 9)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+        }
+        .buttonStyle(.plain)
+        .pointingHand()
+        .help("Open \(item.name)")
     }
 }
 
