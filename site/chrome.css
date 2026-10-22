@@ -74,6 +74,12 @@
 
 .site-footer p { margin: 0 0 8px; }
 
+/* The download in the footer is the way back to the Mac for anybody who
+ * arrived on a phone: a phone cannot install the zip, so on a small screen
+ * this becomes "Send to my Mac" and hands over the link instead. */
+.site-footer .get-it { margin-top: 14px; }
+.site-footer .get-it-link { color: var(--text); font-weight: 600; }
+
 /* The analytics opt-out sits in the footer because the footer is the one piece
  * of chrome every page shares, so the control that stops measurement is never
  * missing from a page that is being measured. */

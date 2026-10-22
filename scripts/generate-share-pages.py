@@ -138,10 +138,10 @@ def render(slug: str, title: str, desc: str) -> str:
 
   <div class="cta-row">
     <a class="btn primary" href="#" data-share-open data-share-slug="{slug}">Open in Vibresia</a>
-    <a class="btn coffee" href="/download?src=share_{slug}" data-share-download hidden>Download for Mac</a>
+    <a class="btn coffee" href="/download?src=share_{slug}" data-install data-share-download hidden>Download for Mac</a>
   </div>
 
-  <p class="share-cta"><small>Press <strong>Open in Vibresia</strong> and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small></p>
+  <p class="share-cta"><small class="say-mac">Press <strong>Open in Vibresia</strong> and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small><small class="say-phone">Send it to your Mac and open it there, and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small></p>
 
   <!-- chrome:footer -->
   <!-- /chrome:footer -->

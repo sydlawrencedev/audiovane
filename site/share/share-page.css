@@ -183,6 +183,15 @@ code, .mono {
   text-align: center;
 }
 
+/* "Open in Vibresia" is a scheme a Mac app answers to. On a phone it goes
+ * nowhere, so the small print says something that does work there — and the
+ * button beside it is the one that sends the link over. */
+.share-cta .say-phone { display: none; }
+@media (max-width: 640px) and (pointer: coarse) {
+  .share-cta .say-mac { display: none; }
+  .share-cta .say-phone { display: block; }
+}
+
 .credit {
   margin: 64px 0 0;
   text-align: center;

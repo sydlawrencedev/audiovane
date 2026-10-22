@@ -113,6 +113,15 @@
 
   .install { margin: 44px auto 0; max-width: 760px; text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px 22px; }
   .install h2 { font-size: 15px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; }
+  /* The block folds away on a phone, where the commands are too wide to read
+     and the terminal is somewhere else entirely. The heading stays as the
+     thing you tap. */
+  .install > summary { display: flex; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+  .install > summary::-webkit-details-marker { display: none; }
+  .install > summary h2 { margin: 0; }
+  .install > summary::after { content: "▾"; color: var(--muted); font-size: 12px; }
+  .install:not([open]) > summary::after { content: "▸"; }
+  .install:not([open]) h2 { margin-bottom: 0; }
   .cmd { display: flex; align-items: center; gap: 10px; background: #000; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin: 8px 0; overflow-x: auto; }
   .cmd code { white-space: nowrap; color: var(--cyan); font-size: 14px; flex: 1; }
   .cmd button { flex: none; background: var(--line); color: var(--text); border: 0; border-radius: 8px; padding: 6px 10px; font: 600 12px "JetBrains Mono", monospace; cursor: pointer; }
@@ -169,10 +178,24 @@
   .coffee-band h2 { margin: 0 0 8px; }
   .coffee-band p { color: var(--muted); margin: 0 0 20px; }
 
+  /* The download, again, after the gallery. The only other one is in the
+     hero, on a page that is very long on a phone. */
+  .cta-band { margin: 56px 0 0; text-align: center; padding: 40px 20px; border-radius: 18px; background: radial-gradient(circle at 50% 0%, rgba(255, 43, 214, 0.16), transparent 70%), var(--panel); border: 1px solid var(--line); }
+  .cta-band h2 { margin: 0 0 8px; }
+  .cta-band p { color: var(--muted); margin: 0 0 20px; }
+
+  /* The gallery is the whole list on a big screen. */
+  .gallery-more { display: none; margin: 20px 0 0; }
+  .gallery-more a { color: var(--cyan); font: 600 13px "JetBrains Mono", monospace; letter-spacing: 1px; text-transform: uppercase; }
+  .gallery-more a:hover { color: var(--magenta); }
 
   @media (max-width: 640px) {
     .site-nav { display: none; }
     .hero { padding-top: 28px; }
+    /* Six cards and a link. Twenty-one of them is a very long scroll on a
+       phone, and the full gallery is one tap away. */
+    section#vibescapes .vibescapes .vibescape:nth-child(n+7) { display: none; }
+    .gallery-more { display: block; }
   }
 </style>
 <link rel="stylesheet" href="/chrome.css">
@@ -202,7 +225,7 @@
     <p class="lede">Create, explore and share your own visual experiences. Every track has a world waiting to be discovered.</p>
     <p class="proclaim">Proudly shareware: free to use, and yours to share.</p>
     <div class="ctas">
-      <a class="btn primary" data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
+      <a class="btn primary" data-install data-track="download_clicked" data-placement="hero" href="/download?src=hero">Download for Mac</a>
       <a class="btn coffee" data-track="coffee_clicked" data-placement="hero" href="https://buy.stripe.com/7sY3cuekN6z66L1c0cbEA01">☕ Buy me a coffee</a>
     </div>
     <p class="small">macOS 14.2 or later · Apple silicon · updates itself · <a href="#shareware">proudly shareware</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues" rel="noopener" data-track="bug_report_link_clicked" data-placement="hero">report a bug</a></p>
@@ -218,14 +241,16 @@
     <video id="reel-hq" muted loop playsinline preload="auto" aria-hidden="true" tabindex="-1"></video>
   </div>
 
-    <div class="install" id="install">
-      <h2>Install</h2>
-      <p style="margin:0 0 4px">Ask your AI assistant (Claude, ChatGPT, …):</p>
-      <div class="cmd"><code>install vibresia from https://vibresia.com</code><button data-copy data-command="ask-ai">Copy</button></div>
-      <p style="margin:12px 0 4px">Or paste this into Terminal:</p>
-      <div class="cmd"><code>curl -fsSL https://vibresia.com/install.sh | bash</code><button data-copy data-command="curl">Copy</button></div>
-      <p class="small" style="margin-top:10px">On first launch, choose <b>Share System Audio</b> and allow Vibresia to record system audio. Nothing is recorded or sent anywhere; the audio is only analysed on your Mac.</p>
-    </div>
+    <details class="install" id="install" open>
+      <summary><h2>Install</h2></summary>
+      <div class="install-body">
+        <p style="margin:0 0 4px">Ask your AI assistant (Claude, ChatGPT, …):</p>
+        <div class="cmd"><code>install vibresia from https://vibresia.com</code><button data-copy data-command="ask-ai">Copy</button></div>
+        <p style="margin:12px 0 4px">Or paste this into Terminal:</p>
+        <div class="cmd"><code>curl -fsSL https://vibresia.com/install.sh | bash</code><button data-copy data-command="curl">Copy</button></div>
+        <p class="small" style="margin-top:10px">On first launch, choose <b>Share System Audio</b> and allow Vibresia to record system audio. Nothing is recorded or sent anywhere; the audio is only analysed on your Mac.</p>
+      </div>
+    </details>
 
   <section id="vibescapes">
     <h2>Vibescapes</h2>
@@ -255,7 +280,14 @@
       <article class="vibescape scan"><div class="body"><h3>Auto Scan</h3><p>Cycles through every vibescape, a few bars at a time.</p></div></article>
     </div>
     <p class="small">These ship with the app. Yours sit alongside them, in the same list, and can be shared the same way.</p>
+    <p class="gallery-more"><a href="/vibescapes">See the whole gallery →</a></p>
   </section>
+
+  <div class="cta-band">
+    <h2>Get it for your Mac</h2>
+    <p>Free to use, and yours to share. macOS 14.2 or later, Apple silicon.</p>
+    <a class="btn primary" data-install data-track="download_clicked" data-placement="after_gallery" href="/download?src=after_gallery">Download for Mac</a>
+  </div>
 
   <section id="make">
     <h2>Make your own</h2>
@@ -338,7 +370,9 @@
   <footer class="site-footer">
     <p>🩷 from <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
     <p class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    <p class="get-it"><a class="get-it-link" data-install data-track="download_clicked" data-placement="footer" href="/download?src=footer">Download for Mac</a> — free to use, and yours to keep.</p>
     <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+    <script src="/mobile.js" defer></script>
   </footer>
   <!-- /chrome:footer -->
 </div>

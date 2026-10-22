@@ -69,10 +69,10 @@
 
   <div class="cta-row" id="cta" hidden>
     <a class="btn primary" href="#" data-share-open data-share-custom>Open in Vibresia</a>
-    <a class="btn coffee" href="/download?src=share_fallback" data-share-download hidden>Download for Mac</a>
+    <a class="btn coffee" href="/download?src=share_fallback" data-install data-share-download hidden>Download for Mac</a>
   </div>
 
-  <p class="share-cta" id="cta-hint" hidden><small>Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small></p>
+  <p class="share-cta" id="cta-hint" hidden><small class="say-mac">Press <strong>Open in Vibresia</strong> to add it to your list. You’ll need the Mac app — free, no account.</small><small class="say-phone">Send it to your Mac and open it there, and it will be added to your list. You’ll need the Mac app — free, no account.</small></p>
 
   <div id="code">
     <!-- The shader, once the payload has been read. -->
@@ -84,7 +84,9 @@
   <footer class="site-footer">
     <p>🩷 from <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
     <p class="legal-links"><a href="/privacy">Privacy</a> · <a href="/terms">Terms</a></p>
+    <p class="get-it"><a class="get-it-link" data-install data-track="download_clicked" data-placement="footer" href="/download?src=footer">Download for Mac</a> — free to use, and yours to keep.</p>
     <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+    <script src="/mobile.js" defer></script>
   </footer>
   <!-- /chrome:footer -->
 </div>
