@@ -654,6 +654,11 @@ enum MCPTools {
                                              url: rawURL.isEmpty ? nil : rawURL,
                                              shader: code, enabled: true, modified: Date())
         mode.shader = code
+        // It compiled, so it should be on. The app switches a vibescape off when
+        // it fails to compile and writes that into the file — and nothing else
+        // turns it back on, so a vibescape that failed once (on an older build,
+        // say) stays invisible for good. A save that compiles is also a re-enable.
+        mode.enabled = true
         if !author.isEmpty { mode.author = author }
         if !rawURL.isEmpty { mode.url = rawURL } else if existing != nil { mode.url = nil }
         // The extras are kept as a header comment, so they survive a save from
