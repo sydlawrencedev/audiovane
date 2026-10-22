@@ -31,13 +31,18 @@ struct ShareVibescapeButton: View {
             ]) }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 11, weight: .semibold))
+                // The word comes first, so that the first thing inside the
+                // pill is the first thing in the column below it. An icon in
+                // front would push the word a whole icon's width to the
+                // right of the name, and no amount of moving the pill left
+                // would fix that without pushing the pill off the window.
                 if app.layout.showsPillText {
                     Text("Share")
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(0.4)
                 }
+                Image(systemName: "square.and.arrow.up")
+                    .font(.system(size: 11, weight: .semibold))
             }
             .foregroundStyle(hovering
                              ? Color.white
@@ -60,11 +65,11 @@ struct ShareVibescapeButton: View {
         }
         .buttonStyle(.plain)
         .fixedSize()
-        // The words in the pill sit a padding's width in from its edge, which
-        // is a padding's width right of the name underneath — so the two
-        // read as two things that do not quite line up. The pill moves left
-        // by that much, which puts its words in the same column as the name
-        // and the credit, and up a touch, which opens the gap under it.
+        // The pill's own padding puts its contents a padding's width in from
+        // its edge, so it moves left by that much: what is written in it
+        // then starts in the same column as the name and the credit under
+        // it, and the pill itself hangs a little into the margin to the
+        // left. Up a touch as well, which opens the gap underneath.
         .offset(x: -padding, y: -2)
         .onHover { hovering = $0 }
         .help("Share this vibescape with someone")
