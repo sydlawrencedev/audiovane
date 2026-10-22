@@ -77,6 +77,15 @@
 
   <p class="share-cta"><small class="say-mac">Press <strong>Open in Vibresia</strong> and the app will switch to Nyan Cat. You’ll need Vibresia on your Mac — free, no account.</small><small class="say-phone">Send it to your Mac and open it there, and the app will switch to Nyan Cat. You’ll need Vibresia on your Mac — free, no account.</small></p>
 
+  <!-- The four most recently shared vibescapes. Filled in by recent.js from
+       the gallery, so that these static pages and the page the Worker
+       renders for a share somebody made show the same four. -->
+  <section class="recent" id="recent" hidden>
+    <h2>Recently shared</h2>
+    <p class="small">The vibescapes people have shared lately.</p>
+    <div class="recent-grid" id="recent-grid"></div>
+  </section>
+
   <!-- chrome:footer -->
   <footer class="site-footer">
     <p>🩷 from <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
@@ -90,5 +99,6 @@
 
 <script src="/analytics.js" defer></script>
 <script src="/share/share-page.js"></script>
+<script src="/share/recent.js" defer></script>
 </body>
 </html>

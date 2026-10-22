@@ -22,6 +22,24 @@ if missing or extra:
     sys.exit(1)
 print(f"site/index.html covers all {len(app)} vibescapes")
 
+# Every vibescape on the home page links to its own page, and the page
+# shows the first four of them. The rest are still in the markup, because
+# that is where the share pages get their names and descriptions from.
+links = re.findall(r'class="vibescape" data-vibescape="([a-zA-Z]+)" '
+                   r'href="/share/([a-zA-Z]+)"', html)
+wrong = [(a, b) for a, b in links if a != b]
+if wrong:
+    print("the home page sends a vibescape to the wrong page:", wrong[0])
+    sys.exit(1)
+missing_links = sorted(app - {slug for slug, _ in links})
+if missing_links:
+    print("No link to the page for:", ", ".join(missing_links))
+    sys.exit(1)
+if "nth-child(n+5)" not in html:
+    print("The home page is not hiding the vibescapes past the first four.")
+    sys.exit(1)
+print(f"the home page shows four of them, and every one links to its own page")
+
 # The structured data quotes the version. It's the one thing on the page that
 # goes stale quietly, because nothing about it breaks when it does.
 version = open(f"{root}/VisualiserMac/VERSION").read().strip()

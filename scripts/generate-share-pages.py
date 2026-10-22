@@ -48,10 +48,11 @@ def parse_vibescape_cards() -> list[dict]:
     # match itself, so a card that drifts takes out one card rather than
     # silently pairing one card's title with another's description.
     #
-    # Only the shipped vibescapes carry data-vibescape; the Auto Scan card
-    # doesn't, because it isn't shareable.
+    # Only the shipped vibescapes carry data-vibescape. The split is on the
+    # attribute rather than on the tag, because the cards are links now —
+    # they go to the vibescape's own page.
     cards = []
-    for chunk in html.split('<article class="vibescape" data-vibescape="')[1:]:
+    for chunk in html.split('class="vibescape" data-vibescape="')[1:]:
         slug = chunk[:chunk.index('"')].strip()
         head = re.search(
             r'<h3>(?P<title>[^<]+)</h3>(?:\s*<p>(?P<desc>.*?)</p>)?',
@@ -143,12 +144,22 @@ def render(slug: str, title: str, desc: str) -> str:
 
   <p class="share-cta"><small class="say-mac">Press <strong>Open in Vibresia</strong> and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small><small class="say-phone">Send it to your Mac and open it there, and the app will switch to {safe_title}. You’ll need Vibresia on your Mac — free, no account.</small></p>
 
+  <!-- The four most recently shared vibescapes. Filled in by recent.js from
+       the gallery, so that these static pages and the page the Worker
+       renders for a share somebody made show the same four. -->
+  <section class="recent" id="recent" hidden>
+    <h2>Recently shared</h2>
+    <p class="small">The vibescapes people have shared lately.</p>
+    <div class="recent-grid" id="recent-grid"></div>
+  </section>
+
   <!-- chrome:footer -->
   <!-- /chrome:footer -->
 </div>
 
 <script src="/analytics.js" defer></script>
 <script src="/share/share-page.js"></script>
+<script src="/share/recent.js" defer></script>
 </body>
 </html>
 """

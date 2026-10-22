@@ -1144,14 +1144,14 @@ async function handleGalleryPage(request, url, env) {
   }
   const html = await asset.text();
 
+  // The name and the picture. The author is not on the card: the gallery
+  // is a list of things to open, and who made each one is a detail that
+  // belongs to the thing rather than to the list.
   const cards = items.map((item) => {
     const name = escapeHtml(item.name || "A vibescape");
-    const author = escapeHtml(item.author || "");
-    const id = escapeHtml(item.id);
     return `      <a class="card" href="${escapeHtml(item.url)}">
         <img src="${escapeHtml(item.image)}" alt="${name}" loading="lazy" width="1200" height="630">
         <span class="card-name">${name}</span>
-        <span class="card-by">${author ? `by ${author}` : ""}</span>
       </a>`;
   }).join("\n");
 
@@ -1159,15 +1159,7 @@ async function handleGalleryPage(request, url, env) {
     ? `      <p class="gallery-empty">Nothing here yet. Share a vibescape from the app and tick it into the gallery.</p>`
     : "";
 
-  const shared = items.filter((item) => !item.builtin).length;
-  const summary = [
-    items.length ? `${items.length} in all` : "",
-    shared ? `${shared} shared by people` : "",
-  ].filter(Boolean).join(", ");
-
-  const page = html
-    .replace("<!-- gallery:cards -->", cards + "\n" + empty)
-    .replace("<!-- gallery:count -->", summary || "nothing here yet");
+  const page = html.replace("<!-- gallery:cards -->", cards + "\n" + empty);
 
   return new Response(page, {
     headers: {
