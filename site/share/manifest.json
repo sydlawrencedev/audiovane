@@ -4,75 +4,93 @@
   "built_ins": [
     {
       "slug": "ribbons",
-      "title": "Ribbons"
+      "title": "Ribbons",
+      "date": "2026-10-19"
     },
     {
       "slug": "vortex",
-      "title": "Vortex"
+      "title": "Vortex",
+      "date": "2026-10-20"
     },
     {
       "slug": "silk",
-      "title": "Silk Flight"
+      "title": "Silk Flight",
+      "date": "2026-10-19"
     },
     {
       "slug": "flux",
-      "title": "Flux"
+      "title": "Flux",
+      "date": "2026-10-20"
     },
     {
       "slug": "spectrum",
-      "title": "Spectrum"
+      "title": "Spectrum",
+      "date": "2026-10-18"
     },
     {
       "slug": "tunnel",
-      "title": "Tunnel"
+      "title": "Tunnel",
+      "date": "2026-10-18"
     },
     {
       "slug": "liquid",
-      "title": "Liquid"
+      "title": "Liquid",
+      "date": "2026-10-20"
     },
     {
       "slug": "kaleidoscope",
-      "title": "Kaleidoscope"
+      "title": "Kaleidoscope",
+      "date": "2026-10-20"
     },
     {
       "slug": "waveform",
-      "title": "Neon Wave"
+      "title": "Neon Wave",
+      "date": "2026-10-19"
     },
     {
       "slug": "machine",
-      "title": "Machine"
+      "title": "Machine",
+      "date": "2026-10-18"
     },
     {
       "slug": "warp",
-      "title": "Warp"
+      "title": "Warp",
+      "date": "2026-10-20"
     },
     {
       "slug": "particles",
-      "title": "Constellation"
+      "title": "Constellation",
+      "date": "2026-10-20"
     },
     {
       "slug": "nyan",
-      "title": "Nyan Cat"
+      "title": "Nyan Cat",
+      "date": "2026-10-20"
     },
     {
       "slug": "hamster",
-      "title": "Hamster Dance"
+      "title": "Hamster Dance",
+      "date": "2026-10-20"
     },
     {
       "slug": "badger",
-      "title": "Badger Badger"
+      "title": "Badger Badger",
+      "date": "2026-10-18"
     },
     {
       "slug": "llama",
-      "title": "Whooping Llama"
+      "title": "Whooping Llama",
+      "date": "2026-10-20"
     },
     {
       "slug": "danceFloor",
-      "title": "Dance Floor"
+      "title": "Dance Floor",
+      "date": "2026-10-20"
     },
     {
       "slug": "band",
-      "title": "The Band"
+      "title": "The Band",
+      "date": "2026-10-18"
     }
   ]
 }

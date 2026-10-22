@@ -29,7 +29,8 @@ REGIONS = {"nav": "nav.html", "footer": "footer.html"}
 # The share pages are generated, so they are not in the repo as a thing you
 # edit — but they are in the repo as files that ship, so they are checked like
 # anything else. generate-share-pages.py calls this at the end for that reason.
-PAGES = ["site/index.html", "site/agents.html", "site/vibescapes.html", "site/vibe.html"]
+PAGES = ["site/index.html", "site/agents.html", "site/vibescapes.html", "site/vibe.html",
+         "site/admin.html"]
 
 
 def pages(root):

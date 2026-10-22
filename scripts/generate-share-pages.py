@@ -154,6 +154,39 @@ def render(slug: str, title: str, desc: str) -> str:
 """
 
 
+def first_seen(slug: str) -> str:
+    """The day a vibescape first existed, as an ISO date.
+
+    The commit that first mentioned it is the day people could first have
+    had it, which is what the gallery sorts by. The search is over the app's
+    own source, where a vibescape is a case in the enum.
+
+    Falls back to today if the history is not there — a shallow clone, or a
+    vibescape whose case was renamed rather than added — because a date in
+    the wrong place is better than no date at all.
+    """
+    import datetime
+    import subprocess
+
+    source = "VisualiserMac/Sources/VisualiserMac/AppState.swift"
+    try:
+        out = subprocess.run(
+            ["git", "log", "--reverse", "--format=%aI", "-S", f"case {slug}", "--", source],
+            cwd=ROOT, capture_output=True, text=True, timeout=30, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return today()
+
+    dates = [line.strip() for line in out.stdout.splitlines() if line.strip()]
+    if not dates:
+        return today()
+    return dates[0][:10]
+
+
+def today() -> str:
+    import datetime
+    return datetime.date.today().isoformat()
+
+
 def main() -> int:
     cards = parse_vibescape_cards()
     for card in cards:
@@ -171,11 +204,17 @@ def main() -> int:
 
     # Lookup table so the JS in /share can suggest other built-ins
     # and validate slugs without having to redeploy.
+    #
+    # Each one carries the day it first appeared, because the gallery lists
+    # the built-ins and the shares people made in one list, newest first, and
+    # a built-in with no date in it cannot be sorted against anything. The
+    # date comes from the history: the commit that first mentioned the
+    # vibescape is the day people could first have had it.
     manifest = {
         "generated": "regenerate with scripts/generate-share-pages.py",
         "base": "https://vibresia.com",
         "built_ins": [
-            {"slug": c["slug"], "title": c["title"]}
+            {"slug": c["slug"], "title": c["title"], "date": first_seen(c["slug"])}
             for c in cards
         ],
     }

@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The gallery — admin</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#06010d">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap" media="print" onload="this.media='all'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Space+Grotesk:wght@400;500;700&display=swap"></noscript>
+<link rel="stylesheet" href="/chrome.css">
+<link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<div class="wrap">
+  <!-- chrome:nav -->
+  <header class="site-header">
+    <a class="brand" href="/">
+      <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M1.6 16 L7.94 16 L10.82 7.36 L14.56 24.64 L18.3 10.24 L21.76 20.32 L24.06 16 L30.4 16" stroke="#ff2bd6" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      VIBRESIA
+    </a>
+    <nav class="site-nav" aria-label="Main">
+      <a href="/vibescapes">Vibescapes</a>
+      <a href="/vibe">Vibe your own</a>
+      <a href="/agents">Agents</a>
+      <a href="/#install">Install</a>
+      <a href="/#changelog">Changelog</a>
+      <a href="https://github.com/sydlawrencedev/vibresia">GitHub</a>
+    </nav>
+  </header>
+  <!-- /chrome:nav -->
+
+  <main>
+    <p class="eyebrow">Admin</p>
+    <h1>The gallery, and the shares behind it.</h1>
+    <p class="lede">Hide a share to take it out of the gallery without breaking the link anybody already has, or delete it and take the link with it. The name and the author on a share are public the moment it is in the gallery.</p>
+
+    <div class="unlock" id="unlock">
+      <label for="token">Admin token</label>
+      <div class="token-row">
+        <input id="token" type="password" autocomplete="off" spellcheck="false" placeholder="the ADMIN_TOKEN secret">
+        <button id="unlock-button">Unlock</button>
+      </div>
+      <p class="note" id="unlock-note">It is kept for this tab only, and never sent anywhere but this site.</p>
+    </div>
+
+    <div class="shares" id="shares" hidden>
+      <div class="shares-head">
+        <span id="count"></span>
+        <button id="refresh">Refresh</button>
+      </div>
+      <div id="list"></div>
+      <p class="note" id="status"></p>
+    </div>
+  </main>
+
+  <!-- chrome:footer -->
+  <footer class="site-footer">
+    <p>🩷 from <a href="https://minithlabs.com">Minith Labs</a> · <a href="https://github.com/sydlawrencedev/vibresia">Source on GitHub</a> · <a href="https://github.com/sydlawrencedev/vibresia/issues">Report an issue</a></p>
+    <p class="privacy">This page counts visits and clicks anonymously. No cookies, no account. <a href="#" data-optout>No thanks, stop measuring this page</a><span id="optout-note" hidden>. Done.</span></p>
+  </footer>
+  <!-- /chrome:footer -->
+</div>
+
+<script>
+  /* The gallery, and the shares behind it.
+   *
+   * The token is the only thing between the public internet and this page, so
+   * it is asked for rather than kept somewhere the page can find it by
+   * itself. It lives in sessionStorage — this tab, and gone when the tab
+   * closes — and it goes to this site and nowhere else.
+   */
+  (function () {
+    "use strict";
+
+    var KEY = "vibresia.admin.token";
+    var unlock = document.getElementById("unlock");
+    var unlockNote = document.getElementById("unlock-note");
+    var tokenField = document.getElementById("token");
+    var shares = document.getElementById("shares");
+    var list = document.getElementById("list");
+    var status = document.getElementById("status");
+    var count = document.getElementById("count");
+
+    function token() {
+      try { return sessionStorage.getItem(KEY) || ""; } catch (e) { return ""; }
+    }
+
+    function setToken(value) {
+      try { value ? sessionStorage.setItem(KEY, value) : sessionStorage.removeItem(KEY); } catch (e) {}
+    }
+
+    function say(message) {
+      status.textContent = message || "";
+    }
+
+    function when(millis) {
+      if (!millis) return "";
+      return new Date(millis).toISOString().slice(0, 16).replace("T", " ");
+    }
+
+    function draw(sharesList) {
+      list.innerHTML = "";
+      count.textContent = sharesList.length + " share" + (sharesList.length === 1 ? "" : "s");
+      if (!sharesList.length) {
+        var empty = document.createElement("p");
+        empty.className = "note";
+        empty.textContent = "No shares yet.";
+        list.appendChild(empty);
+        return;
+      }
+      sharesList.forEach(function (share) {
+        var row = document.createElement("div");
+        row.className = "share";
+
+        var picture = document.createElement("img");
+        picture.src = share.imageUrl || "/media/share.jpg";
+        picture.alt = share.name || "A vibescape";
+        picture.loading = "lazy";
+        row.appendChild(picture);
+
+        var text = document.createElement("div");
+        text.className = "share-text";
+        var name = document.createElement("a");
+        name.href = share.url;
+        name.textContent = share.name || "(no name)";
+        name.target = "_blank";
+        name.rel = "noreferrer";
+        text.appendChild(name);
+        var meta = document.createElement("span");
+        meta.className = "share-meta";
+        meta.textContent = (share.author ? "by " + share.author : "no author")
+          + " · " + when(share.sharedAt)
+          + " · " + share.id
+          + (share.inGallery ? " · in the gallery" : " · hidden");
+        text.appendChild(meta);
+        row.appendChild(text);
+
+        var actions = document.createElement("div");
+        actions.className = "share-actions";
+        if (share.inGallery) {
+          actions.appendChild(button("Hide", "hide", share, "Out of the gallery. The link still works."));
+        } else {
+          actions.appendChild(button("Show", "show", share, "Back in the gallery."));
+        }
+        actions.appendChild(button("Delete", "delete", share, "Gone for good. The link stops working."));
+        row.appendChild(actions);
+
+        list.appendChild(row);
+      });
+    }
+
+    function button(label, action, share, hint) {
+      var b = document.createElement("button");
+      b.textContent = label;
+      b.className = action === "delete" ? "danger" : "";
+      b.title = hint;
+      b.addEventListener("click", function () {
+        if (action === "delete" && !confirm(
+            "Delete “" + (share.name || share.id) + "”?\n\n"
+            + "The link stops working, and the picture goes with it. This cannot be undone.")) {
+          return;
+        }
+        act(action, share);
+      });
+      return b;
+    }
+
+    function act(action, share) {
+      say("Working…");
+      fetch("/api/admin/shares/" + share.id, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-av-admin-token": token() },
+        body: JSON.stringify({ action: action })
+      }).then(function (response) {
+        return response.json().then(function (body) { return { ok: response.ok, body: body }; });
+      }).then(function (result) {
+        if (!result.ok) {
+          say(result.body.error || "That did not work.");
+          return;
+        }
+        say(action === "delete"
+          ? "Deleted. The link is gone."
+          : (action === "hide" ? "Out of the gallery." : "Back in the gallery."));
+        load();
+      }).catch(function (error) {
+        say("That did not work: " + error);
+      });
+    }
+
+    function load() {
+      fetch("/api/admin/shares", { headers: { "x-av-admin-token": token() } })
+        .then(function (response) {
+          if (response.status === 401) {
+            unlock.hidden = false;
+            shares.hidden = true;
+            setToken("");
+            say("");
+            return null;
+          }
+          return response.json();
+        })
+        .then(function (body) {
+          if (!body) return;
+          if (!body.ok) { say(body.error || "That did not work."); return; }
+          unlock.hidden = true;
+          shares.hidden = false;
+          draw(body.shares);
+        }).catch(function (error) {
+          say("That did not work: " + error);
+        });
+    }
+
+    document.getElementById("unlock-button").addEventListener("click", function () {
+      var value = tokenField.value.trim();
+      if (!value) return;
+      setToken(value);
+      tokenField.value = "";
+      load();
+    });
+
+    document.getElementById("token").addEventListener("keydown", function (event) {
+      if (event.key === "Enter") document.getElementById("unlock-button").click();
+    });
+
+    document.getElementById("refresh").addEventListener("click", load);
+
+    if (token()) load();
+  })();
+</script>
+</body>
+</html>

@@ -847,18 +847,32 @@ async function handleNotify(request, env, ctx) {
   return Response.json({ ok: true });
 }
 
+/// A path on this site, as an absolute URL.
+///
+/// The site ends with a slash and the paths start with one, so joining them
+/// as they are makes a double slash — which works, and looks like a mistake.
+function absolute(path) {
+  return `${CANONICAL_SITE.replace(/\/$/, "")}${path}`;
+}
+
 /// The public gallery: the shares that were ticked into it.
 ///
 /// A share is a link anybody can open. The gallery is different — it lists
 /// them, so anything in it is findable by anybody at all, and the name and
 /// the author on it are public.
-async function galleryRows(env) {
+///
+/// `all` is for the admin, who needs the ones that are hidden as well as the
+/// ones that are not.
+async function galleryRows(env, { all = false } = {}) {
   try {
     // Whether the share has a picture, rather than the picture: the column
     // is a blob of up to 400KB, and reading all of them to find out whether
     // they are there would cost more than the gallery is worth.
+    const where = all ? "" : "WHERE is_public = 1";
     const result = await env.SHARES.prepare(
-      "SELECT id, name, author, created_at, CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image FROM shares WHERE is_public = 1 ORDER BY created_at DESC LIMIT 200"
+      `SELECT id, name, author, created_at, is_public,
+              CASE WHEN image IS NULL THEN 0 ELSE 1 END AS has_image
+       FROM shares ${where} ORDER BY created_at DESC LIMIT 200`
     ).all();
     return result.results || [];
   } catch (error) {
@@ -866,22 +880,6 @@ async function galleryRows(env) {
     console.log(`[gallery] could not read the gallery: ${error}`);
     return [];
   }
-}
-
-/// `GET /api/gallery` — the gallery, as JSON.
-async function handleGalleryAPI(request, env) {
-  const rows = await galleryRows(env);
-  return Response.json({
-    ok: true,
-    vibescapes: rows.map((row) => ({
-      id: row.id,
-      name: row.name || "",
-      author: row.author || "",
-      url: `${CANONICAL_SITE}s/${row.id}`,
-      imageUrl: `${CANONICAL_SITE}og/${row.id}.jpg`,
-      sharedAt: row.created_at,
-    })),
-  });
 }
 
 /// The built-in vibescapes, from the manifest the share pages are made from.
@@ -900,11 +898,139 @@ async function builtinRows(env, url) {
       .map((entry) => ({
         slug: entry.slug,
         name: typeof entry.title === "string" ? entry.title : entry.slug,
+        // The day it first existed, so the gallery can sort it against the
+        // shares people have made.
+        date: typeof entry.date === "string" ? entry.date : "",
       }));
   } catch (error) {
     console.log(`[gallery] could not read the manifest: ${error}`);
     return [];
   }
+}
+
+/// The whole gallery: the built-ins and the shares people made, in one list,
+/// newest first.
+///
+/// The built-ins are dated by the day they first appeared and the shares by
+/// the day they were made, so the two can be sorted against each other.
+async function galleryItems(env, url) {
+  const rows = await galleryRows(env);
+  const builtins = await builtinRows(env, url);
+
+  const items = builtins.map((entry) => ({
+    // Midnight, so a built-in and a share made on the same day are in the
+    // order they were made.
+    at: Date.parse(`${entry.date}T00:00:00Z`) || 0,
+    id: entry.slug,
+    name: entry.name,
+    author: "Minith Labs",
+    url: `/share/${entry.slug}`,
+    // The clean still, not the share graphic: the framed one has a title and
+    // a credit painted on it, which is the page's business and not the
+    // gallery's.
+    image: `/media/modes/${entry.slug}.jpg`,
+    builtin: true,
+  }));
+
+  for (const row of rows) {
+    items.push({
+      at: row.created_at || 0,
+      id: row.id,
+      name: row.name || "",
+      author: row.author || "",
+      url: `/s/${row.id}`,
+      // A share with no picture of its own gets the general one, rather than
+      // a broken image on a page about pictures.
+      image: row.has_image ? `/og/${row.id}.jpg` : "/media/share.jpg",
+      builtin: false,
+    });
+  }
+
+  items.sort((a, b) => b.at - a.at);
+  return items;
+}
+
+/// `GET /api/admin/shares` — every share, for the admin page.
+///
+/// The token here is not the share token. That one ships inside the app, so
+/// anybody can read it out of the bundle, and it is only a speed bump against
+/// a script filling the site up. This one is a Worker secret that never
+/// leaves the server, and it is the only thing between the public internet
+/// and the gallery.
+async function handleAdminList(request, env) {
+  if (!isAdmin(request, env)) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+  const rows = await galleryRows(env, { all: true });
+  return Response.json({
+    ok: true,
+    shares: rows.map((row) => ({
+      id: row.id,
+      name: row.name || "",
+      author: row.author || "",
+      url: `${CANONICAL_SITE}s/${row.id}`,
+      imageUrl: row.has_image ? `${CANONICAL_SITE}og/${row.id}.jpg` : null,
+      inGallery: row.is_public === 1,
+      hasImage: row.has_image === 1,
+      sharedAt: row.created_at,
+    })),
+  });
+}
+
+/// `POST /api/admin/shares/<id>` — hide a share, put it back, or delete it.
+///
+/// Hiding takes it out of the gallery and leaves the link working, which is
+/// the one to reach for when a share is fine but should not be listed.
+/// Deleting takes the row, and the link with it: the picture, the name and
+/// the vibescape itself all go.
+async function handleAdminAction(request, url, env) {
+  if (!isAdmin(request, env)) {
+    return Response.json({ ok: false, error: "unauthorised" }, { status: 401 });
+  }
+  const id = url.pathname.slice("/api/admin/shares/".length);
+  if (!isValidShareId(id)) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return Response.json({ ok: false, error: "bad json" }, { status: 400 });
+  }
+  const action = typeof body?.action === "string" ? body.action : "";
+
+  if (action === "hide" || action === "show") {
+    await setPublic(env, id, action === "show");
+    return Response.json({ ok: true, id, inGallery: action === "show" });
+  }
+  if (action === "delete") {
+    const gone = await deleteShare(env, id);
+    if (!gone) return Response.json({ ok: false, error: "no such share" }, { status: 404 });
+    return Response.json({ ok: true, id, deleted: true });
+  }
+  return Response.json({ ok: false, error: "unknown action" }, { status: 400 });
+}
+
+/// Whether the request carries the admin token.
+function isAdmin(request, env) {
+  const token = request.headers.get("x-av-admin-token") || "";
+  return !!env.ADMIN_TOKEN && token === env.ADMIN_TOKEN;
+}
+
+/// `GET /api/gallery` — the gallery, as JSON.
+async function handleGalleryAPI(request, env, url) {
+  const items = await galleryItems(env, url);
+  return Response.json({
+    ok: true,
+    vibescapes: items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      author: item.author,
+      url: absolute(item.url),
+      imageUrl: absolute(item.image),
+      builtin: item.builtin,
+      sharedAt: item.at,
+    })),
+  });
 }
 
 /// `GET /vibescapes` — the gallery, as a page.
@@ -913,8 +1039,7 @@ async function builtinRows(env, url) {
 /// things, and a list that only exists once the JavaScript has run is a list
 /// a crawler never sees.
 async function handleGalleryPage(request, url, env) {
-  const rows = await galleryRows(env);
-  const builtins = await builtinRows(env, url);
+  const items = await galleryItems(env, url);
 
   // "/vibescapes" rather than "/vibescapes.html": the asset service answers
   // a file with a ".html" on the end with a redirect, and a redirect is not
@@ -926,45 +1051,29 @@ async function handleGalleryPage(request, url, env) {
   }
   const html = await asset.text();
 
-  const shared = rows.map((row) => {
-    const name = escapeHtml(row.name || "A vibescape");
-    const author = escapeHtml(row.author || "");
-    const id = escapeHtml(row.id);
-    // A share with no picture gets the generic one, rather than a broken
-    // image on a page about pictures.
-    const picture = row.has_image
-      ? `${CANONICAL_SITE}og/${id}.jpg`
-      : `${CANONICAL_SITE}media/share.jpg`;
-    return `      <a class="card" href="/s/${id}">
-        <img src="${picture}" alt="${name}" loading="lazy" width="1200" height="630">
+  const cards = items.map((item) => {
+    const name = escapeHtml(item.name || "A vibescape");
+    const author = escapeHtml(item.author || "");
+    const id = escapeHtml(item.id);
+    return `      <a class="card" href="${escapeHtml(item.url)}">
+        <img src="${escapeHtml(item.image)}" alt="${name}" loading="lazy" width="1200" height="630">
         <span class="card-name">${name}</span>
         <span class="card-by">${author ? `by ${author}` : ""}</span>
       </a>`;
   }).join("\n");
 
-  const ours = builtins.map((entry) => {
-    const slug = escapeHtml(entry.slug);
-    const name = escapeHtml(entry.name);
-    return `      <a class="card" href="/share/${slug}">
-        <img src="/share/${slug}.jpg" alt="${name}" loading="lazy" width="1200" height="630">
-        <span class="card-name">${name}</span>
-        <span class="card-by">by Minith Labs</span>
-      </a>`;
-  }).join("\n");
-
-  const empty = rows.length === 0
-    ? `      <p class="gallery-empty">None yet. Share a vibescape from the app and tick it into the gallery.</p>`
+  const empty = items.length === 0
+    ? `      <p class="gallery-empty">Nothing here yet. Share a vibescape from the app and tick it into the gallery.</p>`
     : "";
 
-  const count = builtins.length + rows.length;
+  const shared = items.filter((item) => !item.builtin).length;
   const summary = [
-    builtins.length ? `${builtins.length} from Vibresia` : "",
-    rows.length ? `${rows.length} shared by people` : "",
+    items.length ? `${items.length} in all` : "",
+    shared ? `${shared} shared by people` : "",
   ].filter(Boolean).join(", ");
 
   const page = html
-    .replace("<!-- gallery:cards -->", shared + "\n" + empty)
-    .replace("<!-- gallery:builtin-cards -->", ours)
+    .replace("<!-- gallery:cards -->", cards + "\n" + empty)
     .replace("<!-- gallery:count -->", summary || "nothing here yet");
 
   return new Response(page, {
@@ -1063,7 +1172,11 @@ export default {
       if (request.method === "PATCH") return handleSharePatch(request, url, env);
       return handleShareGet(request, url, env);
     }
-    if (url.pathname === "/api/gallery") return handleGalleryAPI(request, env);
+    if (url.pathname === "/api/gallery") return handleGalleryAPI(request, env, url);
+    if (url.pathname === "/api/admin/shares") return handleAdminList(request, env);
+    if (url.pathname.startsWith("/api/admin/shares/")) {
+      return handleAdminAction(request, url, env);
+    }
     if (url.pathname === "/vibescapes") return handleGalleryPage(request, url, env);
     if (url.pathname.startsWith("/s/")) return handleSharePage(request, url, env);
     if (url.pathname.startsWith("/og/")) return handleShareImage(request, url, env);

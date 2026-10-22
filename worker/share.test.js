@@ -26,11 +26,9 @@ function makeShares() {
       // parameters — so it lives on the statement as well as on the bound
       // one.
       const all = async () => {
-        if (sql.includes("is_public")) {
-          const wanted = sql.includes("is_public = 1");
+        if (sql.includes("WHERE is_public = 1")) {
           return {
-            results: [...rows.values()].filter(
-              (row) => (row.is_public ? 1 : 0) === (wanted ? 1 : 0)),
+            results: [...rows.values()].filter((row) => (row.is_public ? 1 : 0) === 1),
           };
         }
         return { results: [...rows.values()] };
@@ -128,8 +126,19 @@ function makeEnv(overrides = {}) {
   return {
     env: {
       ASSETS: {
-        fetch: async () =>
-          new Response(
+        fetch: async (request) => {
+          const path = new URL(request.url).pathname;
+          if (path === "/share/manifest.json") {
+            return new Response(JSON.stringify({
+              generated: "test",
+              base: "https://vibresia.com",
+              built_ins: [
+                { slug: "ribbons", title: "Ribbons", date: "2026-10-19" },
+                { slug: "band", title: "The Band", date: "2026-10-18" },
+              ],
+            }), { status: 200 });
+          }
+          return new Response(
             `<!doctype html><html><head><title>A vibescape was shared with you — Vibresia</title>
 <meta name="description" content="Someone shared a Vibresia vibescape with you.">
 <link rel="canonical" href="https://vibresia.com/share">
@@ -146,9 +155,11 @@ function makeEnv(overrides = {}) {
 <!-- gallery:cards -->
 </head><body>hi</body></html>`,
             { status: 200 }
-          ),
+          );
+        },
       },
       SHARE_TOKEN,
+      ADMIN_TOKEN: "admin-token-for-tests",
       SHARES: shares,
       ...overrides,
     },
@@ -477,6 +488,11 @@ test("a share with no picture has no picture, rather than a broken one", async (
 
 // --- the gallery ------------------------------------------------------------
 
+/** The shares people made, not the built-ins — which are always in the list. */
+function sharedIn(gallery) {
+  return gallery.vibescapes.filter((v) => !v.builtin);
+}
+
 test("the gallery lists the shares that were ticked into it", async () => {
   const { env } = makeEnv();
   // A public share and a private one.
@@ -494,9 +510,12 @@ test("the gallery lists the shares that were ticked into it", async () => {
   const api = await run("https://vibresia.com/api/gallery", { env });
   const body = await api.json();
   assert.equal(body.ok, true);
-  assert.equal(body.vibescapes.length, 1);
-  assert.equal(body.vibescapes[0].name, "In The Gallery");
-  assert.equal(body.vibescapes[0].author, "Stephen");
+  const shared = sharedIn(body);
+  assert.equal(shared.length, 1);
+  assert.equal(shared[0].name, "In The Gallery");
+  assert.equal(shared[0].author, "Stephen");
+  // The built-ins are in the gallery too.
+  assert.equal(body.vibescapes.filter((v) => v.builtin).length, 2);
 });
 
 test("a share is only in the gallery if it was ticked in", async () => {
@@ -507,7 +526,7 @@ test("a share is only in the gallery if it was ticked in", async () => {
     ...shareRequest({ payload: PAYLOAD, name: "Quiet", author: "Nobody", key: "quiet1" }),
   });
   const body = await (await run("https://vibresia.com/api/gallery", { env })).json();
-  assert.equal(body.vibescapes.length, 0);
+  assert.equal(sharedIn(body).length, 0);
 });
 
 test("sharing it again with the tickbox on puts it in the gallery", async () => {
@@ -518,7 +537,7 @@ test("sharing it again with the tickbox on puts it in the gallery", async () => 
     ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1" }),
   });
   let body = await (await run("https://vibresia.com/api/gallery", { env })).json();
-  assert.equal(body.vibescapes.length, 0);
+  assert.equal(sharedIn(body).length, 0);
 
   resetRateLimiter();
   await run("https://vibresia.com/api/share", {
@@ -526,8 +545,8 @@ test("sharing it again with the tickbox on puts it in the gallery", async () => 
     ...shareRequest({ payload: PAYLOAD, name: "Later", author: "Stephen", key: "later1", public: true }),
   });
   body = await (await run("https://vibresia.com/api/gallery", { env })).json();
-  assert.equal(body.vibescapes.length, 1);
-  assert.equal(body.vibescapes[0].name, "Later");
+  assert.equal(sharedIn(body).length, 1);
+  assert.equal(sharedIn(body)[0].name, "Later");
 });
 
 test("the gallery page is a page, with the shares on it", async () => {
@@ -542,6 +561,147 @@ test("the gallery page is a page, with the shares on it", async () => {
   const html = await response.text();
   assert.ok(html.includes("On The Page"), "the share was not on the page");
   assert.ok(html.includes("/s/"), "the share was not linked");
+});
+
+// --- the admin --------------------------------------------------------------
+
+test("the admin needs the admin token", async () => {
+  const { env } = makeEnv();
+  for (const headers of [{}, { "x-av-admin-token": "wrong" }]) {
+    const response = await run("https://vibresia.com/api/admin/shares", { env, headers });
+    assert.equal(response.status, 401);
+  }
+  const ok = await run("https://vibresia.com/api/admin/shares", {
+    env, headers: { "x-av-admin-token": "admin-token-for-tests" },
+  });
+  assert.equal(ok.status, 200);
+});
+
+test("the admin sees the shares that are hidden as well as the ones that are not", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Listed", author: "Stephen", key: "listed1", public: true }),
+  });
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: "aGlkZGVu", name: "Hidden", author: "Nobody", key: "hidden2" }),
+  });
+
+  const body = await (await run("https://vibresia.com/api/admin/shares", {
+    env, headers: { "x-av-admin-token": "admin-token-for-tests" },
+  })).json();
+  assert.equal(body.ok, true);
+  const names = body.shares.map((s) => s.name).sort();
+  assert.deepEqual(names, ["Hidden", "Listed"]);
+  assert.equal(body.shares.find((s) => s.name === "Hidden").inGallery, false);
+  assert.equal(body.shares.find((s) => s.name === "Listed").inGallery, true);
+});
+
+test("hiding a share takes it out of the gallery and leaves the link working", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Hide Me", author: "Stephen", key: "hide1", public: true }),
+  });
+  const { id } = await created.json();
+
+  const hidden = await run(`https://vibresia.com/api/admin/shares/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-admin-token": "admin-token-for-tests", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "hide" }),
+  });
+  assert.equal(hidden.status, 200);
+
+  const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(sharedIn(gallery).length, 0);
+
+  // The link still works: hiding is not deleting.
+  const page = await run(`https://vibresia.com/s/${id}`, { env });
+  assert.equal(page.status, 200);
+});
+
+test("showing a share puts it back in the gallery", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Show Me", author: "Stephen", key: "show1" }),
+  });
+  const { id } = await created.json();
+
+  await run(`https://vibresia.com/api/admin/shares/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-admin-token": "admin-token-for-tests", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "show" }),
+  });
+  const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(sharedIn(gallery).length, 1);
+});
+
+test("deleting a share takes the link with it", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  const created = await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Delete Me", author: "Stephen", key: "del1", public: true }),
+  });
+  const { id } = await created.json();
+
+  const deleted = await run(`https://vibresia.com/api/admin/shares/${id}`, {
+    env,
+    method: "POST",
+    headers: { "x-av-admin-token": "admin-token-for-tests", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete" }),
+  });
+  assert.equal(deleted.status, 200);
+  assert.equal((await run(`https://vibresia.com/s/${id}`, { env })).status, 404);
+  const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
+  assert.equal(sharedIn(gallery).length, 0);
+});
+
+test("the admin cannot delete a share that isn't there", async () => {
+  const { env } = makeEnv();
+  const response = await run("https://vibresia.com/api/admin/shares/aaaaaa", {
+    env,
+    method: "POST",
+    headers: { "x-av-admin-token": "admin-token-for-tests", "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "delete" }),
+  });
+  assert.equal(response.status, 404);
+});
+
+// --- the gallery ------------------------------------------------------------
+
+test("the gallery is one list, newest first", async () => {
+  const { env } = makeEnv();
+  resetRateLimiter();
+  await run("https://vibresia.com/api/share", {
+    env,
+    ...shareRequest({ payload: PAYLOAD, name: "Shared", author: "Stephen", key: "shared1", public: true }),
+  });
+  const body = await (await run("https://vibresia.com/api/gallery", { env })).json();
+
+  // The built-ins are in it, with the shares people made.
+  assert.ok(body.vibescapes.some((v) => v.builtin && v.name === "Ribbons"));
+  assert.ok(body.vibescapes.some((v) => !v.builtin && v.name === "Shared"));
+
+  // Newest first: a share made now is above a built-in from the 18th.
+  const dates = body.vibescapes.map((v) => v.sharedAt);
+  const sorted = [...dates].sort((a, b) => b - a);
+  assert.deepEqual(dates, sorted);
+
+  // The built-ins carry the day they appeared, and the clean still rather
+  // than the framed share graphic.
+  const ribbons = body.vibescapes.find((v) => v.id === "ribbons");
+  assert.equal(ribbons.imageUrl, "https://vibresia.com/media/modes/ribbons.jpg");
+  assert.equal(ribbons.url, "https://vibresia.com/share/ribbons");
+  assert.ok(ribbons.sharedAt > 0);
 });
 
 // --- the pure parts --------------------------------------------------------
@@ -602,7 +762,7 @@ test("the gallery tickbox reaches the site", async () => {
   assert.equal(patched.status, 200);
 
   const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
-  assert.equal(gallery.vibescapes.length, 0, "the share is still in the gallery");
+  assert.equal(sharedIn(gallery).length, 0, "the share is still in the gallery");
 
   // And the share says so, so the app's tickbox can show what is true.
   const details = await (await run(`https://vibresia.com/api/share/${id}`, { env })).json();
@@ -653,8 +813,8 @@ test("changing your name replaces the share rather than leaving it behind", asyn
   // The old share is gone, so the gallery does not fill up with every
   // version of the same vibescape.
   const gallery = await (await run("https://vibresia.com/api/gallery", { env })).json();
-  assert.equal(gallery.vibescapes.length, 1);
-  assert.equal(gallery.vibescapes[0].name, "After");
+  assert.equal(sharedIn(gallery).length, 1);
+  assert.equal(sharedIn(gallery)[0].name, "After");
   assert.equal((await run(`https://vibresia.com/api/share/${oldId}`, { env })).status, 404);
 });
 

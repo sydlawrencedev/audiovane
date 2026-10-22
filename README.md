@@ -193,7 +193,8 @@ GET  /og/k3f9x2.jpg                                    a picture of this vibesca
 
 ## The gallery
 
-`vibresia.com/vibescapes` lists the shares that were ticked into it.
+`vibresia.com/vibescapes` lists the built-in vibescapes and the ones people
+have shared, in one list, newest first.
 
 Sharing a vibescape has always made a link anybody can open. The gallery is
 different: it lists them, so anything in it is findable by anybody at all —
@@ -206,10 +207,38 @@ has a tickbox, on by default.
   `/vibescapes` (the page) and `/api/gallery` (the same thing as JSON). The
   cards are built on the server, so the page works with no JavaScript and a
   crawler sees the list.
+- **The built-ins are in it too**, dated by the day they first appeared —
+  the commit that first mentioned the vibescape — so they can be sorted
+  against the shares people have made. `scripts/generate-share-pages.py`
+  works that date out and writes it into the share manifest. Their cards
+  use the clean still, the same as everybody else's, rather than the framed
+  share graphic.
 - **The shares that were made before the gallery existed are not in it.**
   They were never offered the choice, and publishing them without asking
   would put somebody else's name on the front page of the site. Sharing one
   again with the tickbox on puts it in.
+
+### The admin
+
+`vibresia.com/admin` — unlinked, and not in any sitemap. It asks for a
+token and then lists every share, the ones in the gallery and the ones
+hidden, with three things you can do to each:
+
+- **Hide** takes it out of the gallery and leaves the link working. The right
+  one for a share that is fine but should not be listed.
+- **Show** puts it back.
+- **Delete** takes the row, and the link with it: the picture and the name
+  go too. It asks first, because it cannot be undone.
+
+The token is a Worker secret called `ADMIN_TOKEN`, and it is not the share
+token — that one ships inside the app, so anybody can read it out of the
+bundle. This one never leaves the server, and it is the only thing between
+the public internet and the gallery. The page keeps it in `sessionStorage`,
+so it lives in that tab and not anywhere else.
+
+```bash
+npx wrangler secret put ADMIN_TOKEN
+```
 
 - **D1, not Workers KV.** KV is eventually consistent — a link opened ten
   seconds after it was shared could reach an edge that hadn't seen the write
