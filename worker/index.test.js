@@ -19,6 +19,8 @@ function makeEnv(overrides = {}) {
     DISCORD_WEBHOOK_URL: "https://discord.com/api/webhooks/1/token",
     DISCORD_NOTIFICATIONS_ENABLED: "true",
     DISCORD_BOT_USERNAME: "Vibresia",
+    POSTHOG_KEY: "phc_test_key",
+    POSTHOG_HOST: "https://us.i.posthog.com",
     ...overrides,
   };
 }
@@ -39,7 +41,13 @@ async function run(url, { env = makeEnv(), headers = {}, cf = {}, method = "GET"
   try {
     const response = await worker.fetch(request, env, ctx);
     await Promise.all(waits); // the Discord post is fire-and-forget
-    return { response, posts };
+    // A download does two things: it tells Discord, and it counts itself in
+    // the analytics. The tests care about each on its own.
+    return {
+      response,
+      posts: posts.filter((p) => !p.url.includes("posthog")),
+      events: posts.filter((p) => p.url.includes("posthog")),
+    };
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -58,7 +66,7 @@ test("download redirects to the latest release", async () => {
   });
   assert.equal(response.status, 302);
   assert.equal(response.headers.get("location"), RELEASE_ZIP);
-  assert.equal(posts.length, 1);
+  assert.equal(posts.length, 1, "one alert to Discord");
 });
 
 test("the notification says who, where and whether it is a repeat", async () => {
@@ -152,10 +160,54 @@ test("a Discord outage never breaks the download", async () => {
     assert.equal(response.status, 302);
     assert.equal(response.headers.get("location"), RELEASE_ZIP);
     await Promise.all(waits); // resolves rather than rejecting: waitUntil would log an unhandled error
-    assert.equal(calls, 2, "one retry, then it gives up quietly");
+    // Three: the count in the analytics, the alert to Discord, and the one
+    // retry of that alert. None of them failing changes the download.
+    assert.equal(calls, 3, "the count, the alert and its retry");
   } finally {
     globalThis.fetch = realFetch;
   }
+});
+
+// The iPhone user agent Apple's servers use to build a link preview in a
+// message. A preview fetching the download link is somebody reading a link,
+// not somebody installing anything.
+const LINK_PREVIEW_AGENT =
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1";
+
+test("a link preview is not a download", async () => {
+  const { response, posts } = await run("https://vibresia.com/download?src=share_waveform", {
+    headers: { "user-agent": LINK_PREVIEW_AGENT, referer: "https://vibresia.com/share/waveform" },
+  });
+  // The redirect still happens: a preview fetcher wants the zip.
+  assert.equal(response.status, 302);
+  assert.equal(response.headers.get("location"), RELEASE_ZIP);
+  // But nobody is told about it, and it is not counted.
+  assert.equal(posts.length, 0);
+});
+
+test("a HEAD request is a check, not a download", async () => {
+  const { response, posts } = await run("https://vibresia.com/download?src=hero", {
+    method: "HEAD",
+    headers: { "user-agent": BROWSER_UA },
+  });
+  assert.equal(response.status, 302);
+  assert.equal(posts.length, 0);
+});
+
+test("a real download is counted on the server", async () => {
+  const { response, posts, events } = await run("https://vibresia.com/download?src=hero&seen=0", {
+    headers: { "user-agent": BROWSER_UA, referer: "https://vibresia.com/" },
+  });
+  assert.equal(response.status, 302);
+  // The Discord alert, and the count — which is the one that does not depend
+  // on anybody's JavaScript running.
+  assert.equal(posts.length, 1, "the alert did not go out");
+  assert.equal(events.length, 1, "the download was not counted on the server");
+  const [event] = events[0].body;
+  assert.equal(event.event, "download_requested");
+  assert.equal(event.properties.source, "hero");
+  assert.equal(event.properties.seen, false);
+  assert.equal(event.properties.surface, "web");
 });
 
 test("http and www are redirected to the canonical URL", async () => {

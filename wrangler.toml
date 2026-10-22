@@ -23,6 +23,13 @@ run_worker_first = true
 DISCORD_NOTIFICATIONS_ENABLED = "true"
 DISCORD_BOT_USERNAME = "Vibresia"
 
+# The project's public ingest key, so the Worker can count a download on the
+# server — which is the count that doesn't depend on anybody's ad blocker or
+# on a link preview running the page's JavaScript. It is in the page's HTML
+# anyway: a write-only key for the project the site and the app report to.
+POSTHOG_KEY = "phc_pzYyxiM6u2pYa6FbCkRY8HPudHDopu5LrTwnoamHaeg2"
+POSTHOG_HOST = "https://us.i.posthog.com"
+
 # Shared vibescapes. The app POSTs a custom vibescape here — the shader
 # payload and a picture of it — and gets back a short URL on this domain
 # (/s/<id>) that the site serves with the payload inlined and a real og:image.

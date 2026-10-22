@@ -46,6 +46,14 @@ const STYLES = {
 // us about; a crawler following a link is not.
 const AUTOMATION = /bot|crawler|spider|slurp|curl|wget|python|headless|preview|lighthouse|monitoring|uptime|facebookexternalhit|discordbot|slackbot|whatsapp|telegrambot|linkedinbot|facebookbot|twitterbot|embedly|quora link preview|showyoubot|outbrain|vkshare|w3c_validator|whatsapp/i;
 
+// Apple's link previews.
+//
+// When somebody pastes a link into a message, the phone fetches it to draw
+// the card — and it fetches the *download* link too, because that is what
+// the card says to do. The user agent is the giveaway: Safari/604.1 is
+// Apple's preview fetcher, and no real Safari sends it.
+const LINK_PREVIEW = /Safari\/604\.1/;
+
 const DISCORD_TITLE_LIMIT = 256;
 const DISCORD_FIELD_LIMIT = 1024;
 const DISCORD_DESC_LIMIT = 4096;
@@ -246,7 +254,38 @@ function handleDownload(request, url, env, ctx) {
   // than that.
   const seen = url.searchParams.get("seen");
 
-  if (isDiscordEnabled(env) && !looksAutomated(request) && !rateLimited()) {
+  // Whether this is somebody downloading the app, or something else
+  // touching the link.
+  //
+  // A HEAD request is a check, not a download — a link checker, or a
+  // "does this still work?" probe. And Apple's link previews fetch the
+  // download link to draw the card somebody sees in a message, which is
+  // somebody else reading a link rather than installing anything.
+  //
+  // The redirect still happens either way: a preview fetcher wants the zip
+  // and a head wants the headers, and neither is a person who needs
+  // telling about.
+  const isPreview = LINK_PREVIEW.test(agent);
+  const isProbe = request.method === "HEAD";
+  const counted = !looksAutomated(request) && !isPreview && !isProbe;
+
+  if (counted) {
+    // The count that doesn't depend on anybody's JavaScript running.
+    //
+    // The site sends a download_clicked event, but that is a lower bound:
+    // an ad blocker stops it, and a link preview never runs the page's
+    // JavaScript at all. This one is fired by the server, after the
+    // filters, so it counts the downloads that actually happened.
+    ctx.waitUntil(postDownloadEvent(env, {
+      source,
+      referer,
+      country: request.cf?.country || "",
+      city: request.cf?.city || "",
+      seen: seen === null ? false : seen === "1",
+    }));
+  }
+
+  if (isDiscordEnabled(env) && counted && !rateLimited()) {
     const payload = buildDownloadEmbed({
       source,
       referer,
@@ -262,6 +301,52 @@ function handleDownload(request, url, env, ctx) {
   }
 
   return Response.redirect(RELEASE_ZIP, 302);
+}
+
+/// A download, counted on the server.
+///
+/// The public project key, which is in the page's HTML anyway — this is a
+/// write-only key, and the project is the same one the site and the app
+/// report to. Not a personal API key: that would be a credential in the
+/// Worker, and a download count is not worth one.
+///
+/// The distinct id is a constant, and that is a decision rather than an
+/// oversight. The site knows which visitor downloaded, but the Worker does
+/// not: the browser's id is in its local storage, and putting it in a
+/// download link would hand it to every service that fetched the link. So
+/// this event counts downloads, and the count of people comes from the site.
+function postDownloadEvent(env, { source, referer, country, city, seen }) {
+  const key = env.POSTHOG_KEY;
+  if (!key) return Promise.resolve();
+  const host = (env.POSTHOG_HOST || "https://us.i.posthog.com").replace(/\/+$/, "");
+  const event = {
+    api_key: key,
+    event: "download_requested",
+    distinct_id: "downloads",
+    properties: {
+      surface: "web",
+      $lib: "vibresia-web",
+      source,
+      referer,
+      country,
+      city,
+      seen,
+    },
+    timestamp: new Date().toISOString(),
+  };
+  return fetch(`${host}/batch/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify([event]),
+  }).then((response) => {
+    if (!response.ok) {
+      console.log(`[download] the event was refused: ${response.status}`);
+    }
+  }).catch((error) => {
+    // A download that happened is a download that happened, whatever the
+    // analytics said about it.
+    console.log(`[download] could not record the event: ${error}`);
+  });
 }
 
 /// Builds the embed for a report from the app. Kept pure for the same reason
