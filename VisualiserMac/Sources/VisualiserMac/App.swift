@@ -696,12 +696,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func exportVideoNow(mode: VibescapeID, out: String) {
         guard let app = AppState.shared else { exit(1) }
+        let clip = VideoExporter.Clip.forTempo(app.bpm)
         Task { @MainActor in
             do {
                 try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              audio: app.audio,
+                                              audio: app.audio, clip: clip,
                                               to: URL(fileURLWithPath: out))
-                NSLog("[VIDEO] saved=\(out)")
+                NSLog("[VIDEO] saved=\(out) bars=\(clip.bars) seconds=\(Int(clip.seconds))")
                 exit(0)
             } catch {
                 NSLog("[VIDEO] failed: \(error)")

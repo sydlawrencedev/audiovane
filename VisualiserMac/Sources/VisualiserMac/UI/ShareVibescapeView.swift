@@ -629,8 +629,8 @@ struct ShareVibescapeView: View {
         }
     }
 
-    /// Saves the last ten seconds of the vibescape, with the music, as a
-    /// movie in Downloads.
+    /// Saves the last few bars of the vibescape, with the music, as a movie
+    /// in Downloads.
     private var exportVideoButton: some View {
         Button {
             exportVideo()
@@ -656,14 +656,21 @@ struct ShareVibescapeView: View {
         }
         .buttonStyle(.plain)
         .disabled(exportingVideo)
-        .help("Save the last ten seconds of this vibescape, with the music, as a movie")
+        .help("Save \(videoClip.description) of this vibescape, with the music, as a movie")
     }
 
-    /// Records the last ten seconds and writes them to Downloads.
+    /// How long the recording will be: a number of bars of whatever is
+    /// playing.
+    private var videoClip: VideoExporter.Clip {
+        VideoExporter.Clip.forTempo(app.bpm)
+    }
+
+    /// Records the clip and writes it to Downloads.
     private func exportVideo() {
         guard let app = AppState.shared else { return }
         exportingVideo = true
         let mode = vibescape
+        let clip = videoClip
         let slug = previewFilenameSlug()
         let downloads = FileManager.default.urls(for: .downloadsDirectory,
                                                  in: .userDomainMask).first
@@ -673,11 +680,13 @@ struct ShareVibescapeView: View {
         Task { @MainActor in
             do {
                 try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              audio: app.audio, to: url)
+                                              audio: app.audio, clip: clip, to: url)
                 savedVideoPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 Task { await Analytics.shared.track("share_video_exported", [
-                    "kind": mode.isCustom ? "custom" : "builtin"
+                    "kind": mode.isCustom ? "custom" : "builtin",
+                    "bars": clip.bars,
+                    "seconds": Int(clip.seconds.rounded()),
                 ]) }
             } catch {
                 NSLog("[SHARE] could not export the video: \(error)")

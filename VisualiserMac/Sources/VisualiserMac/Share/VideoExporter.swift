@@ -1,24 +1,55 @@
 import AVFoundation
 import Foundation
 
-/// Saves the last ten seconds of a vibescape, with the music, as a movie.
+/// Saves the last few bars of a vibescape, with the music, as a movie.
 ///
 /// The picture is the app's own renderer: the same draw the window is doing,
-/// over the last ten seconds of its clock, so it is the vibescape rather
-/// than a picture of it. The sound is the last ten seconds of what the app
-/// was hearing — the music, as it was.
+/// over the last stretch of its clock, so it is the vibescape rather
+/// than a picture of it. The sound is what the app was hearing — the music,
+/// as it was.
 ///
 /// Three files and a merge, because that is what AVFoundation makes easy:
 /// the picture goes into a movie, the sound into an audio file, and the two
 /// are put together at the end.
 enum VideoExporter {
-    /// How long the clip is.
-    static let seconds: Double = 10
     /// The frames a second.
     static let fps: Double = 30
     /// The size of the movie.
     static let width = 1280
     static let height = 720
+
+    /// How long a clip is: a number of bars of the music.
+    ///
+    /// Bars rather than seconds, because a bar is what the music is in. Eight
+    /// bars is sixteen seconds at 120bpm, which is a long recording of
+    /// anything; four is eight, which is short. So the count follows the
+    /// tempo — whichever of the two lands closest to ten seconds — and the
+    /// share sheet says which it chose.
+    struct Clip: Equatable {
+        /// How many bars. Zero when there is no tempo to count them in.
+        let bars: Int
+        /// How long that is, in seconds.
+        let seconds: Double
+
+        /// The clip for a tempo.
+        ///
+        /// A tempo of zero means there is nothing to count bars in — nothing
+        /// is playing, or the beat has been lost — and then ten seconds is the
+        /// best answer there is.
+        static func forTempo(_ bpm: Double) -> Clip {
+            guard bpm > 20 else { return Clip(bars: 0, seconds: 10) }
+            let bar = 4 * (60.0 / bpm)
+            let candidates = [4, 8].map { Clip(bars: $0, seconds: Double($0) * bar) }
+            return candidates.min(by: { abs($0.seconds - 10) < abs($1.seconds - 10) }) ?? candidates[0]
+        }
+
+        /// How it is described, for the button's tooltip.
+        var description: String {
+            bars == 0
+                ? "the last \(Int(seconds.rounded())) seconds"
+                : "the last \(bars) bar\(bars == 1 ? "" : "s") (\(Int(seconds.rounded())) seconds)"
+        }
+    }
 
     enum ExportError: LocalizedError {
         case noAudio
@@ -37,12 +68,14 @@ enum VideoExporter {
         }
     }
 
-    /// Records the last ten seconds and writes them to `url`.
+    /// Records the clip and writes it to `url`.
     static func export(renderer: OpenGLRenderer, mode: VibescapeID,
-                       audio: AudioEngine, to url: URL) async throws {
-        // The sound: the last ten seconds of it, straight out of the ring
-        // buffer the app has been filling — as much of it as there is.
-        guard let sound = audio.recentAudio(upTo: seconds) else {
+                       audio: AudioEngine, clip: Clip, to url: URL) async throws {
+        // The sound: the last of it, straight out of the ring buffer the app
+        // has been filling — as much of it as there is. A clip is as long as
+        // the music the app has actually heard, so a recording made a moment
+        // after launch is a short one rather than a broken one.
+        guard let sound = audio.recentAudio(upTo: clip.seconds) else {
             throw ExportError.noAudio
         }
         // The picture is as long as the sound, so the two line up.
@@ -70,9 +103,15 @@ enum VideoExporter {
         let movie = work.appendingPathComponent("picture.mov")
         let track = work.appendingPathComponent("sound.m4a")
 
-        try writeAudio(sound, to: track)
-        try await writeVideo(frames, to: movie)
-        try await merge(video: movie, audio: track, to: url)
+        do { try writeAudio(sound, to: track) } catch {
+            throw ExportError.couldNotWrite("the sound: \(error.localizedDescription)")
+        }
+        do { try await writeVideo(frames, to: movie) } catch {
+            throw ExportError.couldNotWrite("the picture: \(error.localizedDescription)")
+        }
+        do { try await merge(video: movie, audio: track, to: url) } catch {
+            throw ExportError.couldNotWrite("the two together: \(error.localizedDescription)")
+        }
     }
 
     // MARK: - The sound
@@ -191,6 +230,14 @@ enum VideoExporter {
         guard let exporter = AVAssetExportSession(asset: composition,
                                                   presetName: AVAssetExportPresetHighestQuality) else {
             throw ExportError.couldNotWrite("the movie could not be put together")
+        }
+        // The export session refuses to write over a file that is already
+        // there, and says so in a way that sounds like a permissions
+        // problem: "the requested file name is already in use". Exporting the
+        // same vibescape twice hits that, because the first movie is still
+        // in Downloads.
+        if FileManager.default.fileExists(atPath: output.path) {
+            try? FileManager.default.removeItem(at: output)
         }
         exporter.outputURL = output
         exporter.outputFileType = .mp4
