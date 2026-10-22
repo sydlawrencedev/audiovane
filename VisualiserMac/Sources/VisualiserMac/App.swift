@@ -710,10 +710,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private func exportVideoNow(mode: VibescapeID, out: String) {
         guard let app = AppState.shared else { exit(1) }
         let clip = VideoExporter.Clip.forTempo(app.bpm)
+        // The credit names whoever wrote the vibescape, or the app itself
+        // when it doesn't say — the same rule the share sheet uses.
+        let author: String
+        switch mode {
+        case .builtin:
+            author = VibescapeMetadata.author
+        case .custom(let id):
+            author = ShareIdentity.shownAuthor(app.customVibescape(id: id)?.author ?? "")
+        }
         Task { @MainActor in
             do {
                 try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              audio: app.audio, clip: clip,
+                                              author: author, audio: app.audio, clip: clip,
                                               to: URL(fileURLWithPath: out))
                 NSLog("[VIDEO] saved=\(out) bars=\(clip.bars) seconds=\(Int(clip.seconds))")
                 exit(0)

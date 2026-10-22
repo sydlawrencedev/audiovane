@@ -180,10 +180,7 @@ public enum ShareImageBrand {
     public static func draw(in ctx: CGContext, size: CGSize, author: String,
                             brandWash: CGFloat = brandStrength,
                             creditWash: CGFloat = creditStrength) {
-        drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4),
-                  radius: brandRadius, strength: brandWash)
-        drawScrim(in: ctx, corner: CGPoint(x: size.width - 4, y: 4),
-                  radius: creditRadius, strength: creditWash)
+        drawWashes(in: ctx, size: size, brand: brandWash, credit: creditWash)
         drawBrand(in: ctx, size: size)
         drawCredit(in: ctx, size: size, author: author)
     }
@@ -284,28 +281,75 @@ public enum ShareImageBrand {
     /// context, and with only a CGContext there isn't one, so the wordmark
     /// and the credit silently don't appear.
     public static func branded(_ image: CGImage, author: String) -> CGImage? {
+        let size = CGSize(width: image.width, height: image.height)
+        guard let overlay = overlay(size: size, author: author) else { return nil }
+        return branded(image, overlay: overlay)
+    }
+
+    /// The brand and the credit on their own, as a transparent picture.
+    ///
+    /// The lettering is the expensive part: AppKit lays the text out every
+    /// time it draws it, and a movie wants the brand on three hundred
+    /// frames. So a movie draws it once and puts the same picture on each of
+    /// them.
+    ///
+    /// The wash behind the lettering is not in here. That is measured from
+    /// each frame, because a stage light can be in the corner of one frame
+    /// and not the next — so the wash is drawn per frame and this picture
+    /// goes on top of it.
+    ///
+    /// The lettering is drawn with AppKit, which is main-thread-only, so
+    /// call this on the main thread.
+    public static func overlay(size: CGSize, author: String) -> CGImage? {
+        let width = Int(size.width), height = Int(size.height)
+        guard width > 0, height > 0,
+              let ctx = CGContext(data: nil, width: width, height: height,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
+            return nil
+        }
+        // Not flipped: CoreGraphics counts y from the bottom, which is where
+        // the credit and the mark are measured from.
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+        drawBrand(in: ctx, size: size)
+        drawCredit(in: ctx, size: size, author: author)
+        NSGraphicsContext.restoreGraphicsState()
+        return ctx.makeImage()
+    }
+
+    /// A copy of a picture with the brand and the credit on it, using
+    /// lettering that has already been drawn.
+    ///
+    /// Pure CoreGraphics, so it can run on any thread — which is what a
+    /// movie needs, where there are three hundred frames and the main thread
+    /// has an app to run.
+    public static func branded(_ image: CGImage, overlay: CGImage) -> CGImage? {
         let width = image.width
         let height = image.height
-        guard let ctx = CGContext(data: nil,
-                                  width: width, height: height,
+        guard let ctx = CGContext(data: nil, width: width, height: height,
                                   bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else {
             return nil
         }
         ctx.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        // Not flipped: CoreGraphics counts y from the bottom, which is where
-        // the credit and the mark are measured from.
-        NSGraphicsContext.saveGraphicsState()
-        NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
         // The wash is measured from the picture, so it is only as strong as
         // the corner it is over needs it to be.
         let wash = scrimStrengths(in: image)
-        draw(in: ctx, size: CGSize(width: width, height: height), author: author,
-             brandWash: wash.brand, creditWash: wash.credit)
-        NSGraphicsContext.restoreGraphicsState()
-
+        drawWashes(in: ctx, size: CGSize(width: width, height: height),
+                   brand: wash.brand, credit: wash.credit)
+        ctx.draw(overlay, in: CGRect(x: 0, y: 0, width: width, height: height))
         return ctx.makeImage()
+    }
+
+    /// The two washes, in their corners.
+    private static func drawWashes(in ctx: CGContext, size: CGSize,
+                                   brand: CGFloat, credit: CGFloat) {
+        drawScrim(in: ctx, corner: CGPoint(x: 4, y: size.height - 4),
+                  radius: brandRadius, strength: brand)
+        drawScrim(in: ctx, corner: CGPoint(x: size.width - 4, y: 4),
+                  radius: creditRadius, strength: credit)
     }
 }

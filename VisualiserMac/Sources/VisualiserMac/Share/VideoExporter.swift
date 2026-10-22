@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import VibresiaBrand
 
 /// Saves the last few bars of a vibescape, with the music, as a movie.
 ///
@@ -69,7 +70,11 @@ enum VideoExporter {
     }
 
     /// Records the clip and writes it to `url`.
-    static func export(renderer: OpenGLRenderer, mode: VibescapeID,
+    ///
+    /// `author` is whose vibescape it is, and it goes on the picture the same
+    /// way it goes on the share image: a video shared on its own should look
+    /// like it came from here.
+    static func export(renderer: OpenGLRenderer, mode: VibescapeID, author: String,
                        audio: AudioEngine, clip: Clip, to url: URL) async throws {
         // The sound: the last of it, straight out of the ring buffer the app
         // has been filling — as much of it as there is. A clip is as long as
@@ -95,6 +100,23 @@ enum VideoExporter {
         }
         guard !frames.isEmpty else { throw ExportError.noFrames }
 
+        // The brand, on every frame.
+        //
+        // The lettering is drawn once and the same picture goes on each
+        // frame: AppKit lays the text out every time it draws it, and three
+        // hundred frames of that is three hundred times the work for one
+        // picture's worth of letters. The wash behind the lettering is
+        // measured from each frame, because a stage light can be in the
+        // corner of one frame and not the next.
+        let overlay = await MainActor.run {
+            ShareImageBrand.overlay(size: CGSize(width: width, height: height),
+                                    author: author)
+        }
+        let branded = frames.map { frame -> CGImage in
+            guard let overlay else { return frame }
+            return ShareImageBrand.branded(frame, overlay: overlay) ?? frame
+        }
+
         let work = URL(fileURLWithPath: NSTemporaryDirectory())
             .appendingPathComponent("vibresia-video-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: work, withIntermediateDirectories: true)
@@ -106,7 +128,7 @@ enum VideoExporter {
         do { try writeAudio(sound, to: track) } catch {
             throw ExportError.couldNotWrite("the sound: \(error.localizedDescription)")
         }
-        do { try await writeVideo(frames, to: movie) } catch {
+        do { try await writeVideo(branded, to: movie) } catch {
             throw ExportError.couldNotWrite("the picture: \(error.localizedDescription)")
         }
         do { try await merge(video: movie, audio: track, to: url) } catch {

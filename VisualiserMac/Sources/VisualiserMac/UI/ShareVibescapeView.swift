@@ -680,7 +680,8 @@ struct ShareVibescapeView: View {
         Task { @MainActor in
             do {
                 try await VideoExporter.export(renderer: app.renderer, mode: mode,
-                                              audio: app.audio, clip: clip, to: url)
+                                              author: author, audio: app.audio,
+                                              clip: clip, to: url)
                 savedVideoPath = url.path
                 NSWorkspace.shared.activateFileViewerSelecting([url])
                 Task { await Analytics.shared.track("share_video_exported", [
