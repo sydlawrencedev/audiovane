@@ -34,6 +34,11 @@ struct ContentView: View {
                     .padding(.top, 22)
                     .offset(y: chromeVisible ? 0 : -110)
                     .opacity(chromeVisible ? 1 : 0)
+                // The update banner is not part of the chrome that hides
+                // when the pointer goes away: an update that is only in the
+                // menu is an update nobody finds.
+                UpdateBanner()
+                    .padding(.top, 8)
                 Spacer()
                 // The footer's name, credit and share button belong to the
                 // person watching rather than to the app, so they stay.

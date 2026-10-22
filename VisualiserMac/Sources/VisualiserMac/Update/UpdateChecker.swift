@@ -33,16 +33,49 @@ final class UpdateChecker: ObservableObject {
     ///
     /// Set by the hourly check, which must not interrupt whatever is on
     /// screen — a visualiser that is full screen with the lights off does
-    /// not want a modal in the middle of it. The menu says so instead, and
+    /// not want a modal in the middle of it. So it is offered in a banner
+    /// that sits at the top of the window, and the menu says so too, and
     /// the install happens when somebody asks for it.
     @Published private(set) var availableVersion: String?
+
+    /// Whether the banner is on screen.
+    ///
+    /// The banner is the visible part of the prompt. It is not a modal, so
+    /// it can be up while the app is being used, and it can be put away
+    /// without installing anything.
+    @Published private(set) var isUpdateBannerVisible = false
 
     /// The release behind it, so the install can be started from the menu
     /// without asking GitHub again.
     private var availableRelease: Release?
 
     /// The version somebody said "Later" to. Not offered again on its own.
-    private var declinedVersion: String?
+    ///
+    /// It is remembered across restarts as well: a prompt that comes back
+    /// every time the app is opened is a prompt nobody reads, and the
+    /// version is still in the menu for whoever wants it.
+    private var declinedVersion: String? {
+        get { UserDefaults.standard.string(forKey: Self.declinedKey) }
+        set { UserDefaults.standard.set(newValue, forKey: Self.declinedKey) }
+    }
+
+    /// Where the declined version is remembered.
+    private static let declinedKey = "vibresia.declinedUpdateVersion"
+
+    /// Puts the banner away without installing anything.
+    ///
+    /// The version is remembered, so the hourly check does not put the
+    /// banner back up for the same release. A newer one will.
+    func dismissUpdateBanner() {
+        if let version = availableVersion { declinedVersion = version }
+        isUpdateBannerVisible = false
+    }
+
+    /// Opens the release notes for the update that is waiting.
+    func openReleaseNotes() {
+        guard let url = availableRelease?.html_url, let link = URL(string: url) else { return }
+        NSWorkspace.shared.open(link)
+    }
 
     /// A check that is already running. Two at once is two requests for one
     /// answer, and the second one to arrive is the one that wins.
@@ -142,14 +175,22 @@ final class UpdateChecker: ObservableObject {
                     self.offer(latest, release: release)
                     return
                 }
-                // The hourly check does not ask. A visualiser that is full
-                // screen in a dark room should not have a modal appear in
-                // the middle of it, so the update is noted and the menu says
-                // so — and the install happens when somebody asks for it.
-                guard latest != self.declinedVersion else { return }
+                // The hourly check does not ask with a modal. A visualiser
+                // that is full screen in a dark room should not have one
+                // appear in the middle of it, so the update is offered in a
+                // banner at the top of the window and in the menu, and the
+                // install happens when somebody asks for it.
+                //
+                // A version somebody has already said "Later" to is not
+                // offered again on its own — but it stays in the menu, so
+                // the update is one click away for whoever wants it.
+                let declined = self.declinedVersion == latest
                 self.availableVersion = latest
                 self.availableRelease = release
-                NSLog("[UPDATE] found \(latest) — offering it in the menu")
+                if !declined {
+                    self.isUpdateBannerVisible = true
+                }
+                NSLog("[UPDATE] found \(latest) — offering it in the banner and the menu")
                 Task {
                     await Analytics.shared.logToPostHog(
                         "update found by the hourly check",
