@@ -720,6 +720,18 @@ final class OpenGLRenderer: NSObject {
         return ctx
     }
 
+    /// Starts the scanner on a particular vibescape.
+    ///
+    /// Used when the app is opened: Auto Scan picks up on the scene it was
+    /// showing, rather than starting at Tunnel. The scanner still runs —
+    /// this is where it starts, not what it does.
+    func startAutoScan(on mode: VibescapeID) {
+        guard scanCycle.contains(mode) else { return }
+        autoScanTarget = mode
+        autoScanStart = CACurrentMediaTime()
+        NSLog("[SCAN] starting on \(mode.rawValue)")
+    }
+
     func setVibescape(_ mode: VibescapeID) {
         if mode == .builtin(.autoScan) {
             // Start the cycle on whatever is already showing, so switching to

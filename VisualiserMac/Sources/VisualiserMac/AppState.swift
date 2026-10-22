@@ -175,6 +175,11 @@ final class AppState: ObservableObject {
         // something.
         self.activeVibescape = Self.savedVibescape ?? .builtin(.autoScan)
         self.renderer.setVibescape(self.activeVibescape)
+        // Auto Scan starts on the scene it was showing when the app was
+        // closed, rather than on Tunnel every time.
+        if self.activeVibescape == .builtin(.autoScan), let scene = Self.savedScanScene {
+            self.renderer.startAutoScan(on: scene)
+        }
         NSLog("[DD] starting in mode \(self.activeVibescape.rawValue)")
         // How long each vibescape holds in Auto Scan, in bars of the song.
         let bars = UserDefaults.standard.integer(forKey: Self.scanBarsKey)
@@ -434,6 +439,12 @@ final class AppState: ObservableObject {
     private func syncScanTarget() {
         let e = renderer.effectiveVibescape
         if scanTarget != e { scanTarget = e }
+        // While the scanner is running, remember which scene it is on. That
+        // is what the app reopens on, so that it does not snap to Tunnel
+        // every time the app is started.
+        if activeVibescape == .builtin(.autoScan), e != .builtin(.autoScan) {
+            Self.savedScanScene = e
+        }
     }
 
     static private(set) var shared: AppState?
@@ -444,6 +455,24 @@ final class AppState: ObservableObject {
     private static let genreDefaultsKey = "audiovane.genre"
     private static let genreAutoDefaultsKey = "audiovane.genreAuto"
     private static let modeDefaultsKey = "audiovane.mode"
+    /// The scene Auto Scan was showing when the app was closed.
+    ///
+    /// Auto Scan picks up where it left off, so that opening the app does
+    /// not snap to Tunnel every time. It is a scene rather than a choice:
+    /// the app still opens in Auto Scan, on the same scene.
+    private static let scanSceneDefaultsKey = "audiovane.scanScene"
+
+    /// The scene Auto Scan was showing, if it was showing one.
+    private static var savedScanScene: VibescapeID? {
+        get {
+            guard let raw = UserDefaults.standard.object(forKey: scanSceneDefaultsKey) as? String
+            else { return nil }
+            return VibescapeID(rawValue: raw)
+        }
+        set {
+            UserDefaults.standard.set(newValue?.rawValue, forKey: scanSceneDefaultsKey)
+        }
+    }
 
     /// The vibescape they were last looking at. Nil on a fresh install, which is
     /// how "no choice made yet" is distinguished from "chose Tunnel" — the
